@@ -1,0 +1,22 @@
+//go:build linux
+
+package inventory_test
+
+import (
+	"encoding/json"
+	"fmt"
+	"testing"
+
+	"github.com/qbee-io/qbee-agent/app/inventory"
+)
+
+func TestCollectSystemInfo(t *testing.T) {
+	systemInfo, err := inventory.CollectSystemInfo()
+	if err != nil {
+		t.Fatalf("error collecting system info: %v", err)
+	}
+
+	data, _ := json.MarshalIndent(systemInfo, " ", " ")
+
+	fmt.Println(string(data))
+}
