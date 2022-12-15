@@ -15,11 +15,18 @@ type Agent struct {
 	privateKey  *ecdsa.PrivateKey
 	certificate *x509.Certificate
 	rootCAPool  *x509.CertPool
+
+	lastConfigCommitID string
+
+	deliveredInventoryDigests map[InventoryType]string
 }
 
 // New returns a new instance of Agent.
 func New(cfg *Config) (*Agent, error) {
-	agent := &Agent{cfg: cfg}
+	agent := &Agent{
+		cfg:                       cfg,
+		deliveredInventoryDigests: make(map[InventoryType]string),
+	}
 
 	if err := agent.useProxy(); err != nil {
 		return nil, err

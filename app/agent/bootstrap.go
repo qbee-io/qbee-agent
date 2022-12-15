@@ -92,25 +92,10 @@ func Bootstrap(ctx context.Context, cfg *Config, bootstrapKey string) error {
 		return err
 	}
 
-	log.Infof("Collecting system inventory")
-	var systemInfo *inventory.SystemInfo
-	if systemInfo, err = inventory.CollectSystemInfo(); err != nil {
-		return fmt.Errorf("error collecting system info: %w", err)
-	}
-
-	var rawPublicKey []string
-	if rawPublicKey, err = agent.rawPublicKey(); err != nil {
+	var bootstrapRequest *BootstrapRequest
+	bootstrapRequest, err = agent.newBootstrapRequest()
+	if err != nil {
 		return err
-	}
-
-	body := &BootstrapRequest{
-		Host:         systemInfo.Host,
-		FQHost:       systemInfo.FQHost,
-		UQHost:       systemInfo.UQHost,
-		HardwareMAC:  systemInfo.HardwareMAC,
-		IPDefault:    systemInfo.IPv4First,
-		IPv4:         systemInfo.IPv4,
-		RawPublicKey: rawPublicKey,
 	}
 
 	var response *BootstrapResponse
@@ -119,7 +104,7 @@ func Bootstrap(ctx context.Context, cfg *Config, bootstrapKey string) error {
 
 	for {
 
-		if response, err = agent.sendBootstrapRequest(ctx, bootstrapKey, body); err != nil {
+		if response, err = agent.sendBootstrapRequest(ctx, bootstrapKey, bootstrapRequest); err != nil {
 			return fmt.Errorf("error sending bootstrap request: %w", err)
 		}
 
@@ -136,7 +121,44 @@ func Bootstrap(ctx context.Context, cfg *Config, bootstrapKey string) error {
 		return err
 	}
 
-	return agent.saveConfig()
+	if err = agent.saveConfig(); err != nil {
+		return err
+	}
+
+	if err = agent.sendSystemInventory(ctx); err != nil {
+		return err
+	}
+
+	log.Infof("Bootstrap successfully completed")
+
+	return nil
+}
+
+// newBootstrapRequest returns a new BootstrapRequest for the agent.
+func (agent *Agent) newBootstrapRequest() (*BootstrapRequest, error) {
+	log.Infof("Gathering system information")
+
+	systemInfo, err := inventory.CollectSystemInfo()
+	if err != nil {
+		return nil, fmt.Errorf("error collecting system info: %w", err)
+	}
+
+	var rawPublicKey []string
+	if rawPublicKey, err = agent.rawPublicKey(); err != nil {
+		return nil, err
+	}
+
+	bootstrapRequest := &BootstrapRequest{
+		Host:         systemInfo.Host,
+		FQHost:       systemInfo.FQHost,
+		UQHost:       systemInfo.UQHost,
+		HardwareMAC:  systemInfo.HardwareMAC,
+		IPDefault:    systemInfo.IPv4First,
+		IPv4:         systemInfo.IPv4,
+		RawPublicKey: rawPublicKey,
+	}
+
+	return bootstrapRequest, nil
 }
 
 // sendBootstrapRequest sends bootstrap request to the device hub.
@@ -163,7 +185,7 @@ func (agent *Agent) sendBootstrapRequest(
 	request.Header.Set("Authorization", fmt.Sprintf("token %s", bootstrapKey))
 
 	var response *http.Response
-	if response, err = agent.PublicHTTPClient().Do(request); err != nil {
+	if response, err = agent.AnonymousHTTPClient().Do(request); err != nil {
 		return nil, fmt.Errorf("error sending bootstrap request: %w", err)
 	}
 

@@ -131,16 +131,13 @@ type SystemInfo struct {
 	// LastConfigUpdate - TODO: why is this the same as LastPolicyUpdate?
 	LastConfigUpdate string `json:"last_config_update"`
 
-	// LastConfigCommitID - last applied config commi
+	// LastConfigCommitID - last applied config commit
 	// (e.g. "6c07b6d021a015329b1815ec954cca6d8c4973c3b574202401dad448e8cdd0f5").
 	LastConfigCommitID string `json:"last_config_commit_id"`
 
 	// PolicyVersion - which policy version was in use for collecting inventory (e.g. "0.0.45").
 	PolicyVersion string `json:"policy_version"`
 
-	// VPNIndex - TODO: What's this?
-	VPNIndex string `json:"vpn_idx"`
-
-	// CFVersion - The variable gives the version of the running CFEngine Core (e.g. "3.9.1").
-	CFVersion string `json:"cf_version"`
+	// AgentVersion used to collect the inventory.
+	AgentVersion string `json:"cf_version"`
 }

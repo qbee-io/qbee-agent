@@ -35,8 +35,8 @@ func (agent *Agent) useProxy() error {
 	return nil
 }
 
-// PublicHTTPClient returns a public HTTPClient with no client authentication.
-func (agent *Agent) PublicHTTPClient() *http.Client {
+// AnonymousHTTPClient returns an HTTPClient without client TLS certificates.
+func (agent *Agent) AnonymousHTTPClient() *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
@@ -50,8 +50,33 @@ func (agent *Agent) PublicHTTPClient() *http.Client {
 			TLSHandshakeTimeout:   10 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
 			TLSClientConfig: &tls.Config{
-				RootCAs:            agent.rootCAPool,
-				InsecureSkipVerify: os.Getenv("INSECURE") == "1",
+				RootCAs: agent.rootCAPool,
+			},
+		},
+		Timeout: 60 * time.Second,
+	}
+}
+
+// HTTPClient returns an HTTPClient with client TLS certificate.
+func (agent *Agent) HTTPClient() *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   60 * time.Second,
+				KeepAlive: 60 * time.Second,
+			}).DialContext,
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          5,
+			IdleConnTimeout:       60 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			TLSClientConfig: &tls.Config{
+				RootCAs: agent.rootCAPool,
+				Certificates: []tls.Certificate{{
+					Certificate: [][]byte{agent.certificate.Raw},
+					PrivateKey:  agent.privateKey,
+				}},
 			},
 		},
 		Timeout: 60 * time.Second,

@@ -202,12 +202,24 @@ func (agent *Agent) loadPrivateKey() error {
 	return nil
 }
 
-func (agent *Agent) saveCertificate(certificate []byte) error {
+func (agent *Agent) saveCertificate(pemCertificate []byte) error {
+	pemBlock, _ := pem.Decode(pemCertificate)
+	if pemBlock == nil || pemBlock.Type != "CERTIFICATE" {
+		return fmt.Errorf("got invalid certificate")
+	}
+
+	certificate, err := x509.ParseCertificate(pemBlock.Bytes)
+	if err != nil {
+		return fmt.Errorf("error parsing certificate: %w", err)
+	}
+
 	keyPath := path.Join(agent.cfg.Directory, credentialsDirectory, certificateFilename)
 
-	if err := os.WriteFile(keyPath, certificate, credentialsFileMode); err != nil {
+	if err := os.WriteFile(keyPath, pemCertificate, credentialsFileMode); err != nil {
 		return fmt.Errorf("error writing certificate: %w", err)
 	}
+
+	agent.certificate = certificate
 
 	return nil
 }
