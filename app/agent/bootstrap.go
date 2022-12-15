@@ -17,13 +17,13 @@ import (
 type BootstrapRequest struct {
 	// Host - The name of the current host, according to the kernel.
 	// It is undefined whether this is qualified or unqualified with a domain name.
-	Host string `json:"host" bson:"host"`
+	Host string `json:"host"`
 
 	// FQHost - The fully qualified name of the host (e.g. "device1.example.com").
-	FQHost string `json:"fqhost" bson:"fqhost"`
+	FQHost string `json:"fqhost"`
 
 	// UQHost - The unqualified name of the host (e.g. "device1").
-	UQHost string `json:"uqhost" bson:"uqhost"`
+	UQHost string `json:"uqhost"`
 
 	// HardwareMAC - This contains the MAC address of the named interface map[interface]macAddress.
 	// Note: The keys in this array are canonified.
@@ -34,14 +34,14 @@ type BootstrapRequest struct {
 	// 	"ens1": "52:54:00:4a:db:ee",
 	//  "qbee0": "00:00:00:00:00:00"
 	// }
-	HardwareMAC map[string]string `json:"hardware_mac" bson:"hardware_mac"`
+	HardwareMAC map[string]string `json:"hardware_mac"`
 
 	// IPDefault - All four octets of the IPv4 address of the first system interface.
 	//Note: If the system has a single ethernet interface, this variable will contain the IPv4 address.
 	// However, if the system has multiple interfaces, then this variable will simply be the IPv4 address of the first
 	// interface in the list that has an assigned address.
 	// Use IPv4[interface_name] for details on obtaining the IPv4 addresses of all interfaces on a system.
-	IPDefault string `json:"ip_default" bson:"ip_default"`
+	IPDefault string `json:"ip_default"`
 
 	// IPv4 - All IPv4 addresses of the system mapped by interface name.
 	// Example:
@@ -49,7 +49,7 @@ type BootstrapRequest struct {
 	//	"ens1": "192.168.122.239",
 	//	"qbee0": "100.64.39.78"
 	// }
-	IPv4 map[string]string `json:"ipv4" bson:"ipv4"`
+	IPv4 map[string]string `json:"ipv4"`
 
 	// RawPublicKey of the device as slice of PEM-encoded lines.
 	// Example:
@@ -61,7 +61,7 @@ type BootstrapRequest struct {
 	//    "RYkhJQhFeNOlFSpF/xA=",
 	//    "-----END PUBLIC KEY-----"
 	// }
-	RawPublicKey []string `json:"pub_key" bson:"pub_key"`
+	RawPublicKey []string `json:"pub_key"`
 }
 
 type BootstrapResponse struct {
