@@ -16,27 +16,30 @@ type InventoryType string
 
 const (
 	SystemInventoryType InventoryType = "system"
+	PortsInventoryType  InventoryType = "ports"
 )
-
-type SystemInventory struct {
-	System inventory.SystemInfo `json:"system"`
-}
 
 // sendSystemInventory gathers system inventory and sends them to the device hub API.
 func (agent *Agent) sendSystemInventory(ctx context.Context) error {
-	systemInfo, err := inventory.CollectSystemInfo()
+	systemInventory, err := inventory.CollectSystemInventory()
 	if err != nil {
 		return fmt.Errorf("error collecting system info: %w", err)
 	}
 
-	systemInfo.AgentVersion = Version
-	systemInfo.LastConfigCommitID = agent.lastConfigCommitID
-
-	systemInventory := SystemInventory{
-		System: *systemInfo,
-	}
+	systemInventory.System.AgentVersion = Version
+	systemInventory.System.LastConfigCommitID = agent.lastConfigCommitID
 
 	return agent.sendInventory(ctx, SystemInventoryType, systemInventory)
+}
+
+// sendPortsInventory gathers open ports inventory and sends them to the device hub API.
+func (agent *Agent) sendPortsInventory(ctx context.Context) error {
+	portsInventory, err := inventory.CollectPortsInventory()
+	if err != nil {
+		return fmt.Errorf("error collecting system info: %w", err)
+	}
+
+	return agent.sendInventory(ctx, PortsInventoryType, portsInventory)
 }
 
 // sendInventory delivers inventory to device hub if it has changes since last delivery.

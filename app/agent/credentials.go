@@ -215,11 +215,50 @@ func (agent *Agent) saveCertificate(pemCertificate []byte) error {
 
 	keyPath := path.Join(agent.cfg.Directory, credentialsDirectory, certificateFilename)
 
-	if err := os.WriteFile(keyPath, pemCertificate, credentialsFileMode); err != nil {
+	if err = os.WriteFile(keyPath, pemCertificate, credentialsFileMode); err != nil {
 		return fmt.Errorf("error writing certificate: %w", err)
 	}
 
 	agent.certificate = certificate
+
+	return nil
+}
+
+// loadCertificate loads agent's client certificate.
+func (agent *Agent) loadCertificate() error {
+	certPath := path.Join(agent.cfg.Directory, credentialsDirectory, certificateFilename)
+
+	pemBytes, err := os.ReadFile(certPath)
+	if err != nil {
+		return fmt.Errorf("error loading certificate file %s: %w", certPath, err)
+	}
+
+	pemBlock, _ := pem.Decode(pemBytes)
+	if pemBlock == nil {
+		return fmt.Errorf("error decoding certificate's PEM block")
+	}
+
+	agent.certificate, err = x509.ParseCertificate(pemBlock.Bytes)
+	if err != nil {
+		return fmt.Errorf("error parsing certificate: %w", err)
+	}
+
+	return nil
+}
+
+// loadCredentials loads agent's TLS credentials and CA root certificate.
+func (agent *Agent) loadCredentials() error {
+	if err := agent.loadCACertificate(); err != nil {
+		return err
+	}
+
+	if err := agent.loadPrivateKey(); err != nil {
+		return err
+	}
+
+	if err := agent.loadCertificate(); err != nil {
+
+	}
 
 	return nil
 }

@@ -1,5 +1,9 @@
 package inventory
 
+type System struct {
+	System SystemInfo `json:"system"`
+}
+
 type SystemInfo struct {
 	// Class - This variable contains the name of the hard-class category for this host,
 	// (i.e. its top level operating system type classification, e.g. "linux").

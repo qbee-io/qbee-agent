@@ -138,7 +138,7 @@ func Bootstrap(ctx context.Context, cfg *Config, bootstrapKey string) error {
 func (agent *Agent) newBootstrapRequest() (*BootstrapRequest, error) {
 	log.Infof("Gathering system information")
 
-	systemInfo, err := inventory.CollectSystemInfo()
+	systemInventory, err := inventory.CollectSystemInventory()
 	if err != nil {
 		return nil, fmt.Errorf("error collecting system info: %w", err)
 	}
@@ -147,6 +147,8 @@ func (agent *Agent) newBootstrapRequest() (*BootstrapRequest, error) {
 	if rawPublicKey, err = agent.rawPublicKey(); err != nil {
 		return nil, err
 	}
+
+	systemInfo := systemInventory.System
 
 	bootstrapRequest := &BootstrapRequest{
 		Host:         systemInfo.Host,

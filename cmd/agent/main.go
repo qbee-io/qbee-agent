@@ -34,7 +34,7 @@ func main() {
 		err = bootstrap(os.Args[2:])
 	case "start":
 		err = start(os.Args[2:])
-	case "help":
+	default:
 		printHelp()
 	}
 

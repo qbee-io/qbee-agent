@@ -20,8 +20,8 @@ const (
 	systemOS    = "linux"
 )
 
-// CollectSystemInfo returns populated SystemInfo based on current system status.
-func CollectSystemInfo() (*SystemInfo, error) {
+// CollectSystemInventory returns populated System inventory based on current system status.
+func CollectSystemInventory() (*System, error) {
 	systemInfo := new(SystemInfo)
 	systemInfo.Class = systemClass
 	systemInfo.OS = systemOS
@@ -52,9 +52,12 @@ func CollectSystemInfo() (*SystemInfo, error) {
 		systemInfo.Architecture,
 		systemInfo.Release,
 		systemInfo.Version))
+
 	systemInfo.CPUs = fmt.Sprintf("%d", runtime.NumCPU())
 
-	return systemInfo, nil
+	systemInventory := &System{System: *systemInfo}
+
+	return systemInventory, nil
 }
 
 // getDefaultNetworkInterface returns a default network interface name.

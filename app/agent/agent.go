@@ -69,10 +69,19 @@ func (agent *Agent) rawPublicKey() ([]string, error) {
 
 // Start starts the agent.
 func Start(ctx context.Context, cfg *Config) error {
-	return nil
+	agent, err := New(cfg)
+	if err != nil {
+		return fmt.Errorf("error initializing the agent: %w", err)
+	}
+
+	if err = agent.loadCredentials(); err != nil {
+		return err
+	}
+
+	return agent.sendPortsInventory(ctx)
 }
 
 // StartWithAutoUpdate starts the agent with auto-update functionality.
 func StartWithAutoUpdate(ctx context.Context, cfg *Config) error {
-	return nil
+	return Start(ctx, cfg)
 }

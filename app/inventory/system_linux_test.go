@@ -11,7 +11,7 @@ import (
 )
 
 func TestCollectSystemInfo(t *testing.T) {
-	systemInfo, err := inventory.CollectSystemInfo()
+	systemInfo, err := inventory.CollectSystemInventory()
 	if err != nil {
 		t.Fatalf("error collecting system info: %v", err)
 	}
