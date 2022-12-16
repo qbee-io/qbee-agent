@@ -1,11 +1,17 @@
 package agent
 
 import (
+	"bytes"
+	"compress/gzip"
+	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -20,7 +26,7 @@ func (agent *Agent) useProxy() error {
 		return nil
 	}
 
-	proxyURL := fmt.Sprintf("%s:%d", agent.cfg.ProxyServer, agent.cfg.ProxyPort)
+	proxyURL := fmt.Sprintf("%s:%s", agent.cfg.ProxyServer, agent.cfg.ProxyPort)
 
 	if agent.cfg.ProxyUser != "" {
 		proxyURL = fmt.Sprintf("%s:%s@%s", agent.cfg.ProxyUser, agent.cfg.ProxyPassword, proxyURL)
@@ -35,8 +41,8 @@ func (agent *Agent) useProxy() error {
 	return nil
 }
 
-// AnonymousHTTPClient returns an HTTPClient without client TLS certificates.
-func (agent *Agent) AnonymousHTTPClient() *http.Client {
+// anonymousHTTPClient returns an authenticatedHTTPClient without client TLS certificates.
+func (agent *Agent) anonymousHTTPClient() *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
@@ -57,9 +63,13 @@ func (agent *Agent) AnonymousHTTPClient() *http.Client {
 	}
 }
 
-// HTTPClient returns an HTTPClient with client TLS certificate.
-func (agent *Agent) HTTPClient() *http.Client {
-	return &http.Client{
+// authenticatedHTTPClient returns an authenticatedHTTPClient with client TLS certificate.
+func (agent *Agent) authenticatedHTTPClient() *http.Client {
+	if agent.httpClient != nil {
+		return agent.httpClient
+	}
+
+	agent.httpClient = &http.Client{
 		Transport: &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
 			DialContext: (&net.Dialer{
@@ -81,4 +91,64 @@ func (agent *Agent) HTTPClient() *http.Client {
 		},
 		Timeout: 60 * time.Second,
 	}
+
+	return agent.httpClient
+}
+
+// apiRequest sends an HTTP request to the device hub API with device's identity.
+func (agent *Agent) apiRequest(ctx context.Context, method, path string, payload any) (*http.Response, error) {
+	if !strings.HasPrefix(path, "/") {
+		return nil, fmt.Errorf("path %s must start with /", path)
+	}
+
+	url := fmt.Sprintf("https://%s:%s%s", agent.cfg.DeviceHubServer, agent.cfg.DeviceHubPort, path)
+
+	// check if payload is a bytes.Buffer pointer, then we can use it as-is
+	body, alreadyBytesBuffer := payload.(*bytes.Buffer)
+	if payload != nil && !alreadyBytesBuffer {
+		body = new(bytes.Buffer)
+
+		if err := json.NewEncoder(body).Encode(payload); err != nil {
+			return nil, fmt.Errorf("error marshaling request body for %s %s: %w", method, path, err)
+		}
+	}
+
+	request, err := http.NewRequestWithContext(ctx, method, url, compressRequestBody(body))
+	if err != nil {
+		return nil, fmt.Errorf("error initializing http request %s %s: %w", method, path, err)
+	}
+
+	if body != nil {
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Content-Encoding", "gzip")
+	}
+
+	request.Header.Set("User-Agent", UserAgent)
+
+	var response *http.Response
+	if response, err = agent.authenticatedHTTPClient().Do(request); err != nil {
+		return nil, fmt.Errorf("error sending request %s %s: %w", method, path, err)
+	}
+
+	return response, nil
+}
+
+// compressRequestBody returns io.Reader with compressed body payload
+func compressRequestBody(body *bytes.Buffer) io.Reader {
+	if body == nil {
+		return nil
+	}
+
+	compressedBuffer := new(bytes.Buffer)
+
+	gzipWriter := gzip.NewWriter(compressedBuffer)
+	if _, err := gzipWriter.Write(body.Bytes()); err != nil {
+		panic(err) // since we are operating on bytes.Buffer, this shouldn't ever error out
+	}
+
+	if err := gzipWriter.Close(); err != nil {
+		panic(err) // since we are operating on bytes.Buffer, this shouldn't ever error out
+	}
+
+	return compressedBuffer
 }

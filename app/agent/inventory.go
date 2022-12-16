@@ -53,17 +53,10 @@ func (agent *Agent) sendInventory(ctx context.Context, inventoryType InventoryTy
 		return nil
 	}
 
-	endpoint := fmt.Sprintf(
-		"https://%s:%s/v1/org/device/auth/inventory/%s",
-		agent.cfg.DeviceHubServer, agent.cfg.DeviceHubPort, inventoryType)
+	endpoint := fmt.Sprintf("/v1/org/device/auth/inventory/%s", inventoryType)
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, buf)
+	response, err := agent.apiRequest(ctx, http.MethodPut, endpoint, buf)
 	if err != nil {
-		return fmt.Errorf("error preparing %s inventory request: %w", inventoryType, err)
-	}
-
-	var response *http.Response
-	if response, err = agent.HTTPClient().Do(request); err != nil {
 		return fmt.Errorf("error sending %s inventory request: %w", inventoryType, err)
 	}
 

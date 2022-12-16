@@ -185,7 +185,7 @@ func (agent *Agent) sendBootstrapRequest(
 	request.Header.Set("Authorization", fmt.Sprintf("token %s", bootstrapKey))
 
 	var response *http.Response
-	if response, err = agent.AnonymousHTTPClient().Do(request); err != nil {
+	if response, err = agent.anonymousHTTPClient().Do(request); err != nil {
 		return nil, fmt.Errorf("error sending bootstrap request: %w", err)
 	}
 

@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"net/http"
 	"strings"
 )
 
@@ -15,6 +16,8 @@ type Agent struct {
 	privateKey  *ecdsa.PrivateKey
 	certificate *x509.Certificate
 	rootCAPool  *x509.CertPool
+
+	httpClient *http.Client
 
 	lastConfigCommitID string
 
