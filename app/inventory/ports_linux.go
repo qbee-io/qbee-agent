@@ -11,11 +11,11 @@ import (
 	"net"
 	"os"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
 
+	"github.com/qbee-io/qbee-agent/app/inventory/linux"
 	"github.com/qbee-io/qbee-agent/app/log"
 )
 
@@ -47,24 +47,44 @@ func CollectPortsInventory() (*Ports, error) {
 // loadProcessFDInodes loads mapping of processes' open files inodes to file paths.
 func loadProcessFDInodes() (map[uint64]string, error) {
 	// scan all open files for all running processes
-	filePaths, err := filepath.Glob("/proc/*/fd/*")
+	runningProcesses, err := linux.ListRunningProcesses()
 	if err != nil {
-		return nil, fmt.Errorf("error listing open files for processes: %w", err)
+		return nil, fmt.Errorf("error listing /proc/<pid> directories: %w", err)
 	}
 
 	result := make(map[uint64]string)
 
+	var fdPaths []string
 	var fileStat os.FileInfo
-	for _, filePath := range filePaths {
-		// get file info for each open file
-		if fileStat, err = os.Stat(filePath); err != nil {
-			log.Debugf("cannot get stats of %s: %v", filePath, err)
-			continue
+	var fdDir *os.File
+
+	for _, pid := range runningProcesses {
+		processProcPath := path.Join(linux.ProcFS, pid)
+		fdDirPath := path.Join(processProcPath, "fd")
+
+		if fdDir, err = os.Open(fdDirPath); err != nil {
+			return nil, fmt.Errorf("error openning %s: %w", fdDirPath, err)
 		}
 
-		fileStatT := fileStat.Sys().(*syscall.Stat_t)
+		fdPaths, err = fdDir.Readdirnames(-1)
 
-		result[fileStatT.Ino] = filePath
+		_ = fdDir.Close()
+
+		if err != nil {
+			return nil, fmt.Errorf("error listing files in %s: %w", fdDirPath, err)
+		}
+
+		for _, fdPath := range fdPaths {
+			// get file info for each open file
+			if fileStat, err = os.Stat(fdPath); err != nil {
+				log.Debugf("cannot get stats of %s: %v", fdPath, err)
+				continue
+			}
+
+			fileStatT := fileStat.Sys().(*syscall.Stat_t)
+
+			result[fileStatT.Ino] = processProcPath
+		}
 	}
 
 	return result, nil
