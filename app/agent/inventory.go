@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/qbee-io/qbee-agent/app/inventory"
+	"github.com/qbee-io/qbee-agent/app/inventory/software"
 )
 
 type InventoryType string
@@ -19,6 +20,7 @@ const (
 	PortsInventoryType     InventoryType = "ports"
 	ProcessesInventoryType InventoryType = "processes"
 	UsersInventoryType     InventoryType = "users"
+	SoftwareInventoryType  InventoryType = "software"
 )
 
 // sendSystemInventory gathers system inventory and sends them to the device hub API.
@@ -62,6 +64,27 @@ func (agent *Agent) sendUsersInventory(ctx context.Context) error {
 	}
 
 	return agent.sendInventory(ctx, UsersInventoryType, usersInventory)
+}
+
+// sendSoftwareInventory gathers software inventory and sends them to the device hub API.
+func (agent *Agent) sendSoftwareInventory(ctx context.Context) error {
+	for pkgManager := range software.PackageManagers {
+		softwareInventory, err := inventory.CollectSoftwareInventory(pkgManager)
+		if err != nil {
+			return fmt.Errorf("error collecting software inventory: %w", err)
+		}
+
+		// skip unsupported package managers
+		if softwareInventory == nil {
+			continue
+		}
+
+		if err = agent.sendInventory(ctx, SoftwareInventoryType, softwareInventory); err != nil {
+			return fmt.Errorf("error sending software inventory: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // sendInventory delivers inventory to device hub if it has changes since last delivery.

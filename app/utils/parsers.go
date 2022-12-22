@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -43,6 +44,16 @@ func ForLinesInFile(filePath string, fn func(string) error) error {
 	}
 
 	return nil
+}
+
+// ForLinesInCommandOutput executes a command and runs fn for each line of the stdout.
+func ForLinesInCommandOutput(cmd []string, fn func(string) error) error {
+	output, err := RunCommand(cmd)
+	if err != nil {
+		return err
+	}
+
+	return ForLines(bytes.NewBuffer(output), fn)
 }
 
 // ParseEnvFile parses env file into a map of strings.
