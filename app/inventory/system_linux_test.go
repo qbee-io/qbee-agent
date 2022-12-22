@@ -10,7 +10,7 @@ import (
 	"github.com/qbee-io/qbee-agent/app/inventory"
 )
 
-func TestCollectSystemInfo(t *testing.T) {
+func TestCollectSystemInventory(t *testing.T) {
 	systemInfo, err := inventory.CollectSystemInventory()
 	if err != nil {
 		t.Fatalf("error collecting system info: %v", err)
