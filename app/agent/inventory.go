@@ -18,6 +18,7 @@ const (
 	SystemInventoryType    InventoryType = "system"
 	PortsInventoryType     InventoryType = "ports"
 	ProcessesInventoryType InventoryType = "processes"
+	UsersInventoryType     InventoryType = "users"
 )
 
 // sendSystemInventory gathers system inventory and sends them to the device hub API.
@@ -51,6 +52,16 @@ func (agent *Agent) sendProcessesInventory(ctx context.Context) error {
 	}
 
 	return agent.sendInventory(ctx, ProcessesInventoryType, processesInventory)
+}
+
+// sendUsersInventory gathers running processes inventory and sends them to the device hub API.
+func (agent *Agent) sendUsersInventory(ctx context.Context) error {
+	usersInventory, err := inventory.CollectUsersInventory()
+	if err != nil {
+		return fmt.Errorf("error collecting running users: %w", err)
+	}
+
+	return agent.sendInventory(ctx, UsersInventoryType, usersInventory)
 }
 
 // sendInventory delivers inventory to device hub if it has changes since last delivery.
