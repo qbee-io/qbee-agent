@@ -3,12 +3,12 @@
 package linux
 
 import (
-	"bufio"
 	"fmt"
-	"os"
 	"path"
 	"strconv"
 	"strings"
+
+	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
 // MemInfo provides basic information about system memory.
@@ -25,41 +25,32 @@ type MemInfo struct {
 func GetMemInfo() (*MemInfo, error) {
 	filePath := path.Join(ProcFS, "meminfo")
 
-	fp, err := os.Open(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("error opening %s: %w", filePath, err)
-	}
-
-	defer fp.Close()
-
-	scanner := bufio.NewScanner(fp)
 	memInfo := new(MemInfo)
 
-	for scanner.Scan() {
-		if err = scanner.Err(); err != nil {
-			return nil, fmt.Errorf("error reading line from %s: %w", filePath, err)
-		}
+	err := utils.ForLinesInFile(filePath, func(line string) error {
+		var err error
 
-		fields := strings.Fields(scanner.Text())
+		fields := strings.Fields(line)
 
 		switch fields[0] {
 		case "MemTotal:":
 			if len(fields) != 3 || fields[2] != "kB" {
-				return nil, fmt.Errorf("unsupported file format: %s", filePath)
+				return fmt.Errorf("unsupported file format")
 			}
 
 			memInfo.TotalMemory, err = strconv.ParseUint(fields[1], 10, 64)
 		case "MemAvailable:":
 			if len(fields) != 3 || fields[2] != "kB" {
-				return nil, fmt.Errorf("unsupported file format: %s", filePath)
+				return fmt.Errorf("unsupported file format")
 			}
 
 			memInfo.AvailableMemory, err = strconv.ParseUint(fields[1], 10, 64)
 		}
 
-		if err != nil {
-			return nil, fmt.Errorf("error parsing %s: %w", filePath, err)
-		}
+		return err
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return memInfo, nil

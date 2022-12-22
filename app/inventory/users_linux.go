@@ -3,13 +3,13 @@
 package inventory
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"strconv"
 	"strings"
+
+	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
 const (
@@ -62,31 +62,17 @@ func getUsersFromPasswd(passwdFilePath, shadowFilePath string) ([]User, error) {
 		return nil, err
 	}
 
-	var passwdFile *os.File
-	passwdFile, err = os.Open(passwdFilePath)
-	if err != nil {
-		return nil, fmt.Errorf("error openning %s: %w", passwdFilePath, err)
-	}
-
-	defer passwdFile.Close()
-
-	scanner := bufio.NewScanner(passwdFile)
-
 	users := make([]User, 0)
-	for scanner.Scan() {
-		if err = scanner.Err(); err != nil {
-			return nil, fmt.Errorf("error reading %s: %w", passwdFilePath, err)
-		}
-
-		fields := strings.Split(scanner.Text(), ":")
+	err = utils.ForLinesInFile(passwdFilePath, func(line string) error {
+		fields := strings.Split(line, ":")
 
 		var uid, gid int
 		if uid, err = strconv.Atoi(fields[2]); err != nil {
-			return nil, fmt.Errorf("invalid UID for user %s in %s", fields[0], passwdFilePath)
+			return fmt.Errorf("invalid UID")
 		}
 
 		if gid, err = strconv.Atoi(fields[3]); err != nil {
-			return nil, fmt.Errorf("invalid GID for user %s in %s", fields[0], passwdFilePath)
+			return fmt.Errorf("invalid GID")
 		}
 
 		user := User{
@@ -114,6 +100,11 @@ func getUsersFromPasswd(passwdFilePath, shadowFilePath string) ([]User, error) {
 		}
 
 		users = append(users, user)
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return users, nil
@@ -123,35 +114,18 @@ func getUsersFromPasswd(passwdFilePath, shadowFilePath string) ([]User, error) {
 func getUsersFromShadow(filePath string) (map[string]User, error) {
 	users := make(map[string]User)
 
-	shadowFile, err := os.Open(filePath)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return users, nil
-		}
-
-		return nil, fmt.Errorf("error openning %s: %w", filePath, err)
-	}
-
-	defer shadowFile.Close()
-
-	scanner := bufio.NewScanner(shadowFile)
-
-	for scanner.Scan() {
-		if err = scanner.Err(); err != nil {
-			return nil, fmt.Errorf("error reading %s: %w", filePath, err)
-		}
-
-		fields := strings.Split(scanner.Text(), ":")
+	err := utils.ForLinesInFile(filePath, func(line string) error {
+		fields := strings.Split(line, ":")
 
 		// skip invalid passwords
 		passwordFields := strings.Split(fields[1], "$")
 		if len(passwordFields) == 1 {
-			continue
+			return nil
 		}
 
-		var age int
-		if age, err = strconv.Atoi(fields[2]); err != nil {
-			return nil, fmt.Errorf("invalid passowrd age for user %s in %s", fields[0], filePath)
+		age, err := strconv.Atoi(fields[2])
+		if err != nil {
+			return fmt.Errorf("invalid passowrd age")
 		}
 
 		users[fields[0]] = User{
@@ -159,6 +133,16 @@ func getUsersFromShadow(filePath string) (map[string]User, error) {
 			PasswordAlgorithm: shadowAlgorithms[passwordFields[1]],
 			PasswordAge:       age,
 		}
+
+		return nil
+	})
+	if err != nil {
+		// we should be able to continue on systems without shadow file
+		if errors.Is(err, fs.ErrNotExist) {
+			return users, nil
+		}
+
+		return nil, err
 	}
 
 	return users, nil

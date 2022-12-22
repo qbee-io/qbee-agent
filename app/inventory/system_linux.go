@@ -3,16 +3,17 @@
 package inventory
 
 import (
-	"bufio"
 	"fmt"
 	"net"
-	"os"
+	"path"
 	"regexp"
 	"runtime"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/qbee-io/qbee-agent/app/inventory/linux"
+	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
 const (
@@ -62,36 +63,31 @@ func CollectSystemInventory() (*System, error) {
 
 // getDefaultNetworkInterface returns a default network interface name.
 func (systemInfo *SystemInfo) getDefaultNetworkInterface() (string, error) {
-	file, err := os.Open("/proc/net/route")
-	if err != nil {
-		return "", fmt.Errorf("cannot read network routes file /proc/net/route: %w", err)
-	}
+	routeFilePath := path.Join(linux.ProcFS, "net", "route")
 
-	defer file.Close()
+	defaultInterface := ""
 
-	scanner := bufio.NewScanner(file)
-	firstInterface := ""
-
-	for scanner.Scan() {
-		if err = scanner.Err(); err != nil {
-			return "", fmt.Errorf("error parsing /proc/net/route file: %w", err)
-		}
-
-		fields := strings.Fields(scanner.Text())
+	err := utils.ForLinesInFile(routeFilePath, func(line string) error {
+		fields := strings.Fields(line)
 		if fields[1] == "Destination" {
-			continue
+			return nil
 		}
 
-		if firstInterface == "" {
-			firstInterface = fields[0]
+		if defaultInterface == "" {
+			defaultInterface = fields[0]
 		}
 
-		if fields[1] == "00000000" {
-			return fields[0], nil
+		if fields[1] == "00000000" && defaultInterface == "" {
+			defaultInterface = fields[0]
 		}
+
+		return nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("error getting default network interface: %w", err)
 	}
 
-	return firstInterface, nil
+	return defaultInterface, nil
 }
 
 // gatherNetworkInfo gathers system's networking configuration.
@@ -163,9 +159,9 @@ func (systemInfo *SystemInfo) gatherNetworkInfo() error {
 
 // parseOSRelease extracts flavor information from os-release file.
 func (systemInfo *SystemInfo) parseOSRelease() error {
-	data, err := parseEnvFile("/etc/os-release")
+	data, err := utils.ParseEnvFile("/etc/os-release")
 	if err != nil {
-		data, err = parseEnvFile("/usr/lib/os-release")
+		data, err = utils.ParseEnvFile("/usr/lib/os-release")
 	}
 
 	if err != nil {
@@ -184,27 +180,16 @@ func (systemInfo *SystemInfo) parseOSRelease() error {
 
 // parseCPUInfo parses /proc/cpuinfo for extra details re. CPU.
 func (systemInfo *SystemInfo) parseCPUInfo() error {
-	file, err := os.Open("/proc/cpuinfo")
-	if err != nil {
-		return fmt.Errorf("error openning /proc/cpuinfo: %w", err)
-	}
-
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
+	filePath := path.Join(linux.ProcFS, "cpuinfo")
 
 	const expectedLineSubstrings = 2
 
-	for scanner.Scan() {
-		if err = scanner.Err(); err != nil {
-			return fmt.Errorf("error reading /proc/cpuinfo file: %w", err)
-		}
-
-		line := strings.TrimSpace(scanner.Text())
+	return utils.ForLinesInFile(filePath, func(line string) error {
+		line = strings.TrimSpace(line)
 
 		substrings := strings.SplitN(line, ":", expectedLineSubstrings)
 		if len(substrings) != expectedLineSubstrings {
-			continue
+			return nil
 		}
 
 		key := strings.TrimSpace(substrings[0])
@@ -217,9 +202,9 @@ func (systemInfo *SystemInfo) parseCPUInfo() error {
 		case "Revision":
 			systemInfo.CPURevision = strings.TrimSpace(substrings[1])
 		}
-	}
 
-	return nil
+		return nil
+	})
 }
 
 // parseUnameSyscall fills out system info based on results from uname syscall.
@@ -280,53 +265,6 @@ func int8SliceToString(val []int8) string {
 	}
 
 	return string(buf[:])
-}
-
-// parseEnvFile parses env file into a map of strings.
-func parseEnvFile(path string) (map[string]string, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("error opening file %s: %w", path, err)
-	}
-
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-
-	const expectedLineSubstrings = 2
-
-	data := make(map[string]string)
-
-	for scanner.Scan() {
-		if err = scanner.Err(); err != nil {
-			return nil, fmt.Errorf("error reading file: %s: %w", path, err)
-		}
-		line := strings.TrimSpace(scanner.Text())
-
-		if strings.HasPrefix(line, "#") || line == "" {
-			continue
-		}
-
-		substrings := strings.SplitN(line, "=", expectedLineSubstrings)
-
-		if len(substrings) != expectedLineSubstrings {
-			continue
-		}
-
-		key := substrings[0]
-		value := substrings[1]
-
-		if strings.HasPrefix(value, `"`) {
-			value, err = strconv.Unquote(value)
-			if err != nil {
-				continue
-			}
-		}
-
-		data[key] = value
-	}
-
-	return data, nil
 }
 
 var nonAlphaNumRE = regexp.MustCompile("[^a-zA-Z0-9]")

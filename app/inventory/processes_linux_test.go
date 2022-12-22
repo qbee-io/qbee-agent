@@ -12,12 +12,7 @@ func TestCollectProcessesInventory(t *testing.T) {
 		t.Fatalf("error collecting processes: %v", err)
 	}
 
-	for _, process := range processes.Processes {
-		if process.PID != 20543 {
-			continue
-		}
-		data, _ := json.MarshalIndent(process, " ", " ")
+	data, _ := json.MarshalIndent(processes, " ", " ")
 
-		fmt.Println(string(data))
-	}
+	fmt.Println(string(data))
 }

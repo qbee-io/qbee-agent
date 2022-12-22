@@ -3,7 +3,6 @@
 package inventory
 
 import (
-	"bufio"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/qbee-io/qbee-agent/app/inventory/linux"
 	"github.com/qbee-io/qbee-agent/app/log"
+	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
 // CollectPortsInventory returns populated Ports inventory based on current system status.
@@ -49,29 +49,21 @@ func loadProcessFDInodes() (map[uint64]string, error) {
 	// scan all open files for all running processes
 	runningProcesses, err := linux.ListRunningProcesses()
 	if err != nil {
-		return nil, fmt.Errorf("error listing /proc/<pid> directories: %w", err)
+		return nil, fmt.Errorf("error listing running processes: %w", err)
 	}
 
 	result := make(map[uint64]string)
 
 	var fdPaths []string
 	var fileStat os.FileInfo
-	var fdDir *os.File
 
 	for _, pid := range runningProcesses {
 		processProcPath := path.Join(linux.ProcFS, pid)
 		fdDirPath := path.Join(processProcPath, "fd")
 
-		if fdDir, err = os.Open(fdDirPath); err != nil {
-			return nil, fmt.Errorf("error openning %s: %w", fdDirPath, err)
-		}
-
-		fdPaths, err = fdDir.Readdirnames(-1)
-
-		_ = fdDir.Close()
-
+		fdPaths, err = utils.ListDirectory(fdDirPath)
 		if err != nil {
-			return nil, fmt.Errorf("error listing files in %s: %w", fdDirPath, err)
+			return nil, fmt.Errorf("error listing inodes: %w", err)
 		}
 
 		for _, fdPath := range fdPaths {
@@ -93,33 +85,15 @@ func loadProcessFDInodes() (map[uint64]string, error) {
 // parseNetworkPorts parses /proc/net/<protocol> file format and returns a list of listening ports.
 func parseNetworkPorts(protocol string, inodesMap map[uint64]string) ([]Port, error) {
 	procFilePath := path.Join("/proc/net", protocol)
-
-	file, err := os.Open(procFilePath)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil, nil
-		}
-
-		return nil, fmt.Errorf("error opening %s: %w", procFilePath, err)
-	}
-
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-
 	ports := make([]Port, 0)
 
-	for scanner.Scan() {
-		if err = scanner.Err(); err != nil {
-			return nil, fmt.Errorf("error reading %s: %w", procFilePath, err)
-		}
-
-		fields := strings.Fields(scanner.Text())
+	err := utils.ForLinesInFile(procFilePath, func(line string) error {
+		fields := strings.Fields(line)
 
 		// Skip non-listening sockets (that also skips the header).
 		// Listening socket is the one which remote address port is zero.
 		if remoteAddress := fields[2]; !strings.HasSuffix(remoteAddress, ":0000") {
-			continue
+			return nil
 		}
 
 		localAddress := strings.Split(fields[1], ":")
@@ -128,9 +102,9 @@ func parseNetworkPorts(protocol string, inodesMap map[uint64]string) ([]Port, er
 		address := parserKernelNetworkAddress(localAddress[0])
 		port, _ := strconv.ParseInt(localAddress[1], 16, 0)
 
-		var inodeInt int
-		if inodeInt, err = strconv.Atoi(inode); err != nil {
-			return nil, fmt.Errorf("error parsing inode %s: %w", inode, err)
+		inodeInt, err := strconv.Atoi(inode)
+		if err != nil {
+			return fmt.Errorf("error parsing inode %s: %w", inode, err)
 		}
 
 		var cmdLine []byte
@@ -138,9 +112,10 @@ func parseNetworkPorts(protocol string, inodesMap map[uint64]string) ([]Port, er
 		// lookup socket's inode in the inode map to identify the process owning it
 		if fileDescriptorPath, found := inodesMap[uint64(inodeInt)]; found {
 			processID := strings.SplitN(fileDescriptorPath, "/", 4)[2]
-			cmdLinePath := fmt.Sprintf("/proc/%s/cmdline", processID)
+			cmdLinePath := path.Join(linux.ProcFS, processID, "cmdline")
+
 			if cmdLine, err = os.ReadFile(cmdLinePath); err != nil {
-				return nil, fmt.Errorf("error reading %s: %w", cmdLinePath, err)
+				return fmt.Errorf("error reading %s: %w", cmdLinePath, err)
 			}
 		}
 
@@ -149,6 +124,15 @@ func parseNetworkPorts(protocol string, inodesMap map[uint64]string) ([]Port, er
 			Socket:   fmt.Sprintf("%s:%d", address, port),
 			Process:  strings.TrimSpace(strings.ReplaceAll(string(cmdLine), "\000", " ")),
 		})
+
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+
+		return nil, fmt.Errorf("error opening %s: %w", procFilePath, err)
 	}
 
 	return ports, nil
