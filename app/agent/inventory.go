@@ -145,6 +145,24 @@ func (agent *Agent) sendDockerNetworksInventory(ctx context.Context) error {
 	return nil
 }
 
+// sendDockerVolumesInventory gathers docker volumes inventory and sends them to the device hub API.
+func (agent *Agent) sendDockerVolumesInventory(ctx context.Context) error {
+	if !inventory.HasDocker() {
+		return nil
+	}
+
+	dockerVolumesInventory, err := inventory.CollectDockerVolumesInventory()
+	if err != nil {
+		return fmt.Errorf("error collecting docker volumes inventory: %w", err)
+	}
+
+	if err = agent.sendInventory(ctx, DockerVolumesInventoryType, dockerVolumesInventory); err != nil {
+		return fmt.Errorf("error sending docker volumes: %w", err)
+	}
+
+	return nil
+}
+
 // sendInventory delivers inventory to device hub if it has changes since last delivery.
 func (agent *Agent) sendInventory(ctx context.Context, inventoryType InventoryType, inventoryData any) error {
 	buf := new(bytes.Buffer)

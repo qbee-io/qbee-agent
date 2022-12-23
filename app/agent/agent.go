@@ -78,7 +78,7 @@ func Start(ctx context.Context, cfg *Config) error {
 		return err
 	}
 
-	return agent.sendDockerNetworksInventory(ctx)
+	return agent.sendDockerVolumesInventory(ctx)
 }
 
 // StartWithAutoUpdate starts the agent with auto-update functionality.
