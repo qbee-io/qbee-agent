@@ -46,6 +46,11 @@ func (cmd Command) Execute(args []string, opts Options) error {
 		return cmd.Target(opts)
 	}
 
+	if len(args) == 0 {
+		cmd.renderHelp()
+		return fmt.Errorf("command required")
+	}
+
 	subCommand, ok := cmd.SubCommands[args[0]]
 	if !ok {
 		cmd.renderHelp()
