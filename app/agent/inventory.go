@@ -109,7 +109,7 @@ func (agent *Agent) sendDockerContainersInventory(ctx context.Context) error {
 	return nil
 }
 
-// sendDockerImagesInventory gathers docker containers inventory and sends them to the device hub API.
+// sendDockerImagesInventory gathers docker images inventory and sends them to the device hub API.
 func (agent *Agent) sendDockerImagesInventory(ctx context.Context) error {
 	if !inventory.HasDocker() {
 		return nil
@@ -122,6 +122,24 @@ func (agent *Agent) sendDockerImagesInventory(ctx context.Context) error {
 
 	if err = agent.sendInventory(ctx, DockerImagesInventoryType, dockerImagesInventory); err != nil {
 		return fmt.Errorf("error sending docker images: %w", err)
+	}
+
+	return nil
+}
+
+// sendDockerNetworksInventory gathers docker networks inventory and sends them to the device hub API.
+func (agent *Agent) sendDockerNetworksInventory(ctx context.Context) error {
+	if !inventory.HasDocker() {
+		return nil
+	}
+
+	dockerNetworksInventory, err := inventory.CollectDockerNetworksInventory()
+	if err != nil {
+		return fmt.Errorf("error collecting docker networks inventory: %w", err)
+	}
+
+	if err = agent.sendInventory(ctx, DockerNetworksInventoryType, dockerNetworksInventory); err != nil {
+		return fmt.Errorf("error sending docker networks: %w", err)
 	}
 
 	return nil
