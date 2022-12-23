@@ -16,11 +16,15 @@ import (
 type InventoryType string
 
 const (
-	SystemInventoryType    InventoryType = "system"
-	PortsInventoryType     InventoryType = "ports"
-	ProcessesInventoryType InventoryType = "processes"
-	UsersInventoryType     InventoryType = "users"
-	SoftwareInventoryType  InventoryType = "software"
+	SystemInventoryType           InventoryType = "system"
+	PortsInventoryType            InventoryType = "ports"
+	ProcessesInventoryType        InventoryType = "processes"
+	UsersInventoryType            InventoryType = "users"
+	SoftwareInventoryType         InventoryType = "software"
+	DockerContainersInventoryType InventoryType = "docker_containers"
+	DockerImagesInventoryType     InventoryType = "docker_images"
+	DockerNetworksInventoryType   InventoryType = "docker_networks"
+	DockerVolumesInventoryType    InventoryType = "docker_volumes"
 )
 
 // sendSystemInventory gathers system inventory and sends them to the device hub API.
@@ -82,6 +86,42 @@ func (agent *Agent) sendSoftwareInventory(ctx context.Context) error {
 		if err = agent.sendInventory(ctx, SoftwareInventoryType, softwareInventory); err != nil {
 			return fmt.Errorf("error sending software inventory: %w", err)
 		}
+	}
+
+	return nil
+}
+
+// sendDockerContainersInventory gathers docker containers inventory and sends them to the device hub API.
+func (agent *Agent) sendDockerContainersInventory(ctx context.Context) error {
+	if !inventory.HasDocker() {
+		return nil
+	}
+
+	dockerContainersInventory, err := inventory.CollectDockerContainersInventory()
+	if err != nil {
+		return fmt.Errorf("error collecting docker containers inventory: %w", err)
+	}
+
+	if err = agent.sendInventory(ctx, DockerContainersInventoryType, dockerContainersInventory); err != nil {
+		return fmt.Errorf("error sending docker containers inventory: %w", err)
+	}
+
+	return nil
+}
+
+// sendDockerImagesInventory gathers docker containers inventory and sends them to the device hub API.
+func (agent *Agent) sendDockerImagesInventory(ctx context.Context) error {
+	if !inventory.HasDocker() {
+		return nil
+	}
+
+	dockerImagesInventory, err := inventory.CollectDockerImagesInventory()
+	if err != nil {
+		return fmt.Errorf("error collecting docker images inventory: %w", err)
+	}
+
+	if err = agent.sendInventory(ctx, DockerImagesInventoryType, dockerImagesInventory); err != nil {
+		return fmt.Errorf("error sending docker images: %w", err)
 	}
 
 	return nil
