@@ -17,6 +17,24 @@ const (
 	processStatsFieldChildKernelModeJiffies = 16
 )
 
+// NewProcessStats returns ProcessStats based on provided /proc/[pid]/stat file contents.
+func NewProcessStats(line string) (ProcessStats, error) {
+	cmdIndexStart := strings.Index(line, "(")
+	cmdIndexEnd := strings.Index(line, ")")
+
+	if cmdIndexStart < 0 || cmdIndexEnd < 0 {
+		return nil, fmt.Errorf("unexpected stat file format")
+	}
+
+	pid := line[0 : cmdIndexStart-1]
+	command := line[cmdIndexStart+1 : cmdIndexEnd]
+	remainingFields := strings.Fields(line[cmdIndexEnd+2:])
+
+	ps := append([]string{pid, command}, remainingFields...)
+
+	return ps, nil
+}
+
 // ProcessStats represents process stats file (/proc/*/stat).
 // See `man proc` -> `/proc/[pid]/stat` section for details of the file format.
 type ProcessStats []string

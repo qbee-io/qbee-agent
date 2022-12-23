@@ -141,7 +141,9 @@ func getProcessStats(runningProcesses []string) (map[string]linux.ProcessStats, 
 			return nil, fmt.Errorf("error reading %s: %w", statFilePath, err)
 		}
 
-		processStats[pid] = strings.Fields(string(buf[0:n]))
+		if processStats[pid], err = linux.NewProcessStats(string(buf[0:n])); err != nil {
+			return nil, err
+		}
 	}
 
 	return processStats, nil
