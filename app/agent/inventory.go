@@ -27,6 +27,32 @@ const (
 	DockerVolumesInventoryType    InventoryType = "docker_volumes"
 )
 
+// CollectInventory returns inventory data for provided inventory type.
+func CollectInventory(inventoryType InventoryType, pkgManager software.PackageManagerType) (any, error) {
+	switch inventoryType {
+	case SystemInventoryType:
+		return inventory.CollectSystemInventory()
+	case PortsInventoryType:
+		return inventory.CollectPortsInventory()
+	case ProcessesInventoryType:
+		return inventory.CollectProcessesInventory()
+	case UsersInventoryType:
+		return inventory.CollectUsersInventory()
+	case SoftwareInventoryType:
+		return inventory.CollectSoftwareInventory(pkgManager)
+	case DockerContainersInventoryType:
+		return inventory.CollectDockerContainersInventory()
+	case DockerImagesInventoryType:
+		return inventory.CollectDockerImagesInventory()
+	case DockerNetworksInventoryType:
+		return inventory.CollectDockerNetworksInventory()
+	case DockerVolumesInventoryType:
+		return inventory.CollectDockerVolumesInventory()
+	default:
+		return nil, fmt.Errorf("unsupported inventory type")
+	}
+}
+
 // sendSystemInventory gathers system inventory and sends them to the device hub API.
 func (agent *Agent) sendSystemInventory(ctx context.Context) error {
 	systemInventory, err := inventory.CollectSystemInventory()
@@ -194,4 +220,18 @@ func (agent *Agent) sendInventory(ctx context.Context, inventoryType InventoryTy
 	agent.deliveredInventoryDigests[inventoryType] = currentDigest
 
 	return nil
+}
+
+// SendInventory sends inventory to the Device Hub API.
+func SendInventory(ctx context.Context, cfg *Config, inventoryType InventoryType, inventoryData any) error {
+	agent, err := New(cfg)
+	if err != nil {
+		return fmt.Errorf("error initializing the agent: %w", err)
+	}
+
+	if err = agent.loadCredentials(); err != nil {
+		return err
+	}
+
+	return agent.sendInventory(ctx, inventoryType, inventoryData)
 }

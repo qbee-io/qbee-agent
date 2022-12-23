@@ -19,5 +19,6 @@ var Main = Command{
 	SubCommands: map[string]Command{
 		"bootstrap": bootstrapCommand,
 		"start":     startCommand,
+		"inventory": inventoryCommand,
 	},
 }

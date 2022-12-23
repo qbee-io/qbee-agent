@@ -86,9 +86,9 @@ func (cmd Command) renderOptions() {
 		line += fmt.Sprintf("\t%s\t", opt.Help)
 
 		if opt.Required {
-			line += "\t[required]"
+			line += "[required]\t"
 		} else {
-			line += "\t[optional]"
+			line += "[optional]\t"
 		}
 
 		if opt.Default != "" {
