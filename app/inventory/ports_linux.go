@@ -9,7 +9,7 @@ import (
 	"io/fs"
 	"net"
 	"os"
-	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -58,8 +58,8 @@ func loadProcessFDInodes() (map[uint64]string, error) {
 	var fileStat os.FileInfo
 
 	for _, pid := range runningProcesses {
-		processProcPath := path.Join(linux.ProcFS, pid)
-		fdDirPath := path.Join(processProcPath, "fd")
+		processProcPath := filepath.Join(linux.ProcFS, pid)
+		fdDirPath := filepath.Join(processProcPath, "fd")
 
 		fdPaths, err = utils.ListDirectory(fdDirPath)
 		if err != nil {
@@ -84,7 +84,7 @@ func loadProcessFDInodes() (map[uint64]string, error) {
 
 // parseNetworkPorts parses /proc/net/<protocol> file format and returns a list of listening ports.
 func parseNetworkPorts(protocol string, inodesMap map[uint64]string) ([]Port, error) {
-	procFilePath := path.Join("/proc/net", protocol)
+	procFilePath := filepath.Join("/proc/net", protocol)
 	ports := make([]Port, 0)
 
 	err := utils.ForLinesInFile(procFilePath, func(line string) error {
@@ -112,7 +112,7 @@ func parseNetworkPorts(protocol string, inodesMap map[uint64]string) ([]Port, er
 		// lookup socket's inode in the inode map to identify the process owning it
 		if fileDescriptorPath, found := inodesMap[uint64(inodeInt)]; found {
 			processID := strings.SplitN(fileDescriptorPath, "/", 4)[2]
-			cmdLinePath := path.Join(linux.ProcFS, processID, "cmdline")
+			cmdLinePath := filepath.Join(linux.ProcFS, processID, "cmdline")
 
 			if cmdLine, err = os.ReadFile(cmdLinePath); err != nil {
 				return fmt.Errorf("error reading %s: %w", cmdLinePath, err)

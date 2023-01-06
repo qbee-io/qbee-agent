@@ -4,7 +4,7 @@ package linux
 
 import (
 	"fmt"
-	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -23,7 +23,7 @@ type MemInfo struct {
 
 // GetMemInfo returns basic memory information from the system.
 func GetMemInfo() (*MemInfo, error) {
-	filePath := path.Join(ProcFS, "meminfo")
+	filePath := filepath.Join(ProcFS, "meminfo")
 
 	memInfo := new(MemInfo)
 

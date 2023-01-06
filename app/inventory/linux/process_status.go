@@ -5,7 +5,7 @@ package linux
 import (
 	"fmt"
 	"os/user"
-	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -20,7 +20,7 @@ type ProcessStatus struct {
 // GetProcessStatus returns ProcessStatus based on /proc/*/status.
 // See `man proc` -> `/proc/[pid]/status section for details on the file format.
 func GetProcessStatus(pid string) (*ProcessStatus, error) {
-	statusFilePath := path.Join(ProcFS, pid, "status")
+	statusFilePath := filepath.Join(ProcFS, pid, "status")
 	processStatus := new(ProcessStatus)
 
 	err := utils.ForLinesInFile(statusFilePath, func(line string) error {

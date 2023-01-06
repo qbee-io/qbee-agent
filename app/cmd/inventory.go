@@ -3,9 +3,11 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/qbee-io/qbee-agent/app/agent"
+	"github.com/qbee-io/qbee-agent/app/inventory"
 	"github.com/qbee-io/qbee-agent/app/inventory/software"
 )
 
@@ -39,11 +41,36 @@ var inventoryCommand = Command{
 		},
 	},
 	Target: func(opts Options) error {
-		inventoryType := agent.InventoryType(opts[inventoryTypeOption])
+		inventoryType := inventory.Type(opts[inventoryTypeOption])
 		pkgManager := software.PackageManagerType(opts[inventoryPkgManagerOption])
 		dryRun := opts[inventoryDryRunOption] == "true"
 
-		inventoryData, err := agent.CollectInventory(inventoryType, pkgManager)
+		var err error
+		var inventoryData any
+
+		switch inventoryType {
+		case inventory.TypeSystem:
+			inventoryData, err = inventory.CollectSystemInventory()
+		case inventory.TypePorts:
+			inventoryData, err = inventory.CollectPortsInventory()
+		case inventory.TypeProcesses:
+			inventoryData, err = inventory.CollectProcessesInventory()
+		case inventory.TypeUsers:
+			inventoryData, err = inventory.CollectUsersInventory()
+		case inventory.TypeSoftware:
+			inventoryData, err = inventory.CollectSoftwareInventory(pkgManager)
+		case inventory.TypeDockerContainers:
+			inventoryData, err = inventory.CollectDockerContainersInventory()
+		case inventory.TypeDockerImages:
+			inventoryData, err = inventory.CollectDockerImagesInventory()
+		case inventory.TypeDockerNetworks:
+			inventoryData, err = inventory.CollectDockerNetworksInventory()
+		case inventory.TypeDockerVolumes:
+			inventoryData, err = inventory.CollectDockerVolumesInventory()
+		default:
+			return fmt.Errorf("unsupported inventory type")
+		}
+
 		if err != nil {
 			return err
 		}
@@ -54,10 +81,15 @@ var inventoryCommand = Command{
 
 		ctx := context.Background()
 		var cfg *agent.Config
-		if cfg, err = agent.LoadConfig(opts[mainConfigDirOption]); err != nil {
+		if cfg, err = loadConfig(opts); err != nil {
 			return err
 		}
 
-		return agent.SendInventory(ctx, cfg, inventoryType, inventoryData)
+		var deviceAgent *agent.Agent
+		if deviceAgent, err = agent.New(cfg); err != nil {
+			return fmt.Errorf("error initializing the agent: %w", err)
+		}
+
+		return deviceAgent.Inventory.Send(ctx, inventoryType, inventoryData)
 	},
 }

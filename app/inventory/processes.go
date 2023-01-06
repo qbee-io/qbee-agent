@@ -1,5 +1,7 @@
 package inventory
 
+const TypeProcesses Type = "processes"
+
 type Processes struct {
 	Processes []Process `json:"items"`
 }

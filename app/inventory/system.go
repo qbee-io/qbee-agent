@@ -1,5 +1,7 @@
 package inventory
 
+const TypeSystem Type = "system"
+
 type System struct {
 	System SystemInfo `json:"system"`
 }

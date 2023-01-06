@@ -1,87 +1,67 @@
 package agent
 
 import (
-	"context"
 	"crypto/ecdsa"
 	"crypto/x509"
-	"encoding/pem"
-	"fmt"
-	"net/http"
-	"strings"
+	"path/filepath"
+
+	"github.com/qbee-io/qbee-agent/app/api"
+	"github.com/qbee-io/qbee-agent/app/configuration"
+	"github.com/qbee-io/qbee-agent/app/inventory"
 )
 
 type Agent struct {
 	cfg *Config
 
-	privateKey  *ecdsa.PrivateKey
-	certificate *x509.Certificate
-	rootCAPool  *x509.CertPool
+	privateKey    *ecdsa.PrivateKey
+	certificate   *x509.Certificate
+	caCertificate *x509.Certificate
 
-	httpClient *http.Client
+	api *api.Client
 
-	lastConfigCommitID string
-
-	deliveredInventoryDigests map[InventoryType]string
+	Inventory     *inventory.Service
+	Configuration *configuration.Service
 }
 
-// New returns a new instance of Agent.
-func New(cfg *Config) (*Agent, error) {
+// NewWithoutCredentials returns a new instance of Agent without loaded credentials.
+func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 	agent := &Agent{
-		cfg:                       cfg,
-		deliveredInventoryDigests: make(map[InventoryType]string),
+		cfg: cfg,
 	}
 
-	if err := agent.useProxy(); err != nil {
+	if err := api.UseProxy(cfg.ProxyServer, cfg.ProxyPort, cfg.ProxyUser, cfg.ProxyPassword); err != nil {
 		return nil, err
 	}
+
+	if err := agent.loadCACertificate(); err != nil {
+		return nil, err
+	}
+
+	agent.api = api.NewClient(cfg.DeviceHubServer, cfg.DeviceHubPort, agent.caCertificate)
+
+	cacheDir := filepath.Join(cfg.StateDirectory, appWorkingDirectory, cacheDirectory)
+	agent.Inventory = inventory.New(agent.api)
+	agent.Configuration = configuration.New(agent.api, cacheDir)
 
 	return agent, nil
 }
 
-// PublicKey returns public key of the agent.
-func (agent *Agent) PublicKey() (*ecdsa.PublicKey, error) {
-	if agent.privateKey == nil {
-		return nil, fmt.Errorf("agent does not have a private key set")
-	}
-
-	return &agent.privateKey.PublicKey, nil
-}
-
-// rawPublicKey returns a slice of PEM-encoded public key lines.
-func (agent *Agent) rawPublicKey() ([]string, error) {
-	publicKey, err := agent.PublicKey()
+// New returns a new instance of Agent with loaded credentials.
+func New(cfg *Config) (*Agent, error) {
+	agent, err := NewWithoutCredentials(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	var publicKeyDER []byte
-	if publicKeyDER, err = x509.MarshalPKIXPublicKey(publicKey); err != nil {
-		return nil, fmt.Errorf("error marshaling private key: %w", err)
+	if err = agent.loadPrivateKey(); err != nil {
+		return nil, err
 	}
 
-	pemBlock := pem.Block{
-		Type:  "PUBLIC KEY",
-		Bytes: publicKeyDER,
+	if err = agent.loadCertificate(); err != nil {
+		return nil, err
 	}
 
-	return strings.Split(string(pem.EncodeToMemory(&pemBlock)), "\n"), nil
-}
+	agent.api.UseTLSCredentials(agent.privateKey, agent.certificate)
 
-// Start starts the agent.
-func Start(ctx context.Context, cfg *Config) error {
-	agent, err := New(cfg)
-	if err != nil {
-		return fmt.Errorf("error initializing the agent: %w", err)
-	}
-
-	if err = agent.loadCredentials(); err != nil {
-		return err
-	}
-
-	return agent.sendDockerVolumesInventory(ctx)
-}
-
-// StartWithAutoUpdate starts the agent with auto-update functionality.
-func StartWithAutoUpdate(ctx context.Context, cfg *Config) error {
-	return Start(ctx, cfg)
+	return agent, nil
 }

@@ -1,5 +1,7 @@
 package inventory
 
+const TypeUsers Type = "users"
+
 type Users struct {
 	Users []User `json:"items"`
 }

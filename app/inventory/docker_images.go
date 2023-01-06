@@ -7,6 +7,8 @@ import (
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
+const TypeDockerImages Type = "docker_images"
+
 type DockerImages struct {
 	Images []DockerImage `json:"items"`
 }

@@ -4,6 +4,12 @@ import "github.com/qbee-io/qbee-agent/app/agent"
 
 const (
 	mainConfigDirOption = "config-dir"
+	mainStateDirOption  = "state-dir"
+)
+
+const (
+	DefaultConfigDir = "/etc/qbee"
+	DefaultStateDir  = "/var/lib/qbee"
 )
 
 var Main = Command{
@@ -13,12 +19,24 @@ var Main = Command{
 			Name:    mainConfigDirOption,
 			Short:   "c",
 			Help:    "Configuration directory.",
-			Default: agent.DefaultConfigDir,
+			Default: DefaultConfigDir,
+		},
+		{
+			Name:    mainStateDirOption,
+			Short:   "s",
+			Help:    "State directory.",
+			Default: DefaultStateDir,
 		},
 	},
 	SubCommands: map[string]Command{
 		"bootstrap": bootstrapCommand,
 		"start":     startCommand,
 		"inventory": inventoryCommand,
+		"config":    configCommand,
 	},
+}
+
+// loadConfig is a helper method to load agent's config based on provided command-line options.
+func loadConfig(opts Options) (*agent.Config, error) {
+	return agent.LoadConfig(opts[mainConfigDirOption], opts[mainStateDirOption])
 }

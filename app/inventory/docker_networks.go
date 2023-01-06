@@ -7,6 +7,8 @@ import (
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
+const TypeDockerNetworks Type = "docker_networks"
+
 type DockerNetworks struct {
 	Networks []DockerNetwork `json:"items"`
 }

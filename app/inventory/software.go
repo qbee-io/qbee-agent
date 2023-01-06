@@ -6,6 +6,8 @@ import (
 	"github.com/qbee-io/qbee-agent/app/inventory/software"
 )
 
+const TypeSoftware Type = "software"
+
 type Software struct {
 	// PackageManager - type of package manager generating the report
 	PackageManager software.PackageManagerType `json:"pkg_manager"`

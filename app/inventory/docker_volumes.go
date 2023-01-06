@@ -7,6 +7,8 @@ import (
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
+const TypeDockerVolumes Type = "docker_volumes"
+
 type DockerVolumes struct {
 	Volumes []DockerVolume `json:"items"`
 }

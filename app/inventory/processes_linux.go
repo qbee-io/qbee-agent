@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -120,7 +120,7 @@ func getProcessStats(runningProcesses []string) (map[string]linux.ProcessStats, 
 	buf := make([]byte, procStatBufferSize)
 
 	for _, pid := range runningProcesses {
-		statFilePath = path.Join(linux.ProcFS, pid, "stat")
+		statFilePath = filepath.Join(linux.ProcFS, pid, "stat")
 
 		if procStatFile, err = os.Open(statFilePath); err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
@@ -152,7 +152,7 @@ func getProcessStats(runningProcesses []string) (map[string]linux.ProcessStats, 
 // getTotalJiffies returns a sum of all jiffies from /proc/stat
 // We could use C.sysconf(C._SC_CLK_TCK), but that would require CGO and that's not helping with portability.
 func getTotalJiffies() (uint64, error) {
-	filePath := path.Join(linux.ProcFS, "stat")
+	filePath := filepath.Join(linux.ProcFS, "stat")
 
 	file, err := os.Open(filePath)
 	if err != nil {

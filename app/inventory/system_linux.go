@@ -5,13 +5,14 @@ package inventory
 import (
 	"fmt"
 	"net"
-	"path"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/qbee-io/qbee-agent/app"
 	"github.com/qbee-io/qbee-agent/app/inventory/linux"
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
@@ -23,9 +24,11 @@ const (
 
 // CollectSystemInventory returns populated System inventory based on current system status.
 func CollectSystemInventory() (*System, error) {
-	systemInfo := new(SystemInfo)
-	systemInfo.Class = systemClass
-	systemInfo.OS = systemOS
+	systemInfo := &SystemInfo{
+		AgentVersion: app.Version,
+		Class:        systemClass,
+		OS:           systemOS,
+	}
 
 	if err := systemInfo.parseOSRelease(); err != nil {
 		return nil, err
@@ -63,7 +66,7 @@ func CollectSystemInventory() (*System, error) {
 
 // getDefaultNetworkInterface returns a default network interface name.
 func (systemInfo *SystemInfo) getDefaultNetworkInterface() (string, error) {
-	routeFilePath := path.Join(linux.ProcFS, "net", "route")
+	routeFilePath := filepath.Join(linux.ProcFS, "net", "route")
 
 	defaultInterface := ""
 
@@ -180,7 +183,7 @@ func (systemInfo *SystemInfo) parseOSRelease() error {
 
 // parseCPUInfo parses /proc/cpuinfo for extra details re. CPU.
 func (systemInfo *SystemInfo) parseCPUInfo() error {
-	filePath := path.Join(linux.ProcFS, "cpuinfo")
+	filePath := filepath.Join(linux.ProcFS, "cpuinfo")
 
 	const expectedLineSubstrings = 2
 

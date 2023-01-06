@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path"
+	"path/filepath"
 )
 
 const (
@@ -13,14 +13,16 @@ const (
 )
 
 const (
-	DefaultConfigDir = "/etc/qbee/"
-	ConfigFileName   = "qbee-agent.json"
-	ConfigFileMode   = 0600
+	ConfigFileName = "qbee-agent.json"
+	ConfigFileMode = 0600
 )
 
 type Config struct {
 	// Directory where the configuration files of the agent are located.
 	Directory string `json:"-"`
+
+	// StateDirectory where the agent's state is persisted.
+	StateDirectory string `json:"-"`
 
 	// Device Hub API endpoint
 	DeviceHubServer string `json:"server"`
@@ -40,8 +42,8 @@ type Config struct {
 }
 
 // LoadConfig loads config from a provided config file path.
-func LoadConfig(configDir string) (*Config, error) {
-	configFilePath := path.Join(configDir, ConfigFileName)
+func LoadConfig(configDir, stateDir string) (*Config, error) {
+	configFilePath := filepath.Join(configDir, ConfigFileName)
 
 	configBytes, err := os.ReadFile(configFilePath)
 	if err != nil {
@@ -56,6 +58,17 @@ func LoadConfig(configDir string) (*Config, error) {
 
 	config.Directory = configDir
 
+	if !filepath.IsAbs(stateDir) {
+		var currentWorkingDir string
+		if currentWorkingDir, err = os.Getwd(); err != nil {
+			return nil, fmt.Errorf("cannot determine current working directory: %w", err)
+		}
+
+		stateDir = filepath.Join(currentWorkingDir, stateDir)
+	}
+
+	config.StateDirectory = stateDir
+
 	return config, nil
 }
 
@@ -65,7 +78,7 @@ func (agent *Agent) saveConfig() error {
 		return fmt.Errorf("error marshaling configuration file: %w", err)
 	}
 
-	configPath := path.Join(agent.cfg.Directory, ConfigFileName)
+	configPath := filepath.Join(agent.cfg.Directory, ConfigFileName)
 
 	if err = os.WriteFile(configPath, config, ConfigFileMode); err != nil {
 		return fmt.Errorf("error writing config file %s: %w", configPath, err)

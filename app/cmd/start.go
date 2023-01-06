@@ -27,7 +27,7 @@ var startCommand = Command{
 
 		ctx := context.Background()
 
-		cfg, err := agent.LoadConfig(opts[mainConfigDirOption])
+		cfg, err := loadConfig(opts)
 		if err != nil {
 			return err
 		}

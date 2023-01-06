@@ -1,5 +1,7 @@
 package inventory
 
+const TypePorts Type = "ports"
+
 type Ports struct {
 	Ports []Port `json:"items"`
 }

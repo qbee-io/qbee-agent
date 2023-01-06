@@ -13,15 +13,12 @@ import (
 	"math/big"
 	"net/http"
 	"os"
-	"path"
+	"path/filepath"
 
 	"github.com/qbee-io/qbee-agent/app/log"
 )
 
 const (
-	credentialsDirectory     = "ppkeys"
-	credentialsDirectoryMode = 0700
-
 	caCertificateURL      = "https://cdn.qbee.io/app/device/ca-cert.pem"
 	caCertificateFilename = "qbee-ca-cert.pem"
 
@@ -30,36 +27,9 @@ const (
 	credentialsFileMode = 0600
 )
 
-// createCredentialsDirectory checks whether agent's credentials directory exists and has correct permissions.
-// Directory will be created if not found.
-func (agent *Agent) createCredentialsDirectory() error {
-	log.Infof("Preparing agent directories")
-
-	credentialsDir := path.Join(agent.cfg.Directory, credentialsDirectory)
-
-	if err := os.MkdirAll(credentialsDir, credentialsDirectoryMode); err != nil {
-		return fmt.Errorf("error creating credentials directory %s: %w", credentialsDir, err)
-	}
-
-	stats, err := os.Stat(credentialsDir)
-	if err != nil {
-		return fmt.Errorf("error checking status of the credentials directory %s: %w", credentialsDir, err)
-	}
-
-	if !stats.IsDir() {
-		return fmt.Errorf("credentials directory is not a directory %s: %w", credentialsDir, err)
-	}
-
-	if stats.Mode() != credentialsDirectoryMode|fs.ModeDir {
-		return fmt.Errorf("credentials directory %s has incorrect permissions %s", credentialsDir, stats.Mode())
-	}
-
-	return nil
-}
-
 // loadCACertificate attempts to load CA certificate from the filesystem or download it from CDN when not found.
 func (agent *Agent) loadCACertificate() error {
-	caCertPath := path.Join(agent.cfg.Directory, credentialsDirectory, caCertificateFilename)
+	caCertPath := filepath.Join(agent.cfg.Directory, credentialsDirectory, caCertificateFilename)
 
 	caCertPEM, err := os.ReadFile(caCertPath)
 	if err != nil {
@@ -76,13 +46,9 @@ func (agent *Agent) loadCACertificate() error {
 		return fmt.Errorf("error parsing CA certificate file %s: %w", caCertPath, err)
 	}
 
-	var certificate *x509.Certificate
-	if certificate, err = x509.ParseCertificate(pemBlock.Bytes); err != nil {
+	if agent.caCertificate, err = x509.ParseCertificate(pemBlock.Bytes); err != nil {
 		return fmt.Errorf("error parsing CA certificate: %w", err)
 	}
-
-	agent.rootCAPool = x509.NewCertPool()
-	agent.rootCAPool.AddCert(certificate)
 
 	return nil
 }
@@ -105,7 +71,7 @@ func (agent *Agent) downloadCACertificate() ([]byte, error) {
 		return nil, fmt.Errorf("error reading CA certificate from %s: %w", caCertificateURL, err)
 	}
 
-	caCertPath := path.Join(agent.cfg.Directory, credentialsDirectory, caCertificateFilename)
+	caCertPath := filepath.Join(agent.cfg.Directory, credentialsDirectory, caCertificateFilename)
 
 	if err = os.WriteFile(caCertPath, caCertPEM, credentialsFileMode); err != nil {
 		return nil, fmt.Errorf("error writing CA certificate to disk %s: %w", caCertPath, err)
@@ -153,7 +119,7 @@ func (agent *Agent) createPrivateKey() error {
 	}
 
 	pemBytes := pem.EncodeToMemory(pemBlock)
-	keyPath := path.Join(agent.cfg.Directory, credentialsDirectory, privateKeyFilename)
+	keyPath := filepath.Join(agent.cfg.Directory, credentialsDirectory, privateKeyFilename)
 
 	if err = os.WriteFile(keyPath, pemBytes, credentialsFileMode); err != nil {
 		return fmt.Errorf("")
@@ -166,7 +132,7 @@ func (agent *Agent) createPrivateKey() error {
 
 // loadPrivateKey loads private key from the config directory.
 func (agent *Agent) loadPrivateKey() error {
-	keyPath := path.Join(agent.cfg.Directory, credentialsDirectory, privateKeyFilename)
+	keyPath := filepath.Join(agent.cfg.Directory, credentialsDirectory, privateKeyFilename)
 
 	pemBytes, err := os.ReadFile(keyPath)
 	if err != nil {
@@ -213,7 +179,7 @@ func (agent *Agent) saveCertificate(pemCertificate []byte) error {
 		return fmt.Errorf("error parsing certificate: %w", err)
 	}
 
-	keyPath := path.Join(agent.cfg.Directory, credentialsDirectory, certificateFilename)
+	keyPath := filepath.Join(agent.cfg.Directory, credentialsDirectory, certificateFilename)
 
 	if err = os.WriteFile(keyPath, pemCertificate, credentialsFileMode); err != nil {
 		return fmt.Errorf("error writing certificate: %w", err)
@@ -226,7 +192,7 @@ func (agent *Agent) saveCertificate(pemCertificate []byte) error {
 
 // loadCertificate loads agent's client certificate.
 func (agent *Agent) loadCertificate() error {
-	certPath := path.Join(agent.cfg.Directory, credentialsDirectory, certificateFilename)
+	certPath := filepath.Join(agent.cfg.Directory, credentialsDirectory, certificateFilename)
 
 	pemBytes, err := os.ReadFile(certPath)
 	if err != nil {
@@ -241,23 +207,6 @@ func (agent *Agent) loadCertificate() error {
 	agent.certificate, err = x509.ParseCertificate(pemBlock.Bytes)
 	if err != nil {
 		return fmt.Errorf("error parsing certificate: %w", err)
-	}
-
-	return nil
-}
-
-// loadCredentials loads agent's TLS credentials and CA root certificate.
-func (agent *Agent) loadCredentials() error {
-	if err := agent.loadCACertificate(); err != nil {
-		return err
-	}
-
-	if err := agent.loadPrivateKey(); err != nil {
-		return err
-	}
-
-	if err := agent.loadCertificate(); err != nil {
-
 	}
 
 	return nil
