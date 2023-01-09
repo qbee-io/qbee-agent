@@ -37,11 +37,6 @@ type SettingsBundle struct {
 	RunInterval int `json:"agentinterval"`
 }
 
-// BundleCommitID return bundle commit ID for the current settings.
-func (s SettingsBundle) BundleCommitID(committedConfig *CommittedConfig) string {
-	return committedConfig.BundleData.Settings.CommitID
-}
-
 // Execute settings config on the system.
 func (s SettingsBundle) Execute(_ context.Context, service *Service, configData *CommittedConfig) error {
 	settings := configData.BundleData.Settings

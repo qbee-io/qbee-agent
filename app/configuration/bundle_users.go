@@ -1,6 +1,14 @@
 package configuration
 
-// Users adds or removes users.
+import (
+	"context"
+	"fmt"
+
+	"github.com/qbee-io/qbee-agent/app/inventory"
+	"github.com/qbee-io/qbee-agent/app/utils"
+)
+
+// UsersBundle adds or removes users.
 //
 // Example payload:
 // {
@@ -11,7 +19,7 @@ package configuration
 //    }
 //  ]
 // }
-type Users struct {
+type UsersBundle struct {
 	Metadata
 
 	Users []User `json:"items"`
@@ -29,4 +37,72 @@ const (
 type User struct {
 	Username string     `json:"username"`
 	Action   UserAction `json:"action"`
+}
+
+// Execute users config on the system.
+func (u UsersBundle) Execute(ctx context.Context, _ *Service, configData *CommittedConfig) error {
+	usersInventory, err := inventory.CollectUsersInventory()
+	if err != nil {
+		return err
+	}
+
+	userExists := make(map[string]bool)
+	for _, user := range usersInventory.Users {
+		userExists[user.Name] = true
+	}
+
+	for _, user := range configData.BundleData.Users.Users {
+		if user.Action == UserAdd && !userExists[user.Username] {
+			_ = u.AddUser(ctx, user.Username)
+		}
+
+		if user.Action == UserRemove && userExists[user.Username] {
+			_ = u.RemoveUser(ctx, user.Username)
+		}
+	}
+
+	return nil
+}
+
+const (
+	userAddCmd    = "/usr/sbin/useradd"
+	userDeleteCmd = "/usr/sbin/userdel"
+)
+
+// AddUser to the system.
+func (u UsersBundle) AddUser(ctx context.Context, username string) error {
+	output, err := utils.RunCommand([]string{
+		userAddCmd,
+		"--comment", fmt.Sprintf("%s,,,,User added by qbee", username),
+		"--create-home",
+		"--shell", getShell(),
+		username,
+	})
+	if err != nil {
+		ReportError(ctx, output, "Unable to add user '%s'", username)
+
+		return err
+	}
+
+	ReportInfo(ctx, output, "Successfully added user '%s'", username)
+
+	return nil
+}
+
+// RemoveUser from the system along with its home directory and the user's mail spool.
+func (u UsersBundle) RemoveUser(ctx context.Context, username string) error {
+	output, err := utils.RunCommand([]string{
+		userDeleteCmd,
+		"--remove",
+		username,
+	})
+	if err != nil {
+		ReportError(ctx, output, "Unable to delete user '%s'", username)
+
+		return err
+	}
+
+	ReportInfo(ctx, output, "Successfully removed user '%s'", username)
+
+	return nil
 }

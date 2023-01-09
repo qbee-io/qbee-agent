@@ -79,11 +79,6 @@ type TemplateParameter struct {
 	Value string `json:"value"`
 }
 
-// BundleCommitID return bundle commit ID for the current file distribution.
-func (fd FileDistributionBundle) BundleCommitID(committedConfig *CommittedConfig) string {
-	return committedConfig.BundleData.FileDistribution.CommitID
-}
-
 const afterCommandDeadline = 30 * time.Minute
 
 // Execute file distribution config on the system.

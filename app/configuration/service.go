@@ -44,7 +44,7 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 			continue
 		}
 
-		bundleCtx := reporter.BundleContext(ctx, bundleName, bundle.BundleCommitID(configData))
+		bundleCtx := reporter.BundleContext(ctx, bundleName, bundle.BundleCommitID())
 
 		if err := bundle.Execute(bundleCtx, srv, configData); err != nil {
 			log.Errorf("bundle %s execution failed: %v", bundleName, err)

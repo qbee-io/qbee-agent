@@ -9,6 +9,11 @@ type Metadata struct {
 }
 
 type Bundle interface {
-	BundleCommitID(*CommittedConfig) string
+	BundleCommitID() string
 	Execute(context.Context, *Service, *CommittedConfig) error
+}
+
+// BundleCommitID return bundle commit ID for the current bundle.
+func (m Metadata) BundleCommitID() string {
+	return m.CommitID
 }

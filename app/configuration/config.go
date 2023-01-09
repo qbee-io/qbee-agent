@@ -14,8 +14,12 @@ type CommittedConfig struct {
 // If unsupported bundle is provided, nil will be returned.
 func (cc *CommittedConfig) selectBundleByName(bundleName string) Bundle {
 	switch bundleName {
+	case "settings":
+		return cc.BundleData.Settings
 	case "file_distribution":
 		return cc.BundleData.FileDistribution
+	case "users":
+		return cc.BundleData.Users
 	default:
 		return nil
 	}
@@ -26,7 +30,7 @@ type BundleData struct {
 	Settings SettingsBundle `json:"settings"`
 
 	// System
-	Users                Users                  `json:"users"`
+	Users                UsersBundle            `json:"users"`
 	SSHKeys              SSHKeys                `json:"sshkeys"`
 	PackageManagement    PackageManagement      `json:"package_management"`
 	FileDistribution     FileDistributionBundle `json:"file_distribution"`
