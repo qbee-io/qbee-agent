@@ -20,6 +20,8 @@ func (cc *CommittedConfig) selectBundleByName(bundleName string) Bundle {
 		return cc.BundleData.FileDistribution
 	case "users":
 		return cc.BundleData.Users
+	case "sshkeys":
+		return cc.BundleData.SSHKeys
 	default:
 		return nil
 	}
@@ -31,7 +33,7 @@ type BundleData struct {
 
 	// System
 	Users                UsersBundle            `json:"users"`
-	SSHKeys              SSHKeys                `json:"sshkeys"`
+	SSHKeys              SSHKeysBundle          `json:"sshkeys"`
 	PackageManagement    PackageManagement      `json:"package_management"`
 	FileDistribution     FileDistributionBundle `json:"file_distribution"`
 	ConnectivityWatchdog ConnectivityWatchdog   `json:"connectivity_watchdog"`

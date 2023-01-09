@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	directoryPermission = 0750
-	filePermission      = 0640
+	fileManagerDefaultDirectoryPermission = 0750
+	fileManagerDefaultFilePermission      = 0640
 )
 
 // FileDistributionCacheDirectory is where the agent will download template files for processing.
@@ -76,7 +76,7 @@ func (srv *Service) downloadFile(ctx context.Context, src, dst string) (bool, er
 	defer srcFile.Close()
 
 	var dstFile *os.File
-	if dstFile, err = createFile(dst); err != nil {
+	if dstFile, err = createFile(dst, fileManagerDefaultFilePermission); err != nil {
 		return false, err
 	}
 
@@ -125,7 +125,7 @@ func (srv *Service) downloadTemplateFile(ctx context.Context, src, dst string, p
 	defer srcFile.Close()
 
 	var dstFile io.WriteCloser
-	if dstFile, err = createFile(dst); err != nil {
+	if dstFile, err = createFile(dst, fileManagerDefaultFilePermission); err != nil {
 		return false, err
 	}
 
@@ -265,18 +265,18 @@ func calculateTemplateDigest(src string, params map[string]string) (string, erro
 }
 
 // createFile under provided path and with provided uid and gid.
-func createFile(path string) (*os.File, error) {
+func createFile(path string, permission os.FileMode) (*os.File, error) {
 	uid, gid, err := determineFileOwner(path)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = makeDirectories(path, uid, gid); err != nil {
+	if err = makeDirectories(path, fileManagerDefaultDirectoryPermission, uid, gid); err != nil {
 		return nil, err
 	}
 
 	var file *os.File
-	if file, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, filePermission); err != nil {
+	if file, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, permission); err != nil {
 		return nil, fmt.Errorf("error creating file %s: %w", path, err)
 	}
 
@@ -354,7 +354,7 @@ func determineFileOwner(dst string) (int, int, error) {
 }
 
 // makeDirectories checks if all directories for the dst file exist, if not, create them with provided owner and group.
-func makeDirectories(dst string, uid, gid int) error {
+func makeDirectories(dst string, permissions os.FileMode, uid, gid int) error {
 	if dst == "/" {
 		return nil
 	}
@@ -364,11 +364,11 @@ func makeDirectories(dst string, uid, gid int) error {
 	dirInfo, err := os.Stat(dirPath)
 	if errors.Is(err, os.ErrNotExist) {
 		// ensure parent exists
-		if err = makeDirectories(dirPath, uid, gid); err != nil {
+		if err = makeDirectories(dirPath, permissions, uid, gid); err != nil {
 			return err
 		}
 
-		if err = os.Mkdir(dirPath, directoryPermission); err != nil {
+		if err = os.Mkdir(dirPath, permissions); err != nil {
 			return fmt.Errorf("cannot create directorty %s: %w", dirPath, err)
 		}
 

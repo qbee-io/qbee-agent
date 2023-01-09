@@ -46,17 +46,14 @@ func (u UsersBundle) Execute(ctx context.Context, _ *Service, configData *Commit
 		return err
 	}
 
-	userExists := make(map[string]bool)
-	for _, user := range usersInventory.Users {
-		userExists[user.Name] = true
-	}
-
 	for _, user := range configData.BundleData.Users.Users {
-		if user.Action == UserAdd && !userExists[user.Username] {
+		userExists := usersInventory.GetUser(user.Username) != nil
+
+		if user.Action == UserAdd && !userExists {
 			_ = u.AddUser(ctx, user.Username)
 		}
 
-		if user.Action == UserRemove && userExists[user.Username] {
+		if user.Action == UserRemove && userExists {
 			_ = u.RemoveUser(ctx, user.Username)
 		}
 	}
@@ -91,13 +88,18 @@ func (u UsersBundle) AddUser(ctx context.Context, username string) error {
 
 // RemoveUser from the system along with its home directory and the user's mail spool.
 func (u UsersBundle) RemoveUser(ctx context.Context, username string) error {
+	if username == "root" {
+		ReportWarning(ctx, nil, "Cannot remove administrative user '%s'", username)
+		return fmt.Errorf("cannot delete root user")
+	}
+
 	output, err := utils.RunCommand([]string{
 		userDeleteCmd,
 		"--remove",
 		username,
 	})
 	if err != nil {
-		ReportError(ctx, output, "Unable to delete user '%s'", username)
+		ReportError(ctx, output, "Unable to remove user '%s'", username)
 
 		return err
 	}

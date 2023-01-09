@@ -6,6 +6,17 @@ type Users struct {
 	Users []User `json:"items"`
 }
 
+// GetUser returns User with the provided username or nil if user does not exist in the system.
+func (users Users) GetUser(username string) *User {
+	for i := range users.Users {
+		if users.Users[i].Name == username {
+			return &users.Users[i]
+		}
+	}
+
+	return nil
+}
+
 type User struct {
 	// Name - the string a user would type in when logging into the operating system.
 	Name string `json:"user"`
