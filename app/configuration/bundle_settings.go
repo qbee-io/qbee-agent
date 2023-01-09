@@ -1,5 +1,9 @@
 package configuration
 
+import (
+	"context"
+)
+
 // SettingsBundle
 //
 // Example payload:
@@ -14,21 +18,40 @@ package configuration
 type SettingsBundle struct {
 	Metadata
 
-	// Metrics collection enabled.
-	Metrics bool `json:"metrics"`
+	// EnableMetrics collection enabled.
+	EnableMetrics bool `json:"metrics"`
 
-	// Reports collection enabled.
-	Reports bool `json:"reports"`
+	// EnableReports collection enabled.
+	EnableReports bool `json:"reports"`
 
-	// RemoteConsole access enabled.
-	RemoteConsole bool `json:"remoteconsole"`
+	// EnableRemoteConsole access enabled.
+	EnableRemoteConsole bool `json:"remoteconsole"`
 
-	// SoftwareInventory collection enabled.
-	SoftwareInventory bool `json:"software_inventory"`
+	// EnableSoftwareInventory collection enabled.
+	EnableSoftwareInventory bool `json:"software_inventory"`
 
-	// ProcessInventory collection enabled.
-	ProcessInventory bool `json:"process_inventory"`
+	// EnableProcessInventory collection enabled.
+	EnableProcessInventory bool `json:"process_inventory"`
 
-	// AgentInterval defines how often agent reports back to the device hub (in minutes).
-	AgentInterval int `json:"agentinterval"`
+	// RunInterval defines how often agent reports back to the device hub (in minutes).
+	RunInterval int `json:"agentinterval"`
+}
+
+// BundleCommitID return bundle commit ID for the current settings.
+func (s SettingsBundle) BundleCommitID(committedConfig *CommittedConfig) string {
+	return committedConfig.BundleData.Settings.CommitID
+}
+
+// Execute settings config on the system.
+func (s SettingsBundle) Execute(_ context.Context, service *Service, configData *CommittedConfig) error {
+	settings := configData.BundleData.Settings
+
+	service.reportingEnabled = settings.EnableReports
+	service.metricsEnabled = settings.EnableMetrics
+	service.remoteConsoleEnabled = settings.EnableRemoteConsole
+	service.softwareInventoryEnabled = settings.EnableSoftwareInventory
+	service.processInventoryEnabled = settings.EnableProcessInventory
+	service.runInterval = settings.RunInterval
+
+	return nil
 }

@@ -11,6 +11,13 @@ type Service struct {
 	api             *api.Client
 	cacheDirectory  string
 	currentCommitID string
+
+	reportingEnabled         bool
+	metricsEnabled           bool
+	remoteConsoleEnabled     bool
+	softwareInventoryEnabled bool
+	processInventoryEnabled  bool
+	runInterval              int
 }
 
 // New returns a new instance of configuration Service.
@@ -45,8 +52,10 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 		}
 	}
 
-	if err := srv.sendReports(ctx, reporter.Reports()); err != nil {
-		return err
+	if srv.reportingEnabled {
+		if err := srv.sendReports(ctx, reporter.Reports()); err != nil {
+			return err
+		}
 	}
 
 	return nil
