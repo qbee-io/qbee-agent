@@ -48,7 +48,7 @@ const (
 )
 
 // Execute SSH Keys bundle on the system.
-func (s SSHKeysBundle) Execute(ctx context.Context, service *Service, config *CommittedConfig) error {
+func (s SSHKeysBundle) Execute(ctx context.Context, _ *Service) error {
 	usersInventory, err := inventory.CollectUsersInventory()
 	if err != nil {
 		return err

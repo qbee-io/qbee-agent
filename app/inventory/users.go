@@ -39,7 +39,7 @@ type User struct {
 	// HasPassword - "yes" if user has password set.
 	HasPassword string `json:"has_pwd"`
 
-	// PasswordAlgorithm - TODO: is this broken?
+	// PasswordAlgorithm
 	// Probably should be fixed to return one of the following:
 	//    $1$ – MD5
 	//    $2$, $2a$, $2b$ – bcrypt

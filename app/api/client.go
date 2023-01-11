@@ -27,10 +27,7 @@ type Client struct {
 }
 
 // NewClient returns a new device hub client.
-func NewClient(host, port string, caCert *x509.Certificate) *Client {
-	rootCAPool := x509.NewCertPool()
-	rootCAPool.AddCert(caCert)
-
+func NewClient(host, port string, rootCAPool *x509.CertPool) *Client {
 	return &Client{
 		host: host,
 		port: port,

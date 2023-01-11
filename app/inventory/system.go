@@ -134,7 +134,7 @@ type SystemInfo struct {
 	// LastPolicyUpdate - latest applied policy update timestamp (e.g. "1668156545")
 	LastPolicyUpdate string `json:"last_policy_update"`
 
-	// LastConfigUpdate - TODO: why is this the same as LastPolicyUpdate?
+	// LastConfigUpdate
 	LastConfigUpdate string `json:"last_config_update"`
 
 	// LastConfigCommitID - last applied config commit

@@ -11,12 +11,18 @@ import (
 )
 
 const (
-	configDryRunOption = "dry-run"
+	configFromFileOption = "from-file"
+	configDryRunOption   = "dry-run"
 )
 
 var configCommand = Command{
 	Description: "Execute device configuration.",
 	Options: []Option{
+		{
+			Name:  configFromFileOption,
+			Short: "f",
+			Help:  "Apply configuration from provided file.",
+		},
 		{
 			Name:  configDryRunOption,
 			Short: "d",
@@ -25,7 +31,8 @@ var configCommand = Command{
 		},
 	},
 	Target: func(opts Options) error {
-		dryRun := opts[inventoryDryRunOption] == "true"
+		dryRun := opts[configDryRunOption] == "true"
+		fromFile := opts[configFromFileOption]
 
 		ctx := context.Background()
 
@@ -35,13 +42,35 @@ var configCommand = Command{
 		}
 
 		var deviceAgent *agent.Agent
-		if deviceAgent, err = agent.New(cfg); err != nil {
+
+		if fromFile != "" {
+			deviceAgent, err = agent.NewWithoutCredentials(cfg)
+			deviceAgent.Configuration.EnableConsoleReporting()
+		} else {
+			deviceAgent, err = agent.New(cfg)
+		}
+
+		if err != nil {
 			return fmt.Errorf("error initializing the agent: %w", err)
 		}
 
 		var configurationData *configuration.CommittedConfig
-		if configurationData, err = deviceAgent.Configuration.Get(ctx); err != nil {
-			return err
+
+		if fromFile != "" {
+			configBytes, err := os.ReadFile(fromFile)
+			if err != nil {
+				return fmt.Errorf("cannot open local config file: %w", err)
+			}
+
+			configurationData = new(configuration.CommittedConfig)
+
+			if err = json.Unmarshal(configBytes, configurationData); err != nil {
+				return fmt.Errorf("cannot parse local config file: %w", err)
+			}
+		} else {
+			if configurationData, err = deviceAgent.Configuration.Get(ctx); err != nil {
+				return err
+			}
 		}
 
 		if dryRun {

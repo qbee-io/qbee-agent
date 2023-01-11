@@ -38,15 +38,13 @@ type SettingsBundle struct {
 }
 
 // Execute settings config on the system.
-func (s SettingsBundle) Execute(_ context.Context, service *Service, configData *CommittedConfig) error {
-	settings := configData.BundleData.Settings
-
-	service.reportingEnabled = settings.EnableReports
-	service.metricsEnabled = settings.EnableMetrics
-	service.remoteConsoleEnabled = settings.EnableRemoteConsole
-	service.softwareInventoryEnabled = settings.EnableSoftwareInventory
-	service.processInventoryEnabled = settings.EnableProcessInventory
-	service.runInterval = settings.RunInterval
+func (s SettingsBundle) Execute(_ context.Context, service *Service) error {
+	service.reportingEnabled = s.EnableReports
+	service.metricsEnabled = s.EnableMetrics
+	service.remoteConsoleEnabled = s.EnableRemoteConsole
+	service.softwareInventoryEnabled = s.EnableSoftwareInventory
+	service.processInventoryEnabled = s.EnableProcessInventory
+	service.runInterval = s.RunInterval
 
 	return nil
 }

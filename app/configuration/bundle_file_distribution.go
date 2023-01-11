@@ -82,10 +82,8 @@ type TemplateParameter struct {
 const afterCommandDeadline = 30 * time.Minute
 
 // Execute file distribution config on the system.
-func (fd FileDistributionBundle) Execute(ctx context.Context, service *Service, configData *CommittedConfig) error {
-	fileDistribution := configData.BundleData.FileDistribution
-
-	for _, fileSet := range fileDistribution.FileSets {
+func (fd FileDistributionBundle) Execute(ctx context.Context, service *Service) error {
+	for _, fileSet := range fd.FileSets {
 		parameters := fileSet.ParametersMap()
 		anythingChanged := false
 

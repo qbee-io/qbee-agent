@@ -5,13 +5,12 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
+	_ "embed"
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"math/big"
-	"net/http"
 	"os"
 	"path/filepath"
 
@@ -19,65 +18,25 @@ import (
 )
 
 const (
-	caCertificateURL      = "https://cdn.qbee.io/app/device/ca-cert.pem"
-	caCertificateFilename = "qbee-ca-cert.pem"
-
 	privateKeyFilename  = "qbee.key"
 	certificateFilename = "qbee.cert"
 	credentialsFileMode = 0600
 )
 
-// loadCACertificate attempts to load CA certificate from the filesystem or download it from CDN when not found.
-func (agent *Agent) loadCACertificate() error {
-	caCertPath := filepath.Join(agent.cfg.Directory, credentialsDirectory, caCertificateFilename)
+//go:embed ca/prod.crt
+var prodRootCA []byte
 
-	caCertPEM, err := os.ReadFile(caCertPath)
+// loadCACertificatesPool loads all trusted CA certificate.
+func (agent *Agent) loadCACertificatesPool() error {
+	caCert, err := x509.ParseCertificate(prodRootCA)
 	if err != nil {
-		if !errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("error opening CA certificate file %s: %w", caCertPath, err)
-		}
-
-		log.Infof("Downloading CA certificate")
-		caCertPEM, err = agent.downloadCACertificate()
-	}
-
-	pemBlock, _ := pem.Decode(caCertPEM)
-	if pemBlock == nil || pemBlock.Type != "CERTIFICATE" {
-		return fmt.Errorf("error parsing CA certificate file %s: %w", caCertPath, err)
-	}
-
-	if agent.caCertificate, err = x509.ParseCertificate(pemBlock.Bytes); err != nil {
 		return fmt.Errorf("error parsing CA certificate: %w", err)
 	}
 
+	agent.caCertPool = x509.NewCertPool()
+	agent.caCertPool.AddCert(caCert)
+
 	return nil
-}
-
-// downloadCACertificate and store it on the filesystem for future reference.
-func (agent *Agent) downloadCACertificate() ([]byte, error) {
-	response, err := http.Get(caCertificateURL)
-	if err != nil {
-		return nil, fmt.Errorf("error downloading CA certificate from %s: %w", caCertificateURL, err)
-	}
-
-	defer response.Body.Close()
-
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected response status when downloading CA certificate: %d", response.StatusCode)
-	}
-
-	var caCertPEM []byte
-	if caCertPEM, err = io.ReadAll(response.Body); err != nil {
-		return nil, fmt.Errorf("error reading CA certificate from %s: %w", caCertificateURL, err)
-	}
-
-	caCertPath := filepath.Join(agent.cfg.Directory, credentialsDirectory, caCertificateFilename)
-
-	if err = os.WriteFile(caCertPath, caCertPEM, credentialsFileMode); err != nil {
-		return nil, fmt.Errorf("error writing CA certificate to disk %s: %w", caCertPath, err)
-	}
-
-	return caCertPEM, nil
 }
 
 const (

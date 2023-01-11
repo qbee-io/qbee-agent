@@ -40,13 +40,13 @@ type User struct {
 }
 
 // Execute users config on the system.
-func (u UsersBundle) Execute(ctx context.Context, _ *Service, configData *CommittedConfig) error {
+func (u UsersBundle) Execute(ctx context.Context, _ *Service) error {
 	usersInventory, err := inventory.CollectUsersInventory()
 	if err != nil {
 		return err
 	}
 
-	for _, user := range configData.BundleData.Users.Users {
+	for _, user := range u.Users {
 		userExists := usersInventory.GetUser(user.Username) != nil
 
 		if user.Action == UserAdd && !userExists {

@@ -12,6 +12,9 @@ type Service struct {
 	cacheDirectory  string
 	currentCommitID string
 
+	rebootAfterRun bool
+
+	reportToConsole          bool
 	reportingEnabled         bool
 	metricsEnabled           bool
 	remoteConsoleEnabled     bool
@@ -33,9 +36,14 @@ func (srv *Service) CurrentCommitID() string {
 	return srv.currentCommitID
 }
 
-// Execute configuration bundles on the system.
+// EnableConsoleReporting enables reporting to console.
+func (srv *Service) EnableConsoleReporting() {
+	srv.reportToConsole = true
+}
+
+// Execute configuration bundles on the system and return true if system should be rebooted.
 func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) error {
-	reporter := NewReporter(configData.CommitID)
+	reporter := NewReporter(configData.CommitID, srv.reportToConsole)
 
 	for _, bundleName := range configData.Bundles {
 		bundle := configData.selectBundleByName(bundleName)
@@ -46,7 +54,7 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 
 		bundleCtx := reporter.BundleContext(ctx, bundleName, bundle.BundleCommitID())
 
-		if err := bundle.Execute(bundleCtx, srv, configData); err != nil {
+		if err := bundle.Execute(bundleCtx, srv); err != nil {
 			log.Errorf("bundle %s execution failed: %v", bundleName, err)
 			break
 		}
@@ -59,4 +67,19 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 	}
 
 	return nil
+}
+
+// RebootAfterRun schedules system reboot after current agent run.
+func (srv *Service) RebootAfterRun(ctx context.Context) {
+	if srv.rebootAfterRun {
+		return
+	}
+
+	ReportWarning(ctx, nil, "Scheduling system reboot.")
+	srv.rebootAfterRun = true
+}
+
+// ShouldReboot returns true if system should be restarted after agent run.
+func (srv *Service) ShouldReboot() bool {
+	return srv.rebootAfterRun
 }

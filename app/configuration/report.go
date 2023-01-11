@@ -26,10 +26,15 @@ type Report struct {
 	Timestamp int64 `json:"ts"`
 }
 
+func (report Report) String() string {
+	return fmt.Sprintf("[%s] %s", report.Severity, report.Text)
+}
+
 // Reporter is used to collect configuration reports from a single execution.
 type Reporter struct {
-	commitID string
-	reports  []Report
+	commitID        string
+	reports         []Report
+	reportToConsole bool
 }
 
 const (
@@ -51,10 +56,11 @@ func (reporter *Reporter) Reports() []Report {
 }
 
 // NewReporter returns a new instance of Reporter.
-func NewReporter(commitID string) *Reporter {
+func NewReporter(commitID string, reportToConsole bool) *Reporter {
 	return &Reporter{
-		commitID: commitID,
-		reports:  make([]Report, 0),
+		commitID:        commitID,
+		reports:         make([]Report, 0),
+		reportToConsole: reportToConsole,
 	}
 }
 
@@ -111,6 +117,13 @@ func addReport(ctx context.Context, severity string, extraLog any, msgFmt string
 		Text:           fmt.Sprintf(msgFmt, args...),
 		Log:            base64.StdEncoding.EncodeToString(extraLogBytes),
 		Timestamp:      time.Now().Unix(),
+	}
+
+	if reporter.reportToConsole {
+		// uncomment the next line to see extra log contents in the console
+		//fmt.Println("extra log >>>\n", string(extraLogBytes), "\n <<< extra log")
+
+		fmt.Println(report)
 	}
 
 	reporter.reports = append(reporter.reports, report)

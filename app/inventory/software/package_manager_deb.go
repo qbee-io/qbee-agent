@@ -2,10 +2,13 @@ package software
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"regexp"
 	"runtime"
 	"strings"
+	"syscall"
 
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
@@ -15,9 +18,14 @@ const DebPackageManagerType PackageManagerType = "deb"
 const (
 	aptGetPath = "/usr/bin/apt-get"
 	dpkgPath   = "/usr/bin/dpkg"
+
+	dpkgLockPath = "/var/lib/dpkg/lock"
+	dpkgLockMode = 0640
 )
 
-type DebPackageManager struct{}
+type DebPackageManager struct {
+	supportsAllowDowngradesFlag bool
+}
 
 // IsSupported returns true if package manager is supported by the host system.
 func (deb *DebPackageManager) IsSupported() bool {
@@ -36,8 +44,36 @@ func (deb *DebPackageManager) IsSupported() bool {
 	return true
 }
 
+// Busy returns true if dpkg is currently locked.
+func (deb *DebPackageManager) Busy() (bool, error) {
+	// check the lock by attempting to acquire one
+	file, err := os.OpenFile(dpkgLockPath, syscall.O_CREAT|syscall.O_RDWR|syscall.O_CLOEXEC, dpkgLockMode)
+	if err != nil {
+		return false, fmt.Errorf("cannot open file %s: %w", dpkgLockPath, err)
+	}
+
+	defer file.Close()
+
+	flockT := syscall.Flock_t{
+		Type:   syscall.F_WRLCK,
+		Whence: io.SeekStart,
+		Start:  0,
+		Len:    0,
+	}
+
+	if err = syscall.FcntlFlock(file.Fd(), syscall.F_SETLK, &flockT); err != nil {
+		return true, err
+	}
+
+	return false, nil
+}
+
 // ListPackages returns a list of packages with available updates.
 func (deb *DebPackageManager) ListPackages() ([]Package, error) {
+	if installedPackages, cached := getCachedPackages(DebPackageManagerType); cached {
+		return installedPackages, nil
+	}
+
 	installedPackages, err := deb.listInstalledPackages()
 	if err != nil {
 		return nil, fmt.Errorf("error listing installed packages: %w", err)
@@ -52,6 +88,8 @@ func (deb *DebPackageManager) ListPackages() ([]Package, error) {
 	for i, pkg := range installedPackages {
 		installedPackages[i].Update = availableUpdates[pkg.ID()]
 	}
+
+	setCachedPackages(DebPackageManagerType, installedPackages)
 
 	return installedPackages, nil
 }
@@ -75,6 +113,10 @@ func (deb *DebPackageManager) listInstalledPackages() ([]Package, error) {
 			Name:         strings.SplitN(fields[1], ":", 2)[0],
 			Version:      fields[2],
 			Architecture: fields[3],
+		}
+
+		if pkg.Name == "apt" && utils.IsNewerVersion(pkg.Version, "1.1") {
+			deb.supportsAllowDowngradesFlag = true
 		}
 
 		installedPackages = append(installedPackages, pkg)
@@ -133,4 +175,76 @@ func (deb *DebPackageManager) parseUpdateAvailableLine(line string) *Package {
 		Architecture: match[4],
 		Update:       match[3],
 	}
+}
+
+var aptGetBaseCommand = []string{
+	"DEBIAN_FRONTEND=noninteractive",
+	aptGetPath,
+	`-o Dpkg::Options::="--force-confdef"`,
+	`-o Dpkg::Options::="--force-confold"`,
+	"-f",
+	"-y",
+}
+
+// UpgradeAll performs system upgrade if there are available upgrades.
+// On success, return number of packages upgraded, output of the upgrade command and nil error.
+func (deb *DebPackageManager) UpgradeAll() (int, []byte, error) {
+	// check for updates
+	inventory, err := deb.ListPackages()
+	if err != nil {
+		return 0, nil, err
+	}
+
+	updatesAvailable := 0
+
+	for _, pkg := range inventory {
+		if pkg.Update != "" {
+			updatesAvailable++
+		}
+	}
+
+	if updatesAvailable == 0 {
+		return 0, nil, nil
+	}
+
+	// perform system upgrade
+	upgradeCommand := append(aptGetBaseCommand, "upgrade")
+	distUpgradeCommand := append(aptGetBaseCommand, "dist-upgrade")
+
+	cmd := append(append(upgradeCommand, "&&"), distUpgradeCommand...)
+
+	shellCmd := []string{"sh", "-c", strings.Join(cmd, " ")}
+
+	var output []byte
+	if output, err = utils.RunCommand(shellCmd); err != nil {
+		return 0, output, err
+	}
+
+	InvalidateCache(DebPackageManagerType)
+
+	return updatesAvailable, output, err
+}
+
+// Install ensures a package with provided version number is installed in the system.
+// If version is empty, the latest version of the package is installed.
+// Returns output of the installation command.
+func (deb *DebPackageManager) Install(pkgName, version string) ([]byte, error) {
+	if version != "" {
+		pkgName = fmt.Sprintf("%s=%s", pkgName, version)
+	}
+
+	var downgradesFlag string
+	if deb.supportsAllowDowngradesFlag {
+		downgradesFlag = "--allow-downgrades"
+	} else {
+		downgradesFlag = "--force-yes"
+	}
+
+	installCommand := append(aptGetBaseCommand, downgradesFlag, "install", pkgName)
+
+	shellCmd := []string{"sh", "-c", strings.Join(installCommand, " ")}
+
+	defer InvalidateCache(DebPackageManagerType)
+
+	return utils.RunCommand(shellCmd)
 }

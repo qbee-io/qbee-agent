@@ -33,6 +33,7 @@ var Main = Command{
 		"start":     startCommand,
 		"inventory": inventoryCommand,
 		"config":    configCommand,
+		"version":   versionCommand,
 	},
 }
 

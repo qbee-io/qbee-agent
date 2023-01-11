@@ -13,9 +13,9 @@ import (
 type Agent struct {
 	cfg *Config
 
-	privateKey    *ecdsa.PrivateKey
-	certificate   *x509.Certificate
-	caCertificate *x509.Certificate
+	privateKey  *ecdsa.PrivateKey
+	certificate *x509.Certificate
+	caCertPool  *x509.CertPool
 
 	api *api.Client
 
@@ -33,11 +33,11 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 		return nil, err
 	}
 
-	if err := agent.loadCACertificate(); err != nil {
+	if err := agent.loadCACertificatesPool(); err != nil {
 		return nil, err
 	}
 
-	agent.api = api.NewClient(cfg.DeviceHubServer, cfg.DeviceHubPort, agent.caCertificate)
+	agent.api = api.NewClient(cfg.DeviceHubServer, cfg.DeviceHubPort, agent.caCertPool)
 
 	cacheDir := filepath.Join(cfg.StateDirectory, appWorkingDirectory, cacheDirectory)
 	agent.Inventory = inventory.New(agent.api)

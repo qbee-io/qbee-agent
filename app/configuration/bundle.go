@@ -8,12 +8,12 @@ type Metadata struct {
 	CommitID string `json:"bundle_commit_id"`
 }
 
-type Bundle interface {
-	BundleCommitID() string
-	Execute(context.Context, *Service, *CommittedConfig) error
-}
-
 // BundleCommitID return bundle commit ID for the current bundle.
 func (m Metadata) BundleCommitID() string {
 	return m.CommitID
+}
+
+type Bundle interface {
+	BundleCommitID() string
+	Execute(context.Context, *Service) error
 }
