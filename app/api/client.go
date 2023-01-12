@@ -95,7 +95,7 @@ func (cli *Client) NewRequest(ctx context.Context, method, path string, src any)
 
 // Make sends an HTTP request and optionally parses response body into dst.
 func (cli *Client) Make(request *http.Request, dst any) error {
-	response, err := cli.httpClient.Do(request)
+	response, err := cli.Do(request)
 	if err != nil {
 		return err
 	}
@@ -122,7 +122,7 @@ func (cli *Client) Do(request *http.Request) (*http.Response, error) {
 
 	response, err := cli.httpClient.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("error sending API request: %w", err)
+		return nil, ConnectionError(err)
 	}
 
 	return response, nil

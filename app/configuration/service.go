@@ -2,6 +2,7 @@ package configuration
 
 import (
 	"context"
+	"errors"
 
 	"github.com/qbee-io/qbee-agent/app/api"
 	"github.com/qbee-io/qbee-agent/app/log"
@@ -21,6 +22,11 @@ type Service struct {
 	softwareInventoryEnabled bool
 	processInventoryEnabled  bool
 	runInterval              int
+
+	// connectivityWatchdogThreshold defines failed API connections threshold at which server will be rebooted
+	// 0 -> disabled
+	connectivityWatchdogThreshold int
+	failedConnectionsCount        int
 }
 
 // New returns a new instance of configuration Service.
@@ -43,12 +49,21 @@ func (srv *Service) EnableConsoleReporting() {
 
 // Execute configuration bundles on the system and return true if system should be rebooted.
 func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) error {
+	// disable connectivity watchdog if not set in the configData
+	if !configData.HasBundle(BundleConnectivityWatchdog) {
+		srv.connectivityWatchdogThreshold = 0
+	}
+
 	reporter := NewReporter(configData.CommitID, srv.reportToConsole)
 
 	for _, bundleName := range configData.Bundles {
 		bundle := configData.selectBundleByName(bundleName)
 		if bundle == nil {
 			log.Errorf("configuration missing for bundle %s - skipping", bundleName)
+			continue
+		}
+
+		if !bundle.IsEnabled() {
 			continue
 		}
 
@@ -82,4 +97,22 @@ func (srv *Service) RebootAfterRun(ctx context.Context) {
 // ShouldReboot returns true if system should be restarted after agent run.
 func (srv *Service) ShouldReboot() bool {
 	return srv.rebootAfterRun
+}
+
+// reportAPIError tracks failed API connection attempts, so we can trigger reboot when connectivity watchdog is enabled.
+func (srv *Service) reportAPIError(ctx context.Context, err error) {
+	if srv.connectivityWatchdogThreshold == 0 {
+		return
+	}
+
+	if !errors.As(err, new(api.ConnectionError)) {
+		srv.failedConnectionsCount = 0
+		return
+	}
+
+	srv.failedConnectionsCount++
+
+	if srv.failedConnectionsCount >= srv.connectivityWatchdogThreshold {
+		srv.RebootAfterRun(ctx)
+	}
 }

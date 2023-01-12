@@ -15,7 +15,11 @@ const deviceConfigurationAPIPath = "/v1/org/device/auth/config"
 func (srv *Service) Get(ctx context.Context) (*CommittedConfig, error) {
 	cfg := new(CommittedConfig)
 
-	if err := srv.api.Get(ctx, deviceConfigurationAPIPath, cfg); err != nil {
+	err := srv.api.Get(ctx, deviceConfigurationAPIPath, cfg)
+
+	srv.reportAPIError(ctx, err)
+
+	if err != nil {
 		return nil, fmt.Errorf("error getting device config: %w", err)
 	}
 

@@ -5,6 +5,10 @@ import (
 	"io"
 )
 
+// ConnectionError is used to explicitly indicate API connectivity issue.
+// This is used to track failed API connection attempts.
+type ConnectionError error
+
 // HTTPError returned when HTTP request results in status code >= 400.
 type HTTPError struct {
 	ResponseCode int

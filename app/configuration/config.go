@@ -1,5 +1,14 @@
 package configuration
 
+const (
+	BundleSettings             = "settings"
+	BundleFileDistribution     = "file_distribution"
+	BundleUsers                = "users"
+	BundleSSHKeys              = "sshkeys"
+	BundlePackageManagement    = "package_management"
+	BundleConnectivityWatchdog = "connectivity_watchdog"
+)
+
 type Config struct {
 	Config CommittedConfig `json:"config"`
 }
@@ -10,20 +19,33 @@ type CommittedConfig struct {
 	BundleData BundleData `json:"bundle_data"`
 }
 
+// HasBundle returns true if bundleName is set in the Bundles list.
+func (cc *CommittedConfig) HasBundle(bundleName string) bool {
+	for _, bundle := range cc.Bundles {
+		if bundle == bundleName {
+			return true
+		}
+	}
+
+	return false
+}
+
 // selectBundleByName returns Bundle by name from the CommittedConfig.
 // If unsupported bundle is provided, nil will be returned.
 func (cc *CommittedConfig) selectBundleByName(bundleName string) Bundle {
 	switch bundleName {
-	case "settings":
+	case BundleSettings:
 		return cc.BundleData.Settings
-	case "file_distribution":
+	case BundleFileDistribution:
 		return cc.BundleData.FileDistribution
-	case "users":
+	case BundleUsers:
 		return cc.BundleData.Users
-	case "sshkeys":
+	case BundleSSHKeys:
 		return cc.BundleData.SSHKeys
-	case "package_management":
+	case BundlePackageManagement:
 		return cc.BundleData.PackageManagement
+	case BundleConnectivityWatchdog:
+		return cc.BundleData.ConnectivityWatchdog
 	default:
 		return nil
 	}
@@ -34,13 +56,13 @@ type BundleData struct {
 	Settings SettingsBundle `json:"settings"`
 
 	// System
-	Users                UsersBundle             `json:"users"`
-	SSHKeys              SSHKeysBundle           `json:"sshkeys"`
-	PackageManagement    PackageManagementBundle `json:"package_management"`
-	FileDistribution     FileDistributionBundle  `json:"file_distribution"`
-	ConnectivityWatchdog ConnectivityWatchdog    `json:"connectivity_watchdog"`
-	ProcWatch            ProcWatch               `json:"proc_watch"`
-	NTP                  NTP                     `json:"ntp"`
+	Users                UsersBundle                `json:"users"`
+	SSHKeys              SSHKeysBundle              `json:"sshkeys"`
+	PackageManagement    PackageManagementBundle    `json:"package_management"`
+	FileDistribution     FileDistributionBundle     `json:"file_distribution"`
+	ConnectivityWatchdog ConnectivityWatchdogBundle `json:"connectivity_watchdog"`
+	ProcWatch            ProcWatch                  `json:"proc_watch"`
+	NTP                  NTP                        `json:"ntp"`
 
 	// Software
 	SoftwareManagement Management       `json:"software_management"`
