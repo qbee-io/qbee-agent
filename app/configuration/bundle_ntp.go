@@ -1,6 +1,11 @@
 package configuration
 
-// NTP configures NTP servers.
+import (
+	"context"
+	"fmt"
+)
+
+// NTPBundle configures NTP servers.
 //
 // Example payload:
 // {
@@ -8,8 +13,14 @@ package configuration
 //    "pool1.ntp.org"
 //  ]
 // }
-type NTP struct {
+type NTPBundle struct {
 	Metadata
 
 	Servers []string `json:"servers"`
+}
+
+// Execute returns a deprecation error message.
+// We don't want to support NTP as its own bundle, since it can be configured using software management.
+func (ntp NTPBundle) Execute(_ context.Context, _ *Service) error {
+	return fmt.Errorf("NTP is no longer supported - please use software management to configure NTP")
 }
