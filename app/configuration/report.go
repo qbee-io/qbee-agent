@@ -1,6 +1,7 @@
 package configuration
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -91,6 +92,11 @@ func ReportCritical(ctx context.Context, extraLog any, msgFmt string, args ...an
 	addReport(ctx, severityCritical, extraLog, msgFmt, args...)
 }
 
+const (
+	consolePrefixReport = "report:"
+	consolePrefixLog    = "log:"
+)
+
 func addReport(ctx context.Context, severity string, extraLog any, msgFmt string, args ...any) {
 	reporter, ok := ctx.Value(ctxReporter).(*Reporter)
 	if !ok {
@@ -120,10 +126,13 @@ func addReport(ctx context.Context, severity string, extraLog any, msgFmt string
 	}
 
 	if reporter.reportToConsole {
-		// uncomment the next line to see extra log contents in the console
-		//fmt.Println("extra log >>>\n", string(extraLogBytes), "\n <<< extra log")
+		if len(extraLogBytes) > 0 {
+			for _, line := range bytes.Split(bytes.TrimSpace(extraLogBytes), []byte("\n")) {
+				fmt.Println(consolePrefixLog, string(line))
+			}
+		}
 
-		fmt.Println(report)
+		fmt.Println(consolePrefixReport, report)
 	}
 
 	reporter.reports = append(reporter.reports, report)

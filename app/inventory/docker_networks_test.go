@@ -7,7 +7,7 @@ import (
 )
 
 func TestCollectDockerNetworksInventory(t *testing.T) {
-	dockerNetworks, err := CollectDockerNetworksInventory()
+	dockerNetworks, err := CollectDockerNetworksInventory(nil)
 	if err != nil {
 		t.Fatalf("error collecting docker networks: %v", err)
 	}

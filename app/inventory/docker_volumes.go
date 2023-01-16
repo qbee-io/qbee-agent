@@ -1,6 +1,7 @@
 package inventory
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -27,7 +28,7 @@ const dockerVolumesFormat = `{` +
 	`}`
 
 // CollectDockerVolumesInventory returns populated DockerVolumes inventory based on current system status.
-func CollectDockerVolumesInventory() (*DockerVolumes, error) {
+func CollectDockerVolumesInventory(ctx context.Context) (*DockerVolumes, error) {
 	if !HasDocker() {
 		return nil, nil
 	}
@@ -36,7 +37,7 @@ func CollectDockerVolumesInventory() (*DockerVolumes, error) {
 
 	volumes := make([]DockerVolume, 0)
 
-	err := utils.ForLinesInCommandOutput(cmd, func(line string) error {
+	err := utils.ForLinesInCommandOutput(ctx, cmd, func(line string) error {
 		volume := new(DockerVolume)
 
 		if err := json.Unmarshal([]byte(line), volume); err != nil {

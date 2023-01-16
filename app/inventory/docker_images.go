@@ -1,6 +1,7 @@
 package inventory
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -34,7 +35,7 @@ const dockerImagesFormat = `{"id":"{{.ID}}","repository":"{{.Repository}}","tag"
 	`"created_at":"{{.CreatedAt}}","size":"{{.Size}}"}`
 
 // CollectDockerImagesInventory returns populated DockerImages inventory based on current system status.
-func CollectDockerImagesInventory() (*DockerImages, error) {
+func CollectDockerImagesInventory(ctx context.Context) (*DockerImages, error) {
 	if !HasDocker() {
 		return nil, nil
 	}
@@ -43,7 +44,7 @@ func CollectDockerImagesInventory() (*DockerImages, error) {
 
 	images := make([]DockerImage, 0)
 
-	err := utils.ForLinesInCommandOutput(cmd, func(line string) error {
+	err := utils.ForLinesInCommandOutput(ctx, cmd, func(line string) error {
 		image := new(DockerImage)
 
 		if err := json.Unmarshal([]byte(line), image); err != nil {

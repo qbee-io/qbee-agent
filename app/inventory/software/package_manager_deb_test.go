@@ -58,7 +58,7 @@ func TestDebPackageManager_parseUpdateAvailableLine(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			deb := &DebPackageManager{}
+			deb := &DebianPackageManager{}
 			if got := deb.parseUpdateAvailableLine(tt.line); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("parseUpdateAvailableLine() = %v, want %v", got, tt.want)
 			}

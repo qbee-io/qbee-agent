@@ -7,6 +7,7 @@ const (
 	BundleSSHKeys              = "sshkeys"
 	BundlePackageManagement    = "package_management"
 	BundleConnectivityWatchdog = "connectivity_watchdog"
+	BundleProcessWatch         = "proc_watch"
 )
 
 type Config struct {
@@ -46,6 +47,8 @@ func (cc *CommittedConfig) selectBundleByName(bundleName string) Bundle {
 		return cc.BundleData.PackageManagement
 	case BundleConnectivityWatchdog:
 		return cc.BundleData.ConnectivityWatchdog
+	case BundleProcessWatch:
+		return cc.BundleData.ProcessWatch
 	default:
 		return nil
 	}
@@ -61,7 +64,7 @@ type BundleData struct {
 	PackageManagement    PackageManagementBundle    `json:"package_management"`
 	FileDistribution     FileDistributionBundle     `json:"file_distribution"`
 	ConnectivityWatchdog ConnectivityWatchdogBundle `json:"connectivity_watchdog"`
-	ProcWatch            ProcWatch                  `json:"proc_watch"`
+	ProcessWatch         ProcessWatchBundle         `json:"proc_watch"`
 	NTP                  NTP                        `json:"ntp"`
 
 	// Software

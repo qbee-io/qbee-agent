@@ -1,6 +1,7 @@
 package inventory
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -54,7 +55,7 @@ const dockerContainersFormat = `{"id":"{{.ID}}","names":"{{.Names}}","image":"{{
 	`"mounts":"{{.Mounts}}", "networks":"{{.Networks}}"}`
 
 // CollectDockerContainersInventory returns populated DockerContainers inventory based on current system status.
-func CollectDockerContainersInventory() (*DockerContainers, error) {
+func CollectDockerContainersInventory(ctx context.Context) (*DockerContainers, error) {
 	if !HasDocker() {
 		return nil, nil
 	}
@@ -63,7 +64,7 @@ func CollectDockerContainersInventory() (*DockerContainers, error) {
 
 	containers := make([]DockerContainer, 0)
 
-	err := utils.ForLinesInCommandOutput(cmd, func(line string) error {
+	err := utils.ForLinesInCommandOutput(ctx, cmd, func(line string) error {
 		container := new(DockerContainer)
 
 		if err := json.Unmarshal([]byte(line), container); err != nil {

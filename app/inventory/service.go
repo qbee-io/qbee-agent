@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	"github.com/qbee-io/qbee-agent/app/api"
-	"github.com/qbee-io/qbee-agent/app/inventory/software"
 )
 
 // Service provides methods for collecting and delivering inventory data.
@@ -69,20 +68,13 @@ func (srv *Service) sendUsersInventory(ctx context.Context) error {
 
 // sendSoftwareInventory gathers software inventory and sends them to the device hub API.
 func (srv *Service) sendSoftwareInventory(ctx context.Context) error {
-	for pkgManager := range software.PackageManagers {
-		softwareInventory, err := CollectSoftwareInventory(pkgManager)
-		if err != nil {
-			return fmt.Errorf("error collecting software inventory: %w", err)
-		}
+	softwareInventory, err := CollectSoftwareInventory(ctx)
+	if err != nil {
+		return fmt.Errorf("error collecting software inventory: %w", err)
+	}
 
-		// skip unsupported package managers
-		if softwareInventory == nil {
-			continue
-		}
-
-		if err = srv.Send(ctx, TypeSoftware, softwareInventory); err != nil {
-			return fmt.Errorf("error sending software inventory: %w", err)
-		}
+	if err = srv.Send(ctx, TypeSoftware, softwareInventory); err != nil {
+		return fmt.Errorf("error sending software inventory: %w", err)
 	}
 
 	return nil
@@ -94,7 +86,7 @@ func (srv *Service) sendDockerContainersInventory(ctx context.Context) error {
 		return nil
 	}
 
-	dockerContainersInventory, err := CollectDockerContainersInventory()
+	dockerContainersInventory, err := CollectDockerContainersInventory(ctx)
 	if err != nil {
 		return fmt.Errorf("error collecting docker containers inventory: %w", err)
 	}
@@ -112,7 +104,7 @@ func (srv *Service) sendDockerImagesInventory(ctx context.Context) error {
 		return nil
 	}
 
-	dockerImagesInventory, err := CollectDockerImagesInventory()
+	dockerImagesInventory, err := CollectDockerImagesInventory(nil)
 	if err != nil {
 		return fmt.Errorf("error collecting docker images inventory: %w", err)
 	}
@@ -130,7 +122,7 @@ func (srv *Service) sendDockerNetworksInventory(ctx context.Context) error {
 		return nil
 	}
 
-	dockerNetworksInventory, err := CollectDockerNetworksInventory()
+	dockerNetworksInventory, err := CollectDockerNetworksInventory(nil)
 	if err != nil {
 		return fmt.Errorf("error collecting docker networks inventory: %w", err)
 	}
@@ -148,7 +140,7 @@ func (srv *Service) sendDockerVolumesInventory(ctx context.Context) error {
 		return nil
 	}
 
-	dockerVolumesInventory, err := CollectDockerVolumesInventory()
+	dockerVolumesInventory, err := CollectDockerVolumesInventory(nil)
 	if err != nil {
 		return fmt.Errorf("error collecting docker volumes inventory: %w", err)
 	}

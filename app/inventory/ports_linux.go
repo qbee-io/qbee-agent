@@ -107,22 +107,21 @@ func parseNetworkPorts(protocol string, inodesMap map[uint64]string) ([]Port, er
 			return fmt.Errorf("error parsing inode %s: %w", inode, err)
 		}
 
-		var cmdLine []byte
+		var cmdLine string
 
 		// lookup socket's inode in the inode map to identify the process owning it
 		if fileDescriptorPath, found := inodesMap[uint64(inodeInt)]; found {
 			processID := strings.SplitN(fileDescriptorPath, "/", 4)[2]
-			cmdLinePath := filepath.Join(linux.ProcFS, processID, "cmdline")
 
-			if cmdLine, err = os.ReadFile(cmdLinePath); err != nil {
-				return fmt.Errorf("error reading %s: %w", cmdLinePath, err)
+			if cmdLine, err = linux.GetProcessCommand(processID); err != nil {
+				return err
 			}
 		}
 
 		ports = append(ports, Port{
 			Protocol: protocol,
 			Socket:   fmt.Sprintf("%s:%d", address, port),
-			Process:  strings.TrimSpace(strings.ReplaceAll(string(cmdLine), "\000", " ")),
+			Process:  cmdLine,
 		})
 
 		return nil

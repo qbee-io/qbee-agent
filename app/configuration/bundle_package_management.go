@@ -47,7 +47,7 @@ type Package struct {
 
 // Execute package management configuration bundle.
 func (p PackageManagementBundle) Execute(ctx context.Context, service *Service) error {
-	if !p.checkPreCondition() {
+	if !p.checkPreCondition(ctx) {
 		return nil
 	}
 
@@ -82,13 +82,13 @@ func (p PackageManagementBundle) Execute(ctx context.Context, service *Service) 
 }
 
 // checkPreCondition returns true if pre-condition succeeds or is not defined.
-func (p PackageManagementBundle) checkPreCondition() bool {
+func (p PackageManagementBundle) checkPreCondition(ctx context.Context) bool {
 	if p.PreCondition == "" {
 		return true
 	}
 
 	// return with no error when pre-condition fails
-	if _, err := utils.RunCommand([]string{getShell(), "-c", p.PreCondition}); err != nil {
+	if _, err := utils.RunCommand(ctx, []string{getShell(), "-c", p.PreCondition}); err != nil {
 		return false
 	}
 
@@ -97,7 +97,7 @@ func (p PackageManagementBundle) checkPreCondition() bool {
 
 // fullUpgrade performs full system upgrade and reports the results.
 func (p PackageManagementBundle) fullUpgrade(ctx context.Context, pkgManager software.PackageManager) (bool, error) {
-	updated, output, err := pkgManager.UpgradeAll()
+	updated, output, err := pkgManager.UpgradeAll(ctx)
 	if err != nil {
 		ReportError(ctx, err, "Full upgrade failed.")
 		return false, err
@@ -118,7 +118,7 @@ func (p PackageManagementBundle) partialUpgrade(ctx context.Context, pkgManager 
 		return false, nil
 	}
 
-	installedPackages, err := pkgManager.ListPackages()
+	installedPackages, err := pkgManager.ListPackages(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -144,7 +144,7 @@ func (p PackageManagementBundle) partialUpgrade(ctx context.Context, pkgManager 
 			}
 		}
 
-		output, err := pkgManager.Install(pkg.Name, pkg.Version)
+		output, err := pkgManager.Install(ctx, pkg.Name, pkg.Version)
 		if err != nil {
 			ReportError(ctx, err, "Unable to install package '%s'", pkg.Name)
 			return false, err

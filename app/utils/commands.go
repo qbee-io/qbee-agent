@@ -1,14 +1,15 @@
 package utils
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os/exec"
 )
 
 // RunCommand runs a command and returns its output.
-func RunCommand(cmd []string) ([]byte, error) {
-	output, err := exec.Command(cmd[0], cmd[1:]...).Output()
+func RunCommand(ctx context.Context, cmd []string) ([]byte, error) {
+	output, err := exec.CommandContext(ctx, cmd[0], cmd[1:]...).Output()
 	if err != nil {
 		exitError := new(exec.ExitError)
 		if errors.As(err, &exitError) {

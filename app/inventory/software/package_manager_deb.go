@@ -1,6 +1,7 @@
 package software
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -13,7 +14,7 @@ import (
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
-const DebPackageManagerType PackageManagerType = "deb"
+const PackageManagerTypeDebian PackageManagerType = "deb"
 
 const (
 	aptGetPath = "/usr/bin/apt-get"
@@ -23,12 +24,17 @@ const (
 	dpkgLockMode = 0640
 )
 
-type DebPackageManager struct {
+type DebianPackageManager struct {
 	supportsAllowDowngradesFlag bool
 }
 
+// Type returns type of the package manager.
+func (deb *DebianPackageManager) Type() PackageManagerType {
+	return PackageManagerTypeDebian
+}
+
 // IsSupported returns true if package manager is supported by the host system.
-func (deb *DebPackageManager) IsSupported() bool {
+func (deb *DebianPackageManager) IsSupported() bool {
 	if runtime.GOOS != "linux" {
 		return false
 	}
@@ -45,7 +51,7 @@ func (deb *DebPackageManager) IsSupported() bool {
 }
 
 // Busy returns true if dpkg is currently locked.
-func (deb *DebPackageManager) Busy() (bool, error) {
+func (deb *DebianPackageManager) Busy() (bool, error) {
 	// check the lock by attempting to acquire one
 	file, err := os.OpenFile(dpkgLockPath, syscall.O_CREAT|syscall.O_RDWR|syscall.O_CLOEXEC, dpkgLockMode)
 	if err != nil {
@@ -69,19 +75,19 @@ func (deb *DebPackageManager) Busy() (bool, error) {
 }
 
 // ListPackages returns a list of packages with available updates.
-func (deb *DebPackageManager) ListPackages() ([]Package, error) {
-	if installedPackages, cached := getCachedPackages(DebPackageManagerType); cached {
+func (deb *DebianPackageManager) ListPackages(ctx context.Context) ([]Package, error) {
+	if installedPackages, cached := getCachedPackages(PackageManagerTypeDebian); cached {
 		return installedPackages, nil
 	}
 
-	installedPackages, err := deb.listInstalledPackages()
+	installedPackages, err := deb.listInstalledPackages(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error listing installed packages: %w", err)
 	}
 
 	// availableUpdates = map[pkgName:arch]updateVersion
 	var availableUpdates map[string]string
-	if availableUpdates, err = deb.listAvailableUpdates(); err != nil {
+	if availableUpdates, err = deb.listAvailableUpdates(ctx); err != nil {
 		return nil, fmt.Errorf("error listing available updates: %w", err)
 	}
 
@@ -89,20 +95,20 @@ func (deb *DebPackageManager) ListPackages() ([]Package, error) {
 		installedPackages[i].Update = availableUpdates[pkg.ID()]
 	}
 
-	setCachedPackages(DebPackageManagerType, installedPackages)
+	setCachedPackages(PackageManagerTypeDebian, installedPackages)
 
 	return installedPackages, nil
 }
 
 // listInstalledPackages returns currently installed debian packages.
-func (deb *DebPackageManager) listInstalledPackages() ([]Package, error) {
+func (deb *DebianPackageManager) listInstalledPackages(ctx context.Context) ([]Package, error) {
 	cmd := []string{dpkgPath, "-l"}
 
 	installedPackages := make([]Package, 0)
 
 	// only process lines matching the following format:
 	// ii  libsystemd0:amd64           232-25+deb9u13     amd64              systemd utility library
-	err := utils.ForLinesInCommandOutput(cmd, func(line string) error {
+	err := utils.ForLinesInCommandOutput(ctx, cmd, func(line string) error {
 		fields := strings.Fields(line)
 
 		if fields[0] != "ii" || len(fields) < 4 {
@@ -130,10 +136,10 @@ func (deb *DebPackageManager) listInstalledPackages() ([]Package, error) {
 }
 
 // listAvailableUpdates returns a map of pkgName:arch -> availableUpdateVersion for packages with available updates.
-func (deb *DebPackageManager) listAvailableUpdates() (map[string]string, error) {
+func (deb *DebianPackageManager) listAvailableUpdates(ctx context.Context) (map[string]string, error) {
 	updateCmd := []string{aptGetPath, "update"}
 
-	if _, err := utils.RunCommand(updateCmd); err != nil {
+	if _, err := utils.RunCommand(ctx, updateCmd); err != nil {
 		return nil, err
 	}
 
@@ -142,7 +148,7 @@ func (deb *DebPackageManager) listAvailableUpdates() (map[string]string, error) 
 
 	// only process lines matching the following format:
 	// Inst libsystemd0 [232-25+deb9u13] (232-25+deb9u14 Debian-Security:9/oldoldstable [amd64])
-	err := utils.ForLinesInCommandOutput(cmd, func(line string) error {
+	err := utils.ForLinesInCommandOutput(ctx, cmd, func(line string) error {
 		pkg := deb.parseUpdateAvailableLine(line)
 		if pkg != nil {
 			updates[pkg.ID()] = pkg.Update
@@ -163,7 +169,7 @@ var debPkgUpdateRE = regexp.MustCompile("^Inst (\\S+) (?:\\[(.+)] )?\\((\\S+) .*
 // If line doesn't match the expected format, nil is returned.
 // Supported format:
 // Inst libsystemd0 [232-25+deb9u13] (232-25+deb9u14 Debian-Security:9/oldoldstable [amd64])
-func (deb *DebPackageManager) parseUpdateAvailableLine(line string) *Package {
+func (deb *DebianPackageManager) parseUpdateAvailableLine(line string) *Package {
 	match := debPkgUpdateRE.FindStringSubmatch(line)
 	if len(match) == 0 {
 		return nil
@@ -188,9 +194,9 @@ var aptGetBaseCommand = []string{
 
 // UpgradeAll performs system upgrade if there are available upgrades.
 // On success, return number of packages upgraded, output of the upgrade command and nil error.
-func (deb *DebPackageManager) UpgradeAll() (int, []byte, error) {
+func (deb *DebianPackageManager) UpgradeAll(ctx context.Context) (int, []byte, error) {
 	// check for updates
-	inventory, err := deb.ListPackages()
+	inventory, err := deb.ListPackages(ctx)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -216,11 +222,11 @@ func (deb *DebPackageManager) UpgradeAll() (int, []byte, error) {
 	shellCmd := []string{"sh", "-c", strings.Join(cmd, " ")}
 
 	var output []byte
-	if output, err = utils.RunCommand(shellCmd); err != nil {
+	if output, err = utils.RunCommand(ctx, shellCmd); err != nil {
 		return 0, output, err
 	}
 
-	InvalidateCache(DebPackageManagerType)
+	InvalidateCache(PackageManagerTypeDebian)
 
 	return updatesAvailable, output, err
 }
@@ -228,7 +234,7 @@ func (deb *DebPackageManager) UpgradeAll() (int, []byte, error) {
 // Install ensures a package with provided version number is installed in the system.
 // If version is empty, the latest version of the package is installed.
 // Returns output of the installation command.
-func (deb *DebPackageManager) Install(pkgName, version string) ([]byte, error) {
+func (deb *DebianPackageManager) Install(ctx context.Context, pkgName, version string) ([]byte, error) {
 	if version != "" {
 		pkgName = fmt.Sprintf("%s=%s", pkgName, version)
 	}
@@ -244,7 +250,7 @@ func (deb *DebPackageManager) Install(pkgName, version string) ([]byte, error) {
 
 	shellCmd := []string{"sh", "-c", strings.Join(installCommand, " ")}
 
-	defer InvalidateCache(DebPackageManagerType)
+	defer InvalidateCache(PackageManagerTypeDebian)
 
-	return utils.RunCommand(shellCmd)
+	return utils.RunCommand(ctx, shellCmd)
 }

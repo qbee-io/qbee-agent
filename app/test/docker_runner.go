@@ -1,4 +1,4 @@
-package runner
+package test
 
 import (
 	"bytes"
@@ -7,15 +7,13 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"runtime"
 	"strings"
 	"testing"
-	"time"
 )
 
 const Debian = "debian:qbee"
 
-func New(t *testing.T, image string) *Runner {
+func NewDockerRunner(t *testing.T, image string) *DockerRunner {
 	output, err := exec.Command("docker", "run", "--rm", "--detach", image, "sleep", "60").Output()
 	if err != nil {
 		panic(err)
@@ -23,9 +21,8 @@ func New(t *testing.T, image string) *Runner {
 
 	container := strings.TrimSpace(string(output))
 
-	runner := &Runner{
+	runner := &DockerRunner{
 		t:         t,
-		start:     time.Now(),
 		container: container,
 	}
 
@@ -35,33 +32,16 @@ func New(t *testing.T, image string) *Runner {
 	return runner
 }
 
-type Runner struct {
+type DockerRunner struct {
 	t         *testing.T
-	start     time.Time
 	container string
 }
 
-func (runner *Runner) log(msg string, args ...any) {
-	msg = fmt.Sprintf(msg, args...)
-
-	_, file, line, ok := runtime.Caller(1)
-	if ok {
-		fmt.Printf("%s:%d: [%v] %s\n", file, line, time.Since(runner.start), msg)
-	} else {
-		fmt.Printf("[%v] %s\n", time.Since(runner.start), msg)
-	}
-}
-
-func (runner *Runner) Close() {
-	runner.log("closing")
+func (runner *DockerRunner) Close() {
 	_ = exec.Command("docker", "kill", runner.container).Run()
-	runner.log("closed")
 }
 
-func (runner *Runner) Exec(cmd ...string) ([]byte, error) {
-	runner.log("executing %v", cmd)
-	defer runner.log("done")
-
+func (runner *DockerRunner) Exec(cmd ...string) ([]byte, error) {
 	execCommand := append([]string{"exec", runner.container}, cmd...)
 
 	output, err := exec.Command("docker", execCommand...).Output()
@@ -69,7 +49,7 @@ func (runner *Runner) Exec(cmd ...string) ([]byte, error) {
 	return bytes.TrimSpace(output), err
 }
 
-func (runner *Runner) MustExec(cmd ...string) []byte {
+func (runner *DockerRunner) MustExec(cmd ...string) []byte {
 	output, err := runner.Exec(cmd...)
 	if err != nil {
 		if len(output) > 0 {
@@ -87,10 +67,7 @@ func (runner *Runner) MustExec(cmd ...string) []byte {
 	return output
 }
 
-func (runner *Runner) CreateFile(path string, contents []byte) {
-	runner.log("creating file %s", path)
-	defer runner.log("done")
-
+func (runner *DockerRunner) CreateFile(path string, contents []byte) {
 	fd, err := os.CreateTemp(runner.t.TempDir(), "qbee-test-*")
 	if err != nil {
 		panic(err)
@@ -113,17 +90,11 @@ func (runner *Runner) CreateFile(path string, contents []byte) {
 	}
 }
 
-func (runner *Runner) ReadFile(path string) []byte {
-	runner.log("reading file %s", path)
-	defer runner.log("done")
-
+func (runner *DockerRunner) ReadFile(path string) []byte {
 	return runner.MustExec("cat", path)
 }
 
-func (runner *Runner) CreateJSON(path string, doc any) {
-	runner.log("creating JSON %s", path)
-	defer runner.log("done")
-
+func (runner *DockerRunner) CreateJSON(path string, doc any) {
 	docBytes, err := json.Marshal(doc)
 	if err != nil {
 		panic(err)

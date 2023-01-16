@@ -3,6 +3,7 @@ package utils
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -47,8 +48,8 @@ func ForLinesInFile(filePath string, fn func(string) error) error {
 }
 
 // ForLinesInCommandOutput executes a command and runs fn for each line of the stdout.
-func ForLinesInCommandOutput(cmd []string, fn func(string) error) error {
-	output, err := RunCommand(cmd)
+func ForLinesInCommandOutput(ctx context.Context, cmd []string, fn func(string) error) error {
+	output, err := RunCommand(ctx, cmd)
 	if err != nil {
 		return err
 	}

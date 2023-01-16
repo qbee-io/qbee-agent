@@ -1,6 +1,7 @@
 package inventory
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/qbee-io/qbee-agent/app/inventory/software"
@@ -17,23 +18,19 @@ type Software struct {
 }
 
 // CollectSoftwareInventory returns populated Software inventory based on current system status.
-func CollectSoftwareInventory(pkgManagerType software.PackageManagerType) (*Software, error) {
-	pkgManager, ok := software.PackageManagers[pkgManagerType]
-	if !ok {
-		return nil, fmt.Errorf("unknown package manager type: %s", pkgManagerType)
+func CollectSoftwareInventory(ctx context.Context) (*Software, error) {
+	pkgManager := software.DefaultPackageManager
+	if pkgManager == nil {
+		return nil, fmt.Errorf("no supported package manager found")
 	}
 
-	if !pkgManager.IsSupported() {
-		return nil, nil
-	}
-
-	pkgList, err := pkgManager.ListPackages()
+	pkgList, err := pkgManager.ListPackages(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error listing %s packages: %w", pkgManagerType, err)
+		return nil, fmt.Errorf("error listing packages: %w", err)
 	}
 
 	softwareInventory := &Software{
-		PackageManager: pkgManagerType,
+		PackageManager: pkgManager.Type(),
 		Items:          pkgList,
 	}
 

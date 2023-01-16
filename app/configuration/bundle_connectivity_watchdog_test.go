@@ -1,4 +1,4 @@
-package configuration
+package configuration_test
 
 import (
 	"context"
@@ -6,17 +6,18 @@ import (
 	"testing"
 
 	"github.com/qbee-io/qbee-agent/app/api"
+	"github.com/qbee-io/qbee-agent/app/configuration"
 )
 
 func Test_ConnectivityWatchdog(t *testing.T) {
 	apiClient := api.NewClient("invalid-host.example", "12345", nil)
-	service := New(apiClient, "")
+	service := configuration.New(apiClient, "")
 
-	committedConfig := CommittedConfig{
+	committedConfig := configuration.CommittedConfig{
 		Bundles: []string{"connectivity_watchdog"},
-		BundleData: BundleData{
-			ConnectivityWatchdog: ConnectivityWatchdogBundle{
-				Metadata:  Metadata{Enabled: true},
+		BundleData: configuration.BundleData{
+			ConnectivityWatchdog: configuration.ConnectivityWatchdogBundle{
+				Metadata:  configuration.Metadata{Enabled: true},
 				Threshold: "2",
 			},
 		},
@@ -47,9 +48,9 @@ func Test_ConnectivityWatchdog(t *testing.T) {
 	}
 
 	// reset reboot flag and make sure that executing config without connectivity watchdog doesn't trigger the reboot
-	service.rebootAfterRun = false
+	service.ResetRebootAfterRun()
 
-	if err := service.Execute(ctx, new(CommittedConfig)); err != nil {
+	if err := service.Execute(ctx, new(configuration.CommittedConfig)); err != nil {
 		t.Fatalf("error executing config: %v", err)
 	}
 

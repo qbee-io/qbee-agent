@@ -7,7 +7,7 @@ import (
 )
 
 func TestCollectDockerImagesInventory(t *testing.T) {
-	dockerImages, err := CollectDockerImagesInventory()
+	dockerImages, err := CollectDockerImagesInventory(nil)
 	if err != nil {
 		t.Fatalf("error collecting docker images: %v", err)
 	}

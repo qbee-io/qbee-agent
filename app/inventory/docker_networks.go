@@ -1,6 +1,7 @@
 package inventory
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -39,7 +40,7 @@ const dockerNetworksFormat = `{` +
 	`}`
 
 // CollectDockerNetworksInventory returns populated DockerNetworks inventory based on current system status.
-func CollectDockerNetworksInventory() (*DockerNetworks, error) {
+func CollectDockerNetworksInventory(ctx context.Context) (*DockerNetworks, error) {
 	if !HasDocker() {
 		return nil, nil
 	}
@@ -48,7 +49,7 @@ func CollectDockerNetworksInventory() (*DockerNetworks, error) {
 
 	networks := make([]DockerNetwork, 0)
 
-	err := utils.ForLinesInCommandOutput(cmd, func(line string) error {
+	err := utils.ForLinesInCommandOutput(ctx, cmd, func(line string) error {
 		network := new(DockerNetwork)
 
 		if err := json.Unmarshal([]byte(line), network); err != nil {

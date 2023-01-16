@@ -12,7 +12,7 @@ import (
 )
 
 func TestCollectSoftwareInventory_Deb(t *testing.T) {
-	softwareInventory, err := inventory.CollectSoftwareInventory(software.DebPackageManagerType)
+	softwareInventory, err := inventory.CollectSoftwareInventory(software.PackageManagerTypeDebian)
 	if err != nil {
 		t.Fatalf("error collecting software inventory: %v", err)
 	}

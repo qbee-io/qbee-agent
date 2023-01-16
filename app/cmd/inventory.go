@@ -8,13 +8,11 @@ import (
 
 	"github.com/qbee-io/qbee-agent/app/agent"
 	"github.com/qbee-io/qbee-agent/app/inventory"
-	"github.com/qbee-io/qbee-agent/app/inventory/software"
 )
 
 const (
-	inventoryTypeOption       = "type"
-	inventoryPkgManagerOption = "pkg-manager"
-	inventoryDryRunOption     = "dry-run"
+	inventoryTypeOption   = "type"
+	inventoryDryRunOption = "dry-run"
 )
 
 var inventoryCommand = Command{
@@ -28,12 +26,6 @@ var inventoryCommand = Command{
 			Default:  "system",
 		},
 		{
-			Name:    inventoryPkgManagerOption,
-			Short:   "p",
-			Help:    "Package Manager (for software inventory).",
-			Default: string(software.DebPackageManagerType),
-		},
-		{
 			Name:  inventoryDryRunOption,
 			Short: "d",
 			Help:  "Don't send inventory. Just dump as JSON to standard output.",
@@ -42,8 +34,9 @@ var inventoryCommand = Command{
 	},
 	Target: func(opts Options) error {
 		inventoryType := inventory.Type(opts[inventoryTypeOption])
-		pkgManager := software.PackageManagerType(opts[inventoryPkgManagerOption])
 		dryRun := opts[inventoryDryRunOption] == "true"
+
+		ctx := context.Background()
 
 		var err error
 		var inventoryData any
@@ -58,15 +51,15 @@ var inventoryCommand = Command{
 		case inventory.TypeUsers:
 			inventoryData, err = inventory.CollectUsersInventory()
 		case inventory.TypeSoftware:
-			inventoryData, err = inventory.CollectSoftwareInventory(pkgManager)
+			inventoryData, err = inventory.CollectSoftwareInventory(ctx)
 		case inventory.TypeDockerContainers:
-			inventoryData, err = inventory.CollectDockerContainersInventory()
+			inventoryData, err = inventory.CollectDockerContainersInventory(ctx)
 		case inventory.TypeDockerImages:
-			inventoryData, err = inventory.CollectDockerImagesInventory()
+			inventoryData, err = inventory.CollectDockerImagesInventory(ctx)
 		case inventory.TypeDockerNetworks:
-			inventoryData, err = inventory.CollectDockerNetworksInventory()
+			inventoryData, err = inventory.CollectDockerNetworksInventory(ctx)
 		case inventory.TypeDockerVolumes:
-			inventoryData, err = inventory.CollectDockerVolumesInventory()
+			inventoryData, err = inventory.CollectDockerVolumesInventory(ctx)
 		default:
 			return fmt.Errorf("unsupported inventory type")
 		}
@@ -79,7 +72,6 @@ var inventoryCommand = Command{
 			return json.NewEncoder(os.Stdout).Encode(inventoryData)
 		}
 
-		ctx := context.Background()
 		var cfg *agent.Config
 		if cfg, err = loadConfig(opts); err != nil {
 			return err
