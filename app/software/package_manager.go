@@ -42,7 +42,8 @@ type PackageManager interface {
 	UpgradeAll(ctx context.Context) (int, []byte, error)
 
 	// Install ensures a package with provided version number is installed in the system.
-	// If package exists in the system in the right version, return false.
-	// If package was installed as a result of this method call, return true.
 	Install(ctx context.Context, pkgName, version string) ([]byte, error)
+
+	// InstallLocal package.
+	InstallLocal(ctx context.Context, pkgFilePath string) ([]byte, error)
 }

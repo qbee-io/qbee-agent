@@ -1,7 +1,10 @@
 package software
 
 import (
+	"context"
+	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 )
 
@@ -63,5 +66,27 @@ func TestDebPackageManager_parseUpdateAvailableLine(t *testing.T) {
 				t.Errorf("parseUpdateAvailableLine() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestParseDebianPackage(t *testing.T) {
+	ctx := context.Background()
+
+	_, currentFile, _, _ := runtime.Caller(0)
+	testPkg := filepath.Join(filepath.Dir(currentFile), "test_repository", "debian", "test_1.0.1.deb")
+
+	pkgInfo, err := ParseDebianPackage(ctx, testPkg)
+	if err != nil {
+		t.Fatalf("got unexpected error: %v", err)
+	}
+
+	expectedPkg := &Package{
+		Name:         "qbee-test",
+		Version:      "1.0.1",
+		Architecture: "all",
+	}
+
+	if !reflect.DeepEqual(pkgInfo, expectedPkg) {
+		t.Fatalf("expected %v, got %v", expectedPkg, pkgInfo)
 	}
 }

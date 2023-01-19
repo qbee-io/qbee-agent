@@ -23,18 +23,31 @@ const (
 	credentialsFileMode = 0600
 )
 
+//go:embed ca/dev.crt
+var devRootCA []byte
+
 //go:embed ca/prod.crt
 var prodRootCA []byte
 
 // loadCACertificatesPool loads all trusted CA certificate.
 func (agent *Agent) loadCACertificatesPool() error {
-	caCert, err := x509.ParseCertificate(prodRootCA)
+	prodCACert, err := x509.ParseCertificate(prodRootCA)
 	if err != nil {
 		return fmt.Errorf("error parsing CA certificate: %w", err)
 	}
 
 	agent.caCertPool = x509.NewCertPool()
-	agent.caCertPool.AddCert(caCert)
+	agent.caCertPool.AddCert(prodCACert)
+
+	// for non-production device-hub host, allow dev CA
+	if agent.cfg.DeviceHubServer != DefaultDeviceHubServer {
+		var devCACert *x509.Certificate
+		if devCACert, err = x509.ParseCertificate(devRootCA); err != nil {
+			return fmt.Errorf("error parsing dev-CA certificate: %w", err)
+		}
+
+		agent.caCertPool.AddCert(devCACert)
+	}
 
 	return nil
 }

@@ -16,7 +16,7 @@ func Test_ConnectivityWatchdog(t *testing.T) {
 	committedConfig := configuration.CommittedConfig{
 		Bundles: []string{"connectivity_watchdog"},
 		BundleData: configuration.BundleData{
-			ConnectivityWatchdog: configuration.ConnectivityWatchdogBundle{
+			ConnectivityWatchdog: &configuration.ConnectivityWatchdogBundle{
 				Metadata:  configuration.Metadata{Enabled: true},
 				Threshold: "2",
 			},

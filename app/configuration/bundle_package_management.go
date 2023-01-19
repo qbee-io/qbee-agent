@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/qbee-io/qbee-agent/app/inventory/software"
+	"github.com/qbee-io/qbee-agent/app/software"
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
 

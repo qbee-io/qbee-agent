@@ -26,6 +26,7 @@ func prepareDirectories(cfgDirectory, stateDirectory string) error {
 	directories := []string{
 		filepath.Join(cfgDirectory, credentialsDirectory),
 		filepath.Join(cacheDirectoryPath, configuration.FileDistributionCacheDirectory),
+		filepath.Join(cacheDirectoryPath, configuration.SoftwareCacheDirectory),
 	}
 
 	for _, directory := range directories {

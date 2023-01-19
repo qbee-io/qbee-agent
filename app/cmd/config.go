@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	configFromFileOption = "from-file"
-	configDryRunOption   = "dry-run"
+	configFromFileOption        = "from-file"
+	configDryRunOption          = "dry-run"
+	configReportToConsoleOption = "report-to-console"
 )
 
 var configCommand = Command{
@@ -24,6 +25,12 @@ var configCommand = Command{
 			Help:  "Apply configuration from provided file.",
 		},
 		{
+			Name:  configReportToConsoleOption,
+			Short: "r",
+			Help:  "Print configuration reports to console.",
+			Flag:  "true",
+		},
+		{
 			Name:  configDryRunOption,
 			Short: "d",
 			Help:  "Don't apply configuration. Just dump current configuration as JSON to standard output.",
@@ -33,6 +40,7 @@ var configCommand = Command{
 	Target: func(opts Options) error {
 		dryRun := opts[configDryRunOption] == "true"
 		fromFile := opts[configFromFileOption]
+		reportToConsole := opts[configReportToConsoleOption] == "true"
 
 		ctx := context.Background()
 
@@ -45,9 +53,12 @@ var configCommand = Command{
 
 		if fromFile != "" {
 			deviceAgent, err = agent.NewWithoutCredentials(cfg)
-			deviceAgent.Configuration.EnableConsoleReporting()
 		} else {
 			deviceAgent, err = agent.New(cfg)
+		}
+
+		if reportToConsole {
+			deviceAgent.Configuration.EnableConsoleReporting()
 		}
 
 		if err != nil {

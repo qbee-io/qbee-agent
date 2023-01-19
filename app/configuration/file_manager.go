@@ -26,6 +26,9 @@ const (
 // FileDistributionCacheDirectory is where the agent will download template files for processing.
 const FileDistributionCacheDirectory = "file_distribution"
 
+// SoftwareCacheDirectory is where the agent will download software packages to install.
+const SoftwareCacheDirectory = "software"
+
 type FileMetadata struct {
 	MD5          string            `json:"md5"`
 	LastModified int64             `json:"last_modified"`
@@ -131,6 +134,7 @@ func (srv *Service) downloadTemplateFile(ctx context.Context, src, dst string, p
 
 	defer dstFile.Close()
 
+	fmt.Println("params >>>", params)
 	if err = renderTemplate(srcFile, params, dstFile); err != nil {
 		return false, err
 	}

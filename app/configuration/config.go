@@ -9,6 +9,7 @@ const (
 	BundleConnectivityWatchdog = "connectivity_watchdog"
 	BundleProcessWatch         = "proc_watch"
 	BundleNTP                  = "ntp"
+	BundleSoftwareManagement   = "software_management"
 )
 
 type Config struct {
@@ -52,6 +53,8 @@ func (cc *CommittedConfig) selectBundleByName(bundleName string) Bundle {
 		return cc.BundleData.ProcessWatch
 	case BundleNTP:
 		return cc.BundleData.NTP
+	case BundleSoftwareManagement:
+		return cc.BundleData.SoftwareManagement
 	default:
 		return nil
 	}
@@ -62,19 +65,19 @@ type BundleData struct {
 	Settings SettingsBundle `json:"settings"`
 
 	// System
-	Users                UsersBundle                `json:"users"`
-	SSHKeys              SSHKeysBundle              `json:"sshkeys"`
-	PackageManagement    PackageManagementBundle    `json:"package_management"`
-	FileDistribution     FileDistributionBundle     `json:"file_distribution"`
-	ConnectivityWatchdog ConnectivityWatchdogBundle `json:"connectivity_watchdog"`
-	ProcessWatch         ProcessWatchBundle         `json:"proc_watch"`
-	NTP                  NTPBundle                  `json:"ntp"`
+	Users                *UsersBundle                `json:"users,omitempty"`
+	SSHKeys              *SSHKeysBundle              `json:"sshkeys,omitempty"`
+	PackageManagement    *PackageManagementBundle    `json:"package_management,omitempty"`
+	FileDistribution     *FileDistributionBundle     `json:"file_distribution,omitempty"`
+	ConnectivityWatchdog *ConnectivityWatchdogBundle `json:"connectivity_watchdog,omitempty"`
+	ProcessWatch         *ProcessWatchBundle         `json:"proc_watch,omitempty"`
+	NTP                  *NTPBundle                  `json:"ntp,omitempty"`
 
 	// Software
-	SoftwareManagement Management       `json:"software_management"`
-	DockerContainers   DockerContainers `json:"docker_containers"`
+	SoftwareManagement *SoftwareManagementBundle `json:"software_management,omitempty"`
+	DockerContainers   *DockerContainers         `json:"docker_containers,omitempty"`
 
 	// Security
-	Password Password `json:"password"`
-	Firewall Firewall `json:"firewall"`
+	Password *Password `json:"password,omitempty"`
+	Firewall *Firewall `json:"firewall,omitempty"`
 }

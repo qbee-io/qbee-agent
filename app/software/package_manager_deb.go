@@ -254,3 +254,52 @@ func (deb *DebianPackageManager) Install(ctx context.Context, pkgName, version s
 
 	return utils.RunCommand(ctx, shellCmd)
 }
+
+// InstallLocal package.
+func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath string) ([]byte, error) {
+	installCommand := append(
+		// install package using dpkg,
+		[]string{dpkgPath, "-i", pkgFilePath, "||"},
+		// but if install fails, it might be missing dependencies, so we need "apt-get install -f" to correct that
+		append(aptGetBaseCommand, "install")...)
+
+	cmd := []string{"sh", "-c", strings.Join(installCommand, " ")}
+
+	defer InvalidateCache(PackageManagerTypeDebian)
+
+	return utils.RunCommand(ctx, cmd)
+}
+
+// ParseDebianPackage and return Package information.
+func ParseDebianPackage(ctx context.Context, pkgFilePath string) (*Package, error) {
+	cmd := []string{dpkgPath, "-I", pkgFilePath}
+
+	pkg := new(Package)
+
+	err := utils.ForLinesInCommandOutput(ctx, cmd, func(line string) error {
+		fields := strings.Fields(line)
+		if len(fields) != 2 {
+			return nil
+		}
+
+		switch fields[0] {
+		case "Package:":
+			pkg.Name = fields[1]
+		case "Version:":
+			pkg.Version = fields[1]
+		case "Architecture:":
+			pkg.Architecture = fields[1]
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if pkg.Name == "" || pkg.Version == "" || pkg.Architecture == "" {
+		return nil, fmt.Errorf("invalid debian package: %s", pkgFilePath)
+	}
+
+	return pkg, nil
+}

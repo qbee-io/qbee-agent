@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/qbee-io/qbee-agent/app/inventory"
-	"github.com/qbee-io/qbee-agent/app/inventory/software"
+	"github.com/qbee-io/qbee-agent/app/software"
 )
 
 func TestCollectSoftwareInventory_Deb(t *testing.T) {
