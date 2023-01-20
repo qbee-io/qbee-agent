@@ -1,6 +1,16 @@
 package configuration
 
-// Firewall configures system firewall.
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"os/exec"
+	"strings"
+
+	"github.com/qbee-io/qbee-agent/app/utils"
+)
+
+// FirewallBundle configures system firewall.
 //
 // Example payload:
 // {
@@ -20,11 +30,24 @@ package configuration
 //    }
 //  }
 // }
-type Firewall struct {
+type FirewallBundle struct {
 	Metadata
 
 	// Tables defines a map of firewall tables to be modified.
 	Tables map[FirewallTableName]FirewallTable `json:"tables"`
+}
+
+// Execute firewall configuration bundle on the system.
+func (f FirewallBundle) Execute(ctx context.Context, service *Service) error {
+	for tableName, chains := range f.Tables {
+		for chainName, chain := range chains {
+			if err := chain.execute(ctx, tableName, chainName); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 // FirewallTableName defines which firewall table name.
@@ -76,6 +99,74 @@ type FirewallChain struct {
 	Rules []FirewallRule `json:"rules"`
 }
 
+// execute a firewall chain configuration.
+func (c FirewallChain) execute(ctx context.Context, table FirewallTableName, chain FirewallChainName) error {
+	iptablesBin, err := exec.LookPath("iptables")
+	if err != nil {
+		ReportError(ctx, err, "Firewall configuration failed.")
+		return err
+	}
+
+	// list current rules for a table and chain
+	listRulesCmd := []string{iptablesBin, "-t", string(table), "-S", string(chain)}
+	var currentRules []byte
+	if currentRules, err = utils.RunCommand(ctx, listRulesCmd); err != nil {
+		ReportError(ctx, err, "Firewall configuration failed.")
+		return err
+	}
+
+	// make expected rules-set
+	expectedRules := c.Render(table, chain)
+
+	// current state is correct, nothing to do
+	if bytes.Equal(bytes.TrimSpace(currentRules), []byte(strings.Join(expectedRules, "\n"))) {
+		return nil
+	}
+
+	ReportWarning(ctx, currentRules, "Current firewall rules are not in compliance.")
+
+	// flush all rules
+	flushCmd := []string{iptablesBin, "-t", string(table), "-F", string(chain)}
+	if _, err = utils.RunCommand(ctx, flushCmd); err != nil {
+		ReportError(ctx, err, "Firewall configuration failed.")
+		return err
+	}
+
+	// apply correct rules
+	for _, rule := range expectedRules {
+		cmd := append([]string{iptablesBin, "-t", string(table)}, strings.Fields(rule)...)
+		if _, err = utils.RunCommand(ctx, cmd); err != nil {
+			ReportError(ctx, err, "Firewall configuration failed.")
+			return err
+		}
+	}
+
+	ReportInfo(ctx, nil, "Load of new iptables rules succeeded for table %s.", table)
+
+	return nil
+}
+
+// Render rules based on provided firewall chain and table information.
+func (c FirewallChain) Render(table FirewallTableName, chain FirewallChainName) []string {
+	rules := []string{
+		fmt.Sprintf("-P %s %s", chain, c.Policy),
+	}
+
+	// for INPUT chain in the filter table we want to add some special rules
+	if table == Filter && chain == Input {
+		rules = append(rules,
+			"-A INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT",
+			"-A INPUT -i lo -j ACCEPT",
+		)
+	}
+
+	for _, rule := range c.Rules {
+		rules = append(rules, rule.Render(chain))
+	}
+
+	return rules
+}
+
 // FirewallRule defines a single firewall rule.
 type FirewallRule struct {
 	// SourceIP matches packets by source IP.
@@ -89,4 +180,23 @@ type FirewallRule struct {
 
 	// Target defines what to do with a packet when matched.
 	Target Target `json:"target"`
+}
+
+// Render rule as a string acceptable by iptables.
+func (r FirewallRule) Render(chain FirewallChainName) string {
+	rule := []string{"-A", string(chain)}
+
+	if r.SourceIP != "" {
+		rule = append(rule, "-s", r.SourceIP)
+	}
+
+	rule = append(rule, "-p", string(r.Protocol), "-m", string(r.Protocol))
+
+	if r.DestinationPort != "" {
+		rule = append(rule, "--dport", r.DestinationPort)
+	}
+
+	rule = append(rule, "-j", string(r.Target))
+
+	return strings.Join(rule, " ")
 }

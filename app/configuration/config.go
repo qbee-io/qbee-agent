@@ -10,6 +10,7 @@ const (
 	BundleProcessWatch         = "proc_watch"
 	BundleNTP                  = "ntp"
 	BundleSoftwareManagement   = "software_management"
+	BundleFirewall             = "firewall"
 )
 
 type Config struct {
@@ -55,6 +56,8 @@ func (cc *CommittedConfig) selectBundleByName(bundleName string) Bundle {
 		return cc.BundleData.NTP
 	case BundleSoftwareManagement:
 		return cc.BundleData.SoftwareManagement
+	case BundleFirewall:
+		return cc.BundleData.Firewall
 	default:
 		return nil
 	}
@@ -78,6 +81,6 @@ type BundleData struct {
 	DockerContainers   *DockerContainers         `json:"docker_containers,omitempty"`
 
 	// Security
-	Password *Password `json:"password,omitempty"`
-	Firewall *Firewall `json:"firewall,omitempty"`
+	Password *Password       `json:"password,omitempty"`
+	Firewall *FirewallBundle `json:"firewall,omitempty"`
 }

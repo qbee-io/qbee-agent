@@ -14,7 +14,16 @@ import (
 const Debian = "debian:qbee"
 
 func New(t *testing.T) *Runner {
-	output, err := exec.Command("docker", "run", "--rm", "--detach", Debian, "sleep", "600").Output()
+	cmdArgs := []string{
+		"run",
+		"--rm",                // remove container after container exits
+		"--cap-add=NET_ADMIN", // allow control of firewall
+		"--detach",            // launch in background
+		Debian,
+		"sleep", "600", // force exit container after 10 minutes
+	}
+
+	output, err := exec.Command("docker", cmdArgs...).Output()
 	if err != nil {
 		panic(err)
 	}
