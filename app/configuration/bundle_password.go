@@ -1,6 +1,16 @@
 package configuration
 
-// Password bundle sets passwords for existing users.
+import (
+	"context"
+	"fmt"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/qbee-io/qbee-agent/app/inventory"
+)
+
+// PasswordBundle bundle sets passwords for existing users.
 //
 // Example payload:
 // {
@@ -11,7 +21,7 @@ package configuration
 //    }
 //  ]
 // }
-type Password struct {
+type PasswordBundle struct {
 	Metadata
 
 	Users []UserPassword `json:"users"`
@@ -20,4 +30,63 @@ type Password struct {
 type UserPassword struct {
 	Username     string `json:"username"`
 	PasswordHash string `json:"passwordhash"`
+}
+
+const secondsInADay = 60 * 60 * 24
+const shadowFileMode = 0640
+
+func (p PasswordBundle) Execute(ctx context.Context, service *Service) error {
+	// convert user passwords to a map for quick lookup
+	passwordMap := make(map[string]string)
+	for _, user := range p.Users {
+		passwordMap[user.Username] = user.PasswordHash
+	}
+
+	// get current shadow file
+	data, err := os.ReadFile(inventory.ShadowFilePath)
+	if err != nil {
+		ReportError(ctx, err, "Unable to manage passwords.")
+		return err
+	}
+
+	// process all the lines and check if users have the right passwords
+	currentLines := strings.Split(string(data), "\n")
+	outputLines := make([]string, len(currentLines))
+	modifiedUsers := make([]string, 0)
+
+	for i, line := range currentLines {
+		fields := strings.Split(line, ":")
+		expectedPassword, ok := passwordMap[fields[0]]
+
+		// copy without changes if user doesn't have a defined password configuration or the password is already correct
+		if !ok || fields[1] == expectedPassword {
+			outputLines[i] = line
+			continue
+		}
+
+		// set expected password and reset its age
+		fields[1] = expectedPassword
+		fields[2] = fmt.Sprintf("%d", time.Now().Unix()/secondsInADay)
+		outputLines[i] = strings.Join(fields, ":")
+		modifiedUsers = append(modifiedUsers, fields[0])
+	}
+
+	// no changes needed
+	if len(modifiedUsers) == 0 {
+		return nil
+	}
+
+	// changes were made, so we need to write the new shadow file
+	err = os.WriteFile(inventory.ShadowFilePath, []byte(strings.Join(outputLines, "\n")), shadowFileMode)
+	if err != nil {
+		ReportError(ctx, err, "Error setting passwords for users.")
+		return err
+	}
+
+	// and report users for which we changed the password
+	for _, user := range modifiedUsers {
+		ReportInfo(ctx, nil, "Password for user %s successfully set.", user)
+	}
+
+	return nil
 }

@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	passwdFilePath = "/etc/passwd"
-	shadowFilePath = "/etc/shadow"
+	PasswdFilePath = "/etc/passwd"
+	ShadowFilePath = "/etc/shadow"
 )
 
 const (
@@ -42,7 +42,7 @@ var shadowAlgorithms = map[string]int{
 
 // CollectUsersInventory returns populated Users inventory based on current system status.
 func CollectUsersInventory() (*Users, error) {
-	users, err := getUsersFromPasswd(passwdFilePath, shadowFilePath)
+	users, err := getUsersFromPasswd(PasswdFilePath, ShadowFilePath)
 	if err != nil {
 		return nil, err
 	}
