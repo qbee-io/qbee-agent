@@ -12,6 +12,7 @@ const (
 	BundleSoftwareManagement   = "software_management"
 	BundleFirewall             = "firewall"
 	BundlePassword             = "password"
+	BundleDockerContainers     = "docker_containers"
 )
 
 type Config struct {
@@ -61,6 +62,8 @@ func (cc *CommittedConfig) selectBundleByName(bundleName string) Bundle {
 		return cc.BundleData.Firewall
 	case BundlePassword:
 		return cc.BundleData.Password
+	case BundleDockerContainers:
+		return cc.BundleData.DockerContainers
 	default:
 		return nil
 	}
@@ -81,7 +84,7 @@ type BundleData struct {
 
 	// Software
 	SoftwareManagement *SoftwareManagementBundle `json:"software_management,omitempty"`
-	DockerContainers   *DockerContainers         `json:"docker_containers,omitempty"`
+	DockerContainers   *DockerContainersBundle   `json:"docker_containers,omitempty"`
 
 	// Security
 	Password *PasswordBundle `json:"password,omitempty"`

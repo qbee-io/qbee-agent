@@ -27,6 +27,7 @@ func prepareDirectories(cfgDirectory, stateDirectory string) error {
 		filepath.Join(cfgDirectory, credentialsDirectory),
 		filepath.Join(cacheDirectoryPath, configuration.FileDistributionCacheDirectory),
 		filepath.Join(cacheDirectoryPath, configuration.SoftwareCacheDirectory),
+		filepath.Join(cacheDirectoryPath, configuration.DockerContainerDirectory),
 	}
 
 	for _, directory := range directories {

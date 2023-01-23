@@ -16,7 +16,12 @@ const Debian = "debian:qbee"
 func New(t *testing.T) *Runner {
 	cmdArgs := []string{
 		"run",
-		"--rm",                // remove container after container exits
+		"--rm",                                            // remove container after container exits
+		"-v", "/var/run/docker.sock:/var/run/docker.sock", // mount docker socket
+		"-v", "/sys/fs/cgroup:/sys/fs/cgroup:ro", // mount cgroup for docker
+		"--tmpfs", "/tmp",
+		"--tmpfs", "/run",
+		"--tmpfs", "/run/lock",
 		"--cap-add=NET_ADMIN", // allow control of firewall
 		"--detach",            // launch in background
 		Debian,
