@@ -50,7 +50,7 @@ func Test_SoftwareManagementBundle_InstallPackageFromFile(t *testing.T) {
 	test.Equal(t, string(output), "2.1.1")
 }
 
-func Test_SoftwareManagementBundle_InstallPackageFromFile_WithDependecies(t *testing.T) {
+func Test_SoftwareManagementBundle_InstallPackageFromFile_WithDependencies(t *testing.T) {
 	r := test.New(t)
 	r.Bootstrap()
 

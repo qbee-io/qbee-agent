@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
 // FileDistributionBundle controls files in the system.
@@ -45,6 +47,23 @@ type FileSet struct {
 
 	// AfterCommand defines a command to be executed after files are saved on the filesystem.
 	AfterCommand string `json:"command"`
+
+	// PreCondition defines an optional command which needs to return 0 in order for the FileSet to be executed.
+	PreCondition string `json:"pre_condition" bson:"pre_condition"`
+}
+
+// checkPreCondition returns true if pre-condition succeeds or is not defined.
+func (fs *FileSet) checkPreCondition(ctx context.Context) bool {
+	if fs.PreCondition == "" {
+		return true
+	}
+
+	// return with no error when pre-condition fails
+	if _, err := utils.RunCommand(ctx, []string{getShell(), "-c", fs.PreCondition}); err != nil {
+		return false
+	}
+
+	return true
 }
 
 // ParametersMap returns TemplateParameters as map.
@@ -84,6 +103,10 @@ const afterCommandDeadline = 30 * time.Minute
 // Execute file distribution config on the system.
 func (fd FileDistributionBundle) Execute(ctx context.Context, service *Service) error {
 	for _, fileSet := range fd.FileSets {
+		if !fileSet.checkPreCondition(ctx) {
+			continue
+		}
+
 		parameters := fileSet.ParametersMap()
 		anythingChanged := false
 
