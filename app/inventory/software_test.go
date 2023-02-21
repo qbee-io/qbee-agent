@@ -3,16 +3,16 @@
 package inventory_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
 
 	"github.com/qbee-io/qbee-agent/app/inventory"
-	"github.com/qbee-io/qbee-agent/app/software"
 )
 
 func TestCollectSoftwareInventory_Deb(t *testing.T) {
-	softwareInventory, err := inventory.CollectSoftwareInventory(software.PackageManagerTypeDebian)
+	softwareInventory, err := inventory.CollectSoftwareInventory(context.Background())
 	if err != nil {
 		t.Fatalf("error collecting software inventory: %v", err)
 	}
