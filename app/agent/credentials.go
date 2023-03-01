@@ -49,6 +49,26 @@ func (agent *Agent) loadCACertificatesPool() error {
 		agent.caCertPool.AddCert(devCACert)
 	}
 
+	// for testing, we want to allow
+	if envCA := os.Getenv("CA_CERT"); envCA != "" {
+		pemCert, err := os.ReadFile(envCA)
+		if err != nil {
+			return fmt.Errorf("error reading env-CA certificate %s: %w", envCA, err)
+		}
+
+		pemBlock, _ := pem.Decode(pemCert)
+		if pemBlock == nil {
+			return fmt.Errorf("error decoding env-CA certificate %s: %w", envCA, err)
+		}
+
+		var envCACert *x509.Certificate
+		if envCACert, err = x509.ParseCertificate(pemBlock.Bytes); err != nil {
+			return fmt.Errorf("error parsing env-CA certificate %s: %w", envCA, err)
+		}
+
+		agent.caCertPool.AddCert(envCACert)
+	}
+
 	return nil
 }
 
