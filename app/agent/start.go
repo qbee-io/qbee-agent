@@ -12,9 +12,7 @@ func Start(ctx context.Context, cfg *Config) error {
 		return fmt.Errorf("error initializing the agent: %w", err)
 	}
 
-	_ = agent
-
-	return fmt.Errorf("not implemented")
+	return agent.Run(ctx)
 }
 
 // StartWithAutoUpdate starts the agent with auto-update functionality.
