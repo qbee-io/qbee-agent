@@ -38,10 +38,9 @@ func (cc *CommittedConfig) HasBundle(bundleName string) bool {
 
 // selectBundleByName returns Bundle by name from the CommittedConfig.
 // If unsupported bundle is provided, nil will be returned.
+// Note: settings is not supported here, since it's going through its dedicated flow.
 func (cc *CommittedConfig) selectBundleByName(bundleName string) Bundle {
 	switch bundleName {
-	case BundleSettings:
-		return cc.BundleData.Settings
 	case BundleFileDistribution:
 		return cc.BundleData.FileDistribution
 	case BundleUsers:

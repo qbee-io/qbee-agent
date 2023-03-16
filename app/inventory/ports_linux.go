@@ -49,7 +49,7 @@ func loadProcessFDInodes() (map[uint64]string, error) {
 	// scan all open files for all running processes
 	runningProcesses, err := linux.ListRunningProcesses()
 	if err != nil {
-		return nil, fmt.Errorf("error listing running processes: %w", err)
+		return nil, fmt.Errorf("cannot list currently running processes: %w", err)
 	}
 
 	result := make(map[uint64]string)
@@ -57,19 +57,29 @@ func loadProcessFDInodes() (map[uint64]string, error) {
 	var fdPaths []string
 	var fileStat os.FileInfo
 
+	agentPID := fmt.Sprintf("%d", os.Getpid())
+
 	for _, pid := range runningProcesses {
 		processProcPath := filepath.Join(linux.ProcFS, pid)
 		fdDirPath := filepath.Join(processProcPath, "fd")
 
 		fdPaths, err = utils.ListDirectory(fdDirPath)
 		if err != nil {
-			return nil, fmt.Errorf("error listing inodes: %w", err)
+			log.Debugf("cannot list inodes for process %s: %v", pid, err)
+			continue
 		}
 
-		for _, fdPath := range fdPaths {
+		for _, relativeFDPath := range fdPaths {
+			fdPath := filepath.Join(fdDirPath, relativeFDPath)
+
 			// get file info for each open file
 			if fileStat, err = os.Stat(fdPath); err != nil {
-				log.Debugf("cannot get stats of %s: %v", fdPath, err)
+				// Silence debug messages for the agent PID, since it's always producing an error.
+				// The error is due to the agent closing the directory's file description (in utils.ListDirectory)
+				// before we get to read all the files' inodes.
+				if pid != agentPID {
+					log.Debugf("cannot get stats of %s: %v", fdPath, err)
+				}
 				continue
 			}
 

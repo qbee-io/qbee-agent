@@ -69,9 +69,8 @@ func Bootstrap(ctx context.Context, cfg *Config, bootstrapKey string) error {
 		return err
 	}
 
-	if err = agent.Inventory.SendSystemInventory(ctx, ""); err != nil {
-		return err
-	}
+	agent.RunOnce(ctx)
+	agent.inProgress.Wait()
 
 	log.Infof("Bootstrap successfully completed")
 

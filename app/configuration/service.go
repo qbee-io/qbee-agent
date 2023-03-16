@@ -3,6 +3,7 @@ package configuration
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/qbee-io/qbee-agent/app/api"
@@ -29,7 +30,12 @@ type Service struct {
 	softwareInventoryEnabled bool
 	processInventoryEnabled  bool
 
-	runInterval int
+	runInterval               int
+	runIntervalChangeNotifier chan time.Duration
+
+	// runLock prevents system from executing configuration concurrently
+	runLock sync.Mutex
+
 	// connectivityWatchdogThreshold defines failed API connections threshold at which server will be rebooted
 	// 0 -> disabled
 	connectivityWatchdogThreshold int
@@ -41,6 +47,11 @@ func New(apiClient *api.Client, cacheDirectory string) *Service {
 	return &Service{
 		api:            apiClient,
 		cacheDirectory: cacheDirectory,
+		runInterval:    defaultAgentInterval,
+
+		// this will notify the main agent loop about changes to the agent run interval
+		// we don't expect more than a single consumer of this, that's why a buffered channel is used
+		runIntervalChangeNotifier: make(chan time.Duration, 1),
 	}
 }
 
@@ -96,18 +107,24 @@ func (srv *Service) applyDefaultSettings() {
 }
 
 // UpdateSettings of the agent based on provided config data.
-func (srv *Service) UpdateSettings(ctx context.Context, configData *CommittedConfig) error {
+func (srv *Service) UpdateSettings(configData *CommittedConfig) {
 	// if no enabled settings bundle available, use defaults
 	if !configData.HasBundle(BundleSettings) || !configData.BundleData.Settings.Enabled {
 		srv.applyDefaultSettings()
-		return nil
+		return
 	}
 
-	return configData.BundleData.Settings.Execute(ctx, srv)
+	configData.BundleData.Settings.Execute(srv)
 }
 
 // Execute configuration bundles on the system and return true if system should be rebooted.
 func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) error {
+	if !srv.runLock.TryLock() {
+		log.Infof("configuration changes already in progress")
+		return nil
+	}
+	defer srv.runLock.Unlock()
+
 	// disable connectivity watchdog if not set in the configData
 	if !configData.HasBundle(BundleConnectivityWatchdog) {
 		srv.connectivityWatchdogThreshold = 0
@@ -184,4 +201,9 @@ func (srv *Service) reportAPIError(ctx context.Context, err error) {
 	if srv.failedConnectionsCount >= srv.connectivityWatchdogThreshold {
 		srv.RebootAfterRun(ctx)
 	}
+}
+
+// RunIntervalChangedNotifier returns a channel which will send a new agent interval duration when it changes.
+func (srv *Service) RunIntervalChangedNotifier() <-chan time.Duration {
+	return srv.runIntervalChangeNotifier
 }

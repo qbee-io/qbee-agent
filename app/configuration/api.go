@@ -20,7 +20,7 @@ func (srv *Service) Get(ctx context.Context) (*CommittedConfig, error) {
 	srv.reportAPIError(ctx, err)
 
 	if err != nil {
-		return nil, fmt.Errorf("error getting device config: %w", err)
+		return nil, err
 	}
 
 	return cfg, nil

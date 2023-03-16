@@ -9,20 +9,20 @@ import (
 // This is used to track failed API connection attempts.
 type ConnectionError error
 
-// HTTPError returned when HTTP request results in status code >= 400.
-type HTTPError struct {
+// Error returned when HTTP API request results in status code >= 400.
+type Error struct {
 	ResponseCode int
 	ResponseBody []byte
 }
 
-func (err *HTTPError) Error() string {
-	return fmt.Sprintf("unexpected HTTP response: %d %s", err.ResponseCode, err.ResponseBody)
+func (err *Error) Error() string {
+	return fmt.Sprintf("unexpected API response: %d %s", err.ResponseCode, err.ResponseBody)
 }
 
-func NewHTTPError(responseStatusCode int, responseBody io.Reader) error {
+func NewError(responseStatusCode int, responseBody io.Reader) error {
 	responseBodyContents, _ := io.ReadAll(responseBody)
 
-	return &HTTPError{
+	return &Error{
 		ResponseCode: responseStatusCode,
 		ResponseBody: responseBodyContents,
 	}

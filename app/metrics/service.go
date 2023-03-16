@@ -1,8 +1,6 @@
 package metrics
 
 import (
-	"context"
-
 	"github.com/qbee-io/qbee-agent/app/api"
 	"github.com/qbee-io/qbee-agent/app/log"
 )
@@ -50,7 +48,7 @@ var metricsCollectors = []metricsCollector{
 
 // Collect system metrics.
 // If any errors are encountered, they'll be logged, but won't interrupt the process.
-func Collect(ctx context.Context) []Metric {
+func Collect() []Metric {
 	allMetrics := make([]Metric, 0)
 
 	for _, collector := range metricsCollectors {

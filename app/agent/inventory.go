@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/qbee-io/qbee-agent/app"
 	"github.com/qbee-io/qbee-agent/app/inventory"
@@ -11,24 +10,24 @@ import (
 )
 
 // doInventories collects all inventories and delivers them to the device hub API.
-func (agent *Agent) doInventories(ctx context.Context, waitGroup *sync.WaitGroup) {
-	agent.doSystemInventory(ctx, waitGroup)
-	agent.doUsersInventory(ctx, waitGroup)
-	agent.doPortsInventory(ctx, waitGroup)
-	agent.doDockerContainersInventory(ctx, waitGroup)
-	agent.doDockerImagesInventory(ctx, waitGroup)
-	agent.doDockerVolumesInventory(ctx, waitGroup)
-	agent.doDockerNetworksInventory(ctx, waitGroup)
-	agent.doSoftwareInventory(ctx, waitGroup)
-	agent.doProcessInventory(ctx, waitGroup)
+func (agent *Agent) doInventories(ctx context.Context) {
+	agent.doSystemInventory(ctx)
+	agent.doUsersInventory(ctx)
+	agent.doPortsInventory(ctx)
+	agent.doDockerContainersInventory(ctx)
+	agent.doDockerImagesInventory(ctx)
+	agent.doDockerVolumesInventory(ctx)
+	agent.doDockerNetworksInventory(ctx)
+	agent.doSoftwareInventory(ctx)
+	agent.doProcessInventory(ctx)
 }
 
 // doSystemInventory collects system inventory and delivers it to the device hub API.
-func (agent *Agent) doSystemInventory(ctx context.Context, waitGroup *sync.WaitGroup) {
-	waitGroup.Add(1)
+func (agent *Agent) doSystemInventory(ctx context.Context) {
+	agent.inProgress.Add(1)
 
 	go func() {
-		defer waitGroup.Done()
+		defer agent.inProgress.Done()
 
 		systemInventory, err := inventory.CollectSystemInventory()
 		if err != nil {
@@ -48,11 +47,11 @@ func (agent *Agent) doSystemInventory(ctx context.Context, waitGroup *sync.WaitG
 }
 
 // doUsersInventory collects users inventory and delivers it to the device hub API.
-func (agent *Agent) doUsersInventory(ctx context.Context, waitGroup *sync.WaitGroup) {
-	waitGroup.Add(1)
+func (agent *Agent) doUsersInventory(ctx context.Context) {
+	agent.inProgress.Add(1)
 
 	go func() {
-		defer waitGroup.Done()
+		defer agent.inProgress.Done()
 
 		usersInventory, err := inventory.CollectUsersInventory()
 		if err != nil {
@@ -67,11 +66,11 @@ func (agent *Agent) doUsersInventory(ctx context.Context, waitGroup *sync.WaitGr
 }
 
 // doPortsInventory collects ports inventory and delivers it to the device hub API.
-func (agent *Agent) doPortsInventory(ctx context.Context, waitGroup *sync.WaitGroup) {
-	waitGroup.Add(1)
+func (agent *Agent) doPortsInventory(ctx context.Context) {
+	agent.inProgress.Add(1)
 
 	go func() {
-		defer waitGroup.Done()
+		defer agent.inProgress.Done()
 
 		portsInventory, err := inventory.CollectPortsInventory()
 		if err != nil {
@@ -86,11 +85,11 @@ func (agent *Agent) doPortsInventory(ctx context.Context, waitGroup *sync.WaitGr
 }
 
 // doDockerContainersInventory collects docker containers inventory and delivers it to the device hub API.
-func (agent *Agent) doDockerContainersInventory(ctx context.Context, waitGroup *sync.WaitGroup) {
-	waitGroup.Add(1)
+func (agent *Agent) doDockerContainersInventory(ctx context.Context) {
+	agent.inProgress.Add(1)
 
 	go func() {
-		defer waitGroup.Done()
+		defer agent.inProgress.Done()
 
 		dockerContainersInventory, err := inventory.CollectDockerContainersInventory(ctx)
 		if err != nil {
@@ -105,11 +104,11 @@ func (agent *Agent) doDockerContainersInventory(ctx context.Context, waitGroup *
 }
 
 // doDockerImagesInventory collects docker images inventory and delivers it to the device hub API.
-func (agent *Agent) doDockerImagesInventory(ctx context.Context, waitGroup *sync.WaitGroup) {
-	waitGroup.Add(1)
+func (agent *Agent) doDockerImagesInventory(ctx context.Context) {
+	agent.inProgress.Add(1)
 
 	go func() {
-		defer waitGroup.Done()
+		defer agent.inProgress.Done()
 
 		dockerImagesInventory, err := inventory.CollectDockerImagesInventory(ctx)
 		if err != nil {
@@ -124,11 +123,11 @@ func (agent *Agent) doDockerImagesInventory(ctx context.Context, waitGroup *sync
 }
 
 // doDockerVolumesInventory collects docker volumes inventory and delivers it to the device hub API.
-func (agent *Agent) doDockerVolumesInventory(ctx context.Context, waitGroup *sync.WaitGroup) {
-	waitGroup.Add(1)
+func (agent *Agent) doDockerVolumesInventory(ctx context.Context) {
+	agent.inProgress.Add(1)
 
 	go func() {
-		defer waitGroup.Done()
+		defer agent.inProgress.Done()
 
 		dockerVolumesInventory, err := inventory.CollectDockerVolumesInventory(ctx)
 		if err != nil {
@@ -143,11 +142,11 @@ func (agent *Agent) doDockerVolumesInventory(ctx context.Context, waitGroup *syn
 }
 
 // doDockerNetworksInventory collects docker networks inventory and delivers it to the device hub API.
-func (agent *Agent) doDockerNetworksInventory(ctx context.Context, waitGroup *sync.WaitGroup) {
-	waitGroup.Add(1)
+func (agent *Agent) doDockerNetworksInventory(ctx context.Context) {
+	agent.inProgress.Add(1)
 
 	go func() {
-		defer waitGroup.Done()
+		defer agent.inProgress.Done()
 
 		dockerNetworksInventory, err := inventory.CollectDockerNetworksInventory(ctx)
 		if err != nil {
@@ -162,14 +161,14 @@ func (agent *Agent) doDockerNetworksInventory(ctx context.Context, waitGroup *sy
 }
 
 // doSoftwareInventory collects software inventory - if enabled - and delivers it to the device hub API.
-func (agent *Agent) doSoftwareInventory(ctx context.Context, waitGroup *sync.WaitGroup) {
+func (agent *Agent) doSoftwareInventory(ctx context.Context) {
 	if !agent.Configuration.CollectSoftwareInventory() {
 		return
 	}
 
-	waitGroup.Add(1)
+	agent.inProgress.Add(1)
 	go func() {
-		defer waitGroup.Done()
+		defer agent.inProgress.Done()
 
 		softwareInventory, err := inventory.CollectSoftwareInventory(ctx)
 		if err != nil {
@@ -184,14 +183,14 @@ func (agent *Agent) doSoftwareInventory(ctx context.Context, waitGroup *sync.Wai
 }
 
 // doProcessInventory collects process inventory - if enabled - and delivers it to the device hub API.
-func (agent *Agent) doProcessInventory(ctx context.Context, waitGroup *sync.WaitGroup) {
+func (agent *Agent) doProcessInventory(ctx context.Context) {
 	if !agent.Configuration.CollectProcessInventory() {
 		return
 	}
 
-	waitGroup.Add(1)
+	agent.inProgress.Add(1)
 	go func() {
-		defer waitGroup.Done()
+		defer agent.inProgress.Done()
 
 		processesInventory, err := inventory.CollectProcessesInventory()
 		if err != nil {

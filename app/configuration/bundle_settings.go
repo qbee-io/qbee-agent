@@ -1,7 +1,7 @@
 package configuration
 
 import (
-	"context"
+	"time"
 )
 
 // SettingsBundle
@@ -38,13 +38,16 @@ type SettingsBundle struct {
 }
 
 // Execute settings config on the system.
-func (s SettingsBundle) Execute(_ context.Context, service *Service) error {
+func (s SettingsBundle) Execute(service *Service) {
 	service.reportingEnabled = s.EnableReports
 	service.metricsEnabled = s.EnableMetrics
 	service.remoteConsoleEnabled = s.EnableRemoteConsole
 	service.softwareInventoryEnabled = s.EnableSoftwareInventory
 	service.processInventoryEnabled = s.EnableProcessInventory
-	service.runInterval = s.RunInterval
 
-	return nil
+	if service.runInterval != s.RunInterval {
+		service.runIntervalChangeNotifier <- time.Duration(s.RunInterval) * time.Minute
+	}
+
+	service.runInterval = s.RunInterval
 }

@@ -20,6 +20,10 @@ import (
 
 const UserAgent = "qbee-agent/" + app.Version
 
+// apiCallTimeout defines total request/response time we allow for any API call.
+// This timeout doesn't apply to file downloads.
+const apiCallTimeout = 10 * time.Second
+
 type Client struct {
 	host       string
 	port       string
@@ -93,7 +97,7 @@ func (cli *Client) NewRequest(ctx context.Context, method, path string, src any)
 	return request, nil
 }
 
-// Make sends an HTTP request and optionally parses response body into dst.
+// Make sends an API request and optionally parses response body into dst.
 func (cli *Client) Make(request *http.Request, dst any) error {
 	response, err := cli.Do(request)
 	if err != nil {
@@ -103,12 +107,12 @@ func (cli *Client) Make(request *http.Request, dst any) error {
 	defer response.Body.Close()
 
 	if response.StatusCode >= http.StatusBadRequest {
-		return NewHTTPError(response.StatusCode, response.Body)
+		return NewError(response.StatusCode, response.Body)
 	}
 
 	if dst != nil {
 		if err = json.NewDecoder(response.Body).Decode(dst); err != nil {
-			return fmt.Errorf("error decoding response body: %w", err)
+			return fmt.Errorf("cannot decode API response body: %w", err)
 		}
 	}
 
@@ -122,7 +126,7 @@ func (cli *Client) Do(request *http.Request) (*http.Response, error) {
 
 	response, err := cli.httpClient.Do(request)
 	if err != nil {
-		return nil, ConnectionError(err)
+		return nil, ConnectionError(fmt.Errorf("failed to send API request: %w", err))
 	}
 
 	return response, nil
@@ -130,7 +134,10 @@ func (cli *Client) Do(request *http.Request) (*http.Response, error) {
 
 // request creates, sends and processes response for an HTTP request.
 func (cli *Client) request(ctx context.Context, method, path string, src, dst any) error {
-	request, err := cli.NewRequest(ctx, method, path, src)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, apiCallTimeout)
+	defer cancel()
+
+	request, err := cli.NewRequest(ctxWithTimeout, method, path, src)
 	if err != nil {
 		return err
 	}
@@ -151,11 +158,6 @@ func (cli *Client) Post(ctx context.Context, path string, src, dst any) error {
 // Put sends a PUT request to device hub.
 func (cli *Client) Put(ctx context.Context, path string, src, dst any) error {
 	return cli.request(ctx, http.MethodPut, path, src, dst)
-}
-
-// Delete sends a DELETE request to device hub.
-func (cli *Client) Delete(ctx context.Context, path string, src, dst any) error {
-	return cli.request(ctx, http.MethodDelete, path, src, dst)
 }
 
 // compressRequestBody returns io.Reader with compressed body payload

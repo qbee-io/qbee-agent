@@ -86,3 +86,10 @@ func (agent *Agent) sendBootstrapRequest(
 
 	return bootstrapResponse, nil
 }
+
+const heartbeatAPIPath = "/v1/org/device/auth/cfgmetadata/latest"
+
+// sendHeartbeat sends a heartbeat to the device hub to notify that device is up and running.
+func (agent *Agent) sendHeartbeat(ctx context.Context) error {
+	return agent.api.Get(ctx, heartbeatAPIPath, nil)
+}
