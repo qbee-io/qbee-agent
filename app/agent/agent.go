@@ -107,17 +107,10 @@ func (agent *Agent) RunOnce(ctx context.Context) {
 
 	agent.Configuration.UpdateSettings(configData)
 
-	currentCommitID := agent.Configuration.CurrentCommitID()
-
 	agent.doHeartbeat(ctx)
 	agent.doMetrics(ctx)
 	agent.doInventories(ctx)
 	agent.doConfig(ctx, configData)
-
-	// in case new configuration was applied, do system inventory again
-	if currentCommitID != agent.Configuration.CurrentCommitID() {
-		agent.doSystemInventory(ctx)
-	}
 
 	if agent.Configuration.ShouldReboot() {
 		agent.RebootSystem(ctx)
@@ -165,9 +158,9 @@ func (agent *Agent) doConfig(ctx context.Context, configData *configuration.Comm
 		log.Errorf("failed to apply configuration: %v", err)
 	}
 
-	// when new config has a different commitID then applied to the system, let's push a new system inventory out
+	// when new config has a different commitID then applied to the system, let's push new inventories out
 	if currentCommitID != configData.CommitID {
-		agent.doSystemInventory(ctx)
+		agent.doInventories(ctx)
 	}
 }
 
