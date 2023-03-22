@@ -17,7 +17,7 @@ var startCommand = Command{
 		{
 			Name:  startDisableAutoUpdateOption,
 			Short: "n",
-			Help:  "Disable auto-update.",
+			Help:  "Without auto-update.",
 			Flag:  "true",
 		},
 	},

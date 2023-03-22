@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+
+	"github.com/qbee-io/qbee-agent/app"
 )
 
 type BootstrapRequest struct {
@@ -87,7 +89,7 @@ func (agent *Agent) sendBootstrapRequest(
 	return bootstrapResponse, nil
 }
 
-const heartbeatAPIPath = "/v1/org/device/auth/cfgmetadata/latest"
+const heartbeatAPIPath = "/v1/org/device/auth/cfgmetadata/" + app.Version
 
 // sendHeartbeat sends a heartbeat to the device hub to notify that device is up and running.
 func (agent *Agent) sendHeartbeat(ctx context.Context) error {

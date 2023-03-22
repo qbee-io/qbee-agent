@@ -5,7 +5,6 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
-	_ "embed"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -18,56 +17,33 @@ import (
 )
 
 const (
+	caCertFilename      = "qbee-ca-cert.pem"
 	privateKeyFilename  = "qbee.key"
 	certificateFilename = "qbee.cert"
 	credentialsFileMode = 0600
 )
 
-//go:embed ca/dev.crt
-var devRootCA []byte
-
-//go:embed ca/prod.crt
-var prodRootCA []byte
-
-// loadCACertificatesPool loads all trusted CA certificate.
+// loadCACertificatesPool loads trusted CA certificate.
 func (agent *Agent) loadCACertificatesPool() error {
-	prodCACert, err := x509.ParseCertificate(prodRootCA)
+	caCertPath := filepath.Join(agent.cfg.Directory, credentialsDirectory, caCertFilename)
+
+	pemCert, err := os.ReadFile(caCertPath)
 	if err != nil {
-		return fmt.Errorf("error parsing CA certificate: %w", err)
+		return fmt.Errorf("error reading CA certificate %s: %w", caCertPath, err)
+	}
+
+	pemBlock, _ := pem.Decode(pemCert)
+	if pemBlock == nil {
+		return fmt.Errorf("error decoding CA certificate %s: %w", caCertPath, err)
+	}
+
+	var envCACert *x509.Certificate
+	if envCACert, err = x509.ParseCertificate(pemBlock.Bytes); err != nil {
+		return fmt.Errorf("error parsing CA certificate %s: %w", caCertPath, err)
 	}
 
 	agent.caCertPool = x509.NewCertPool()
-	agent.caCertPool.AddCert(prodCACert)
-
-	// for non-production device-hub host, allow dev CA
-	if agent.cfg.DeviceHubServer != DefaultDeviceHubServer {
-		var devCACert *x509.Certificate
-		if devCACert, err = x509.ParseCertificate(devRootCA); err != nil {
-			return fmt.Errorf("error parsing dev-CA certificate: %w", err)
-		}
-
-		agent.caCertPool.AddCert(devCACert)
-	}
-
-	// for testing, we want to allow
-	if envCA := os.Getenv("CA_CERT"); envCA != "" {
-		pemCert, err := os.ReadFile(envCA)
-		if err != nil {
-			return fmt.Errorf("error reading env-CA certificate %s: %w", envCA, err)
-		}
-
-		pemBlock, _ := pem.Decode(pemCert)
-		if pemBlock == nil {
-			return fmt.Errorf("error decoding env-CA certificate %s: %w", envCA, err)
-		}
-
-		var envCACert *x509.Certificate
-		if envCACert, err = x509.ParseCertificate(pemBlock.Bytes); err != nil {
-			return fmt.Errorf("error parsing env-CA certificate %s: %w", envCA, err)
-		}
-
-		agent.caCertPool.AddCert(envCACert)
-	}
+	agent.caCertPool.AddCert(envCACert)
 
 	return nil
 }
