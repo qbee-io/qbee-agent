@@ -3,6 +3,7 @@ package configuration
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/qbee-io/qbee-agent/app/software"
 	"github.com/qbee-io/qbee-agent/app/utils"
@@ -83,7 +84,7 @@ func (p PackageManagementBundle) Execute(ctx context.Context, service *Service) 
 
 // checkPreCondition returns true if pre-condition succeeds or is not defined.
 func (p PackageManagementBundle) checkPreCondition(ctx context.Context) bool {
-	if p.PreCondition == "" {
+	if strings.TrimSpace(p.PreCondition) == "" {
 		return true
 	}
 

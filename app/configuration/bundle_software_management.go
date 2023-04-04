@@ -92,11 +92,28 @@ type Software struct {
 	// ServiceName defines an optional service name (if empty, Package is used).
 	ServiceName string `json:"service_name"`
 
+	// PreCondition defines an optional command which needs to return 0 in order for the Software to be installed.
+	PreCondition string `json:"pre_condition,omitempty"`
+
 	// ConfigFiles to be created for the software.
 	ConfigFiles []ConfigFile `json:"config_files"`
 
 	// Parameters for the ConfigFiles templating.
 	Parameters []ConfigFileParameter `json:"parameters"`
+}
+
+// checkPreCondition returns true if pre-condition succeeds or is not defined.
+func (s Software) checkPreCondition(ctx context.Context) bool {
+	if strings.TrimSpace(s.PreCondition) == "" {
+		return true
+	}
+
+	// return with no error when pre-condition fails
+	if _, err := utils.RunCommand(ctx, []string{getShell(), "-c", s.PreCondition}); err != nil {
+		return false
+	}
+
+	return true
 }
 
 func (s Software) serviceName(ctx context.Context, srv *Service) string {
@@ -122,6 +139,10 @@ func (s Software) serviceName(ctx context.Context, srv *Service) string {
 
 // Execute a Software configuration on the system.
 func (s Software) Execute(ctx context.Context, srv *Service, pkgManager software.PackageManager) error {
+	if !s.checkPreCondition(ctx) {
+		return nil
+	}
+
 	var err error
 	var shouldRestart bool
 

@@ -3,6 +3,7 @@ package configuration
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/qbee-io/qbee-agent/app/utils"
@@ -54,7 +55,7 @@ type FileSet struct {
 
 // checkPreCondition returns true if pre-condition succeeds or is not defined.
 func (fs *FileSet) checkPreCondition(ctx context.Context) bool {
-	if fs.PreCondition == "" {
+	if strings.TrimSpace(fs.PreCondition) == "" {
 		return true
 	}
 

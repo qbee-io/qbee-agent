@@ -215,6 +215,46 @@ func Test_SoftwareManagementBundle_InstallPackage_RestartService_WithServiceName
 	test.Equal(t, reports, expectedReports)
 }
 
+func Test_SoftwareManagementBundle_InstallPackage_PreCondition(t *testing.T) {
+	testCases := []struct {
+		name            string
+		preCondition    string
+		expectedReports []string
+	}{
+		{
+			name:            "empty",
+			preCondition:    "",
+			expectedReports: []string{"[INFO] Successfully installed 'qbee-test-service'"},
+		},
+		{
+			name:            "true",
+			preCondition:    "true",
+			expectedReports: []string{"[INFO] Successfully installed 'qbee-test-service'"},
+		},
+		{
+			name:            "false",
+			preCondition:    "false",
+			expectedReports: nil,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			r := test.New(t)
+
+			// install systemctl
+			r.MustExec("apt-get", "install", "-y", "systemctl")
+
+			// execute configuration bundles
+			items := []configuration.Software{{Package: "qbee-test-service", PreCondition: testCase.preCondition}}
+
+			reports := executeSoftwareManagementBundle(r, items)
+
+			test.Equal(t, reports, testCase.expectedReports)
+		})
+	}
+}
+
 // executeSoftwareManagementBundle is a helper method to quickly execute software management bundle.
 // On success, it returns a slice of produced reports.
 func executeSoftwareManagementBundle(r *test.Runner, items []configuration.Software) []string {
