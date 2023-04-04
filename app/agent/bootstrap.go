@@ -16,10 +16,6 @@ const boostrapWaitTime = 5 * time.Second
 
 // Bootstrap device using agent's config and provided bootstrap key.
 func Bootstrap(ctx context.Context, cfg *Config, bootstrapKey string) error {
-	if err := prepareDirectories(cfg.Directory, cfg.StateDirectory); err != nil {
-		return err
-	}
-
 	agent, err := NewWithoutCredentials(cfg)
 	if err != nil {
 		return err
@@ -69,7 +65,7 @@ func Bootstrap(ctx context.Context, cfg *Config, bootstrapKey string) error {
 		return err
 	}
 
-	agent.RunOnce(ctx)
+	agent.RunOnce(ctx, QuickRun)
 	agent.inProgress.Wait()
 
 	log.Infof("Bootstrap successfully completed")

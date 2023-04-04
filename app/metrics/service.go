@@ -1,21 +1,41 @@
 package metrics
 
 import (
+	"sync"
+
 	"github.com/qbee-io/qbee-agent/app/api"
 	"github.com/qbee-io/qbee-agent/app/log"
 )
 
-const defaultAgentInterval = 5 // minutes
+// 10 days of 12 metrics per hour for 8 recorded metrics
+const metricsBufferSize = 10 * 24 * 12 * 8
 
 type Service struct {
-	api *api.Client
+	api        *api.Client
+	buffer     []Metric
+	bufferLock sync.Mutex
 }
 
 // New returns a new instance of metrics Service.
 func New(apiClient *api.Client) *Service {
 	return &Service{
-		api: apiClient,
+		api:    apiClient,
+		buffer: make([]Metric, 0),
 	}
+}
+
+// addMetricsToBuffer adds metrics to the buffer, dropping the oldest ones if the buffer is full.
+func (srv *Service) addMetricsToBuffer(metrics []Metric) {
+	srv.bufferLock.Lock()
+	defer srv.bufferLock.Unlock()
+
+	if len(srv.buffer)+len(metrics) > metricsBufferSize {
+		log.Warnf("metrics buffer is full, dropping %d metrics", len(metrics))
+		srv.buffer = append(srv.buffer[len(metrics):], metrics...)
+		return
+	}
+
+	srv.buffer = append(srv.buffer, metrics...)
 }
 
 type metricsCollector struct {

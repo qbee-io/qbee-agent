@@ -2,13 +2,14 @@ package test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 )
 
 const Debian = "debian:qbee"
@@ -16,9 +17,11 @@ const Debian = "debian:qbee"
 func New(t *testing.T) *Runner {
 	cmdArgs := []string{
 		"run",
-		"--rm",                                            // remove container after container exits
+		"--rm",                         // remove container after container exits
+		"-e", "INSECURE_CA_DOWNLOAD=1", // allow initial, untrusted CA download
 		"-v", "/var/run/docker.sock:/var/run/docker.sock", // mount docker socket
 		"-v", "/sys/fs/cgroup:/sys/fs/cgroup:ro", // mount cgroup for docker
+		"--network", "platform_default",
 		"--tmpfs", "/tmp",
 		"--tmpfs", "/run",
 		"--tmpfs", "/run/lock",
@@ -82,9 +85,8 @@ func (runner *Runner) Bootstrap() {
 
 	runner.DeviceID = getPublicKeyHexDigest(privateKeyPEM)
 
-	runner.API.AssignDeviceToGroup(runner.DeviceID, "root")
-
-	runner.t.Cleanup(runner.RemoveDevice)
+	// Device cleanup is disabled until we have a better bootstrap process to propagate data to timescale.
+	//runner.t.Cleanup(runner.RemoveDevice)
 }
 
 func (runner *Runner) RemoveDevice() {
@@ -92,10 +94,24 @@ func (runner *Runner) RemoveDevice() {
 	runner.API.DeletePendingDevice(runner.DeviceID)
 }
 
+const execTimeout = 5 * time.Second
+
 func (runner *Runner) Exec(cmd ...string) ([]byte, error) {
 	execCommand := append([]string{"exec", runner.container}, cmd...)
 
-	output, err := exec.Command("docker", execCommand...).Output()
+	ctx, cancel := context.WithTimeout(context.Background(), execTimeout)
+	defer cancel()
+
+	execCmd := exec.CommandContext(ctx, "docker", execCommand...)
+	stderr := new(bytes.Buffer)
+	execCmd.Stderr = stderr
+	output, err := execCmd.Output()
+
+	for _, line := range strings.Split(stderr.String(), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			fmt.Println(line)
+		}
+	}
 
 	return bytes.TrimSpace(output), err
 }
@@ -105,11 +121,6 @@ func (runner *Runner) MustExec(cmd ...string) []byte {
 	if err != nil {
 		if len(output) > 0 {
 			fmt.Println("stdout:", string(output))
-		}
-
-		execExitErr := new(exec.ExitError)
-		if errors.As(err, &execExitErr) && len(execExitErr.Stderr) > 0 {
-			fmt.Println("stderr:", string(execExitErr.Stderr))
 		}
 
 		panic(err)

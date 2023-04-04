@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -8,11 +9,15 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"math/big"
+	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
+	"github.com/qbee-io/qbee-agent/app/api"
 	"github.com/qbee-io/qbee-agent/app/log"
 )
 
@@ -25,6 +30,16 @@ const (
 
 // loadCACertificatesPool loads trusted CA certificate.
 func (agent *Agent) loadCACertificatesPool() error {
+	// to allow bootstrapping with non-production environments
+	if agent.cfg.DeviceHubServer != DefaultDeviceHubServer && os.Getenv("INSECURE_CA_DOWNLOAD") == "1" {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+
+		if err := agent.updateCACertificate(ctx, true); err != nil {
+			return nil
+		}
+	}
+
 	caCertPath := filepath.Join(agent.cfg.Directory, credentialsDirectory, caCertFilename)
 
 	pemCert, err := os.ReadFile(caCertPath)
@@ -44,6 +59,44 @@ func (agent *Agent) loadCACertificatesPool() error {
 
 	agent.caCertPool = x509.NewCertPool()
 	agent.caCertPool.AddCert(envCACert)
+
+	return nil
+}
+
+// updateCACertificate updates existing CA certificate file with the one provided by the device hub.
+// For development and testing, the insecure flag allows to download initial CA certificate.
+func (agent *Agent) updateCACertificate(ctx context.Context, insecure bool) error {
+	cli := agent.api
+
+	if insecure {
+		cli = api.NewClient(agent.cfg.DeviceHubServer, agent.cfg.DeviceHubPort, nil)
+		cli.SkipCAVerification()
+	}
+
+	path := "/ca.crt"
+
+	request, err := cli.NewRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return err
+	}
+
+	var response *http.Response
+	if response, err = cli.Do(request); err != nil {
+		return err
+	}
+
+	defer response.Body.Close()
+
+	var pemCert []byte
+	if pemCert, err = io.ReadAll(response.Body); err != nil {
+		return fmt.Errorf("failed to read CA certificate from the API response: %w", err)
+	}
+
+	caCertPath := filepath.Join(agent.cfg.Directory, credentialsDirectory, caCertFilename)
+
+	if err = os.WriteFile(caCertPath, pemCert, 0600); err != nil {
+		return fmt.Errorf("failed to write CA certificate to %s: %w", caCertPath, err)
+	}
 
 	return nil
 }

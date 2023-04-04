@@ -66,10 +66,9 @@ func NewReporter(commitID string, reportToConsole bool) *Reporter {
 }
 
 const (
-	severityInfo     = "INFO"
-	severityWarning  = "WARN"
-	severityError    = "ERR"
-	severityCritical = "CRIT"
+	severityInfo    = "INFO"
+	severityWarning = "WARN"
+	severityError   = "ERR"
 )
 
 // ReportInfo adds an info message to the reporter instance set in context.
@@ -85,11 +84,6 @@ func ReportWarning(ctx context.Context, extraLog any, msgFmt string, args ...any
 // ReportError adds an error message to the reporter instance set in context.
 func ReportError(ctx context.Context, extraLog any, msgFmt string, args ...any) {
 	addReport(ctx, severityError, extraLog, msgFmt, args...)
-}
-
-// ReportCritical adds a critical message to the reporter instance set in context.
-func ReportCritical(ctx context.Context, extraLog any, msgFmt string, args ...any) {
-	addReport(ctx, severityCritical, extraLog, msgFmt, args...)
 }
 
 const (

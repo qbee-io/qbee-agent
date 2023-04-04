@@ -10,14 +10,15 @@ import (
 	"github.com/qbee-io/qbee-agent/app/log"
 )
 
-const defaultAgentInterval = 5 // minutes
+const defaultAgentInterval = 5                      // minutes
+const reportsBufferExpiration = 10 * 24 * time.Hour // 10 days
 
 type Service struct {
 	api            *api.Client
 	cacheDirectory string
 
-	// currentCommitID represents commit ID of committed device config currently applied to the system
-	currentCommitID string
+	// currentConfig is the currently applied configuration
+	currentConfig *CommittedConfig
 
 	// configChangeTime represents a time when the currentCommitID changed last time
 	configChangeTime time.Time
@@ -33,13 +34,13 @@ type Service struct {
 	runInterval               int
 	runIntervalChangeNotifier chan time.Duration
 
-	// runLock prevents system from executing configuration concurrently
-	runLock sync.Mutex
-
 	// connectivityWatchdogThreshold defines failed API connections threshold at which server will be rebooted
 	// 0 -> disabled
 	connectivityWatchdogThreshold int
 	failedConnectionsCount        int
+
+	reportsBuffer     []Report
+	reportsBufferLock sync.Mutex
 }
 
 // New returns a new instance of configuration Service.
@@ -48,6 +49,7 @@ func New(apiClient *api.Client, cacheDirectory string) *Service {
 		api:            apiClient,
 		cacheDirectory: cacheDirectory,
 		runInterval:    defaultAgentInterval,
+		reportsBuffer:  make([]Report, 0),
 
 		// this will notify the main agent loop about changes to the agent run interval
 		// we don't expect more than a single consumer of this, that's why a buffered channel is used
@@ -80,9 +82,18 @@ func (srv *Service) RunInterval() time.Duration {
 	return time.Duration(srv.runInterval) * time.Minute
 }
 
+// Current returns currently applied configuration.
+func (srv *Service) Current() *CommittedConfig {
+	return srv.currentConfig
+}
+
 // CurrentCommitID returns currently applied commit ID.
 func (srv *Service) CurrentCommitID() string {
-	return srv.currentCommitID
+	if srv.Current() == nil {
+		return ""
+	}
+
+	return srv.Current().CommitID
 }
 
 // ConfigChangeTimestamp returns timestamp when the configuration commit ID changed last time.
@@ -119,11 +130,11 @@ func (srv *Service) UpdateSettings(configData *CommittedConfig) {
 
 // Execute configuration bundles on the system and return true if system should be rebooted.
 func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) error {
-	if !srv.runLock.TryLock() {
-		log.Infof("configuration changes already in progress")
+	if err := acquireLock(); err != nil {
+		log.Infof("failed to acquire execution lock - %v", err)
 		return nil
 	}
-	defer srv.runLock.Unlock()
+	defer releaseLock()
 
 	// disable connectivity watchdog if not set in the configData
 	if !configData.HasBundle(BundleConnectivityWatchdog) {
@@ -156,8 +167,8 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 	}
 
 	// assign config's commitID as current
-	if srv.currentCommitID != configData.CommitID {
-		srv.currentCommitID = configData.CommitID
+	if srv.CurrentCommitID() != configData.CommitID {
+		srv.currentConfig = configData
 		srv.configChangeTime = time.Now()
 	}
 
@@ -206,4 +217,24 @@ func (srv *Service) reportAPIError(ctx context.Context, err error) {
 // RunIntervalChangedNotifier returns a channel which will send a new agent interval duration when it changes.
 func (srv *Service) RunIntervalChangedNotifier() <-chan time.Duration {
 	return srv.runIntervalChangeNotifier
+}
+
+// addReportsToBuffer adds reports to the end of the delivery buffer.
+func (srv *Service) addReportsToBuffer(reports []Report) {
+	srv.reportsBufferLock.Lock()
+	defer srv.reportsBufferLock.Unlock()
+
+	// identify reports which are older than the buffer expiration
+	reportsExpirationCutoff := time.Now().Add(-reportsBufferExpiration).Unix()
+
+	i := 0
+	for _, report := range srv.reportsBuffer {
+		if report.Timestamp > reportsExpirationCutoff {
+			break
+		}
+
+		i++
+	}
+
+	srv.reportsBuffer = append(srv.reportsBuffer[i:], reports...)
 }

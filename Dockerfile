@@ -15,5 +15,7 @@ RUN apt-get update && apt-get upgrade -y
 # create empty agent configuration directory
 RUN mkdir /etc/qbee && echo '{}' > /etc/qbee/qbee-agent.json
 
+WORKDIR /app
+
 # copy the agent
 COPY bin/qbee-agent /usr/sbin/qbee-agent

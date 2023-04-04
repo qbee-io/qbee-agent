@@ -70,16 +70,16 @@ var bootstrapCommand = Command{
 
 	Target: func(opts Options) error {
 		cfg := &agent.Config{
-			Directory:       opts[mainConfigDirOption],
-			StateDirectory:  opts[mainStateDirOption],
-			AutoUpdate:      opts[bootstrapDisableAutoUpdateOption] != "true",
-			DeviceHubServer: opts[bootstrapDeviceHubHostOption],
-			DeviceHubPort:   opts[bootstrapDeviceHubPortOption],
-			TPMDevice:       opts[bootstrapTPMDeviceOption],
-			ProxyServer:     opts[bootstrapProxyHostOption],
-			ProxyPort:       opts[bootstrapProxyPortOption],
-			ProxyUser:       opts[bootstrapProxyUserOption],
-			ProxyPassword:   opts[bootstrapProxyPasswordOption],
+			Directory:         opts[mainConfigDirOption],
+			CacheDirectory:    opts[mainCacheDirOption],
+			DisableAutoUpdate: opts[bootstrapDisableAutoUpdateOption] == "true",
+			DeviceHubServer:   opts[bootstrapDeviceHubHostOption],
+			DeviceHubPort:     opts[bootstrapDeviceHubPortOption],
+			TPMDevice:         opts[bootstrapTPMDeviceOption],
+			ProxyServer:       opts[bootstrapProxyHostOption],
+			ProxyPort:         opts[bootstrapProxyPortOption],
+			ProxyUser:         opts[bootstrapProxyUserOption],
+			ProxyPassword:     opts[bootstrapProxyPasswordOption],
 		}
 
 		bootstrapKey, ok := opts[boostrapKeyOption]

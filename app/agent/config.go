@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/qbee-io/qbee-agent/app/log"
 )
 
 const (
@@ -21,8 +23,8 @@ type Config struct {
 	// Directory where the configuration files of the agent are located.
 	Directory string `json:"-"`
 
-	// StateDirectory where the agent's state is persisted.
-	StateDirectory string `json:"-"`
+	// CacheDirectory where the agent's cache is located.
+	CacheDirectory string `json:"-"`
 
 	// Device Hub API endpoint
 	DeviceHubServer string `json:"server"`
@@ -37,37 +39,40 @@ type Config struct {
 	// TPM Configuration
 	TPMDevice string `json:"tpm_device,omitempty"`
 
-	// AutoUpdate enables auto-update functionality
-	AutoUpdate bool `json:"auto_update,omitempty"`
+	// DisableAutoUpdate functionality
+	DisableAutoUpdate bool `json:"disable_auto_update,omitempty"`
 }
 
 // LoadConfig loads config from a provided config file path.
-func LoadConfig(configDir, stateDir string) (*Config, error) {
-	configFilePath := filepath.Join(configDir, ConfigFileName)
+// If the config file does not exist, it will return a default configuration.
+func LoadConfig(configDir, cacheDir string) (*Config, error) {
+	config := new(Config)
 
-	configBytes, err := os.ReadFile(configFilePath)
-	if err != nil {
-		return nil, fmt.Errorf("error loading config from file %s: %w", configFilePath, err)
+	var err error
+
+	if config.Directory, err = filepath.Abs(configDir); err != nil {
+		return nil, fmt.Errorf("error resolving config directory path: %w", err)
 	}
 
-	config := new(Config)
+	if config.CacheDirectory, err = filepath.Abs(cacheDir); err != nil {
+		return nil, fmt.Errorf("error resolving cache directory path: %w", err)
+	}
+
+	configFilePath := filepath.Join(configDir, ConfigFileName)
+
+	var configBytes []byte
+	if configBytes, err = os.ReadFile(configFilePath); err != nil {
+		if os.IsNotExist(err) {
+			log.Warnf("config file %s does not exist, using default configuration", configFilePath)
+			return config, nil
+		}
+
+		return nil, fmt.Errorf("error loading config from file %s: %w", configFilePath, err)
+	}
 
 	if err = json.Unmarshal(configBytes, config); err != nil {
 		return nil, fmt.Errorf("error parsing config file %s: %w", configFilePath, err)
 	}
-
-	config.Directory = configDir
-
-	if !filepath.IsAbs(stateDir) {
-		var currentWorkingDir string
-		if currentWorkingDir, err = os.Getwd(); err != nil {
-			return nil, fmt.Errorf("cannot determine current working directory: %w", err)
-		}
-
-		stateDir = filepath.Join(currentWorkingDir, stateDir)
-	}
-
-	config.StateDirectory = stateDir
 
 	return config, nil
 }

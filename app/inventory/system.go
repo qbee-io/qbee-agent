@@ -147,4 +147,7 @@ type SystemInfo struct {
 
 	// AgentVersion used to collect the inventory.
 	AgentVersion string `json:"cf_version"`
+
+	// AutoUpdateEnabled - flags whether auto update is enabled or not.
+	AutoUpdateEnabled bool `json:"auto_update_enabled"`
 }

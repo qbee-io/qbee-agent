@@ -9,9 +9,23 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync/atomic"
+	"time"
 )
 
-const defaultAPIBaseURL = "https://www.app.qbee-dev.qbee.io/api/v2"
+const (
+	defaultAPIBaseURL    = "http://localhost:8080/api/v2"
+	defaultDeviceHubHost = "devicehub"
+	defaultDeviceHubPort = "8443"
+)
+
+var apiBaseURL = strings.TrimSuffix(os.Getenv("QBEE_BASE_URL"), "/")
+
+func init() {
+	if apiBaseURL == "" {
+		apiBaseURL = defaultAPIBaseURL
+	}
+}
 
 // APIClient encapsulates communication with the qbee API.
 type APIClient struct {
@@ -23,11 +37,6 @@ type APIClient struct {
 
 // NewAPIClient returns a new instance of an authenticated APIClient.
 func NewAPIClient() *APIClient {
-	apiBaseURL := strings.TrimSuffix(os.Getenv("QBEE_BASE_URL"), "/")
-	if apiBaseURL == "" {
-		apiBaseURL = defaultAPIBaseURL
-	}
-
 	apiClient := &APIClient{
 		baseURL:    apiBaseURL,
 		httpClient: http.DefaultClient,
@@ -36,8 +45,8 @@ func NewAPIClient() *APIClient {
 	email := os.Getenv("QBEE_EMAIL")
 	password := os.Getenv("QBEE_PASSWORD")
 
-	if email == "" || password == "" {
-		panic("QBEE_EMAIL and QBEE_PASSWORD must be set to run this test")
+	if email == "" && password == "" {
+		email, password = apiClient.NewAccount()
 	}
 
 	apiClient.Login(email, password)
@@ -47,12 +56,20 @@ func NewAPIClient() *APIClient {
 
 // GetDeviceHubHost returns device-hub host matching the API.
 func (api *APIClient) GetDeviceHubHost() string {
-	return os.Getenv("QBEE_DEVICE_HUB_HOST")
+	if host := os.Getenv("QBEE_DEVICE_HUB_HOST"); host != "" {
+		return host
+	}
+
+	return defaultDeviceHubHost
 }
 
 // GetDeviceHubPort returns device-hub port matching the API.
 func (api *APIClient) GetDeviceHubPort() string {
-	return os.Getenv("QBEE_DEVICE_HUB_PORT")
+	if port := os.Getenv("QBEE_DEVICE_HUB_PORT"); port != "" {
+		return port
+	}
+
+	return defaultDeviceHubPort
 }
 
 // Login authenticates the APIClient with provided email and password.
@@ -88,6 +105,7 @@ func (api *APIClient) NewBootstrapKey() string {
 	// update its settings to auto-accept and root group
 	request := map[string]any{
 		"auto_accept": true,
+		"group":       "root",
 	}
 
 	keyPath := path + "/" + bootstrapKey
@@ -269,5 +287,67 @@ func (api *APIClient) request(method, path string, src, dst any) {
 			fmt.Println(string(responseBody))
 			panic(err)
 		}
+	}
+}
+
+var accountCounter int64
+
+// NewAccount returns credentials for a newly-created, unique platform account.
+func (api *APIClient) NewAccount() (email, password string) {
+	// make sure to produce unique accounts by using an atomic counter
+	company := fmt.Sprintf("test.%d.%d", time.Now().Unix(), atomic.AddInt64(&accountCounter, 1))
+
+	email = fmt.Sprintf("%s@qbee.io", company)
+	password = "password"
+
+	api.registerAccount(company, email, password)
+
+	return
+}
+
+// registerAccount for provided credentials
+func (api *APIClient) registerAccount(company, email, password string) {
+	path := "/user/register"
+	payload := map[string]any{
+		"fname":         "Unit",
+		"lname":         "Test",
+		"email":         email,
+		"company":       company,
+		"password":      password,
+		"conf_password": password,
+		"service_agree": true,
+	}
+
+	api.request(http.MethodPost, path, payload, nil)
+
+	registrationEmails := GetEmailMessages(email)
+	if len(registrationEmails) != 1 {
+		panic(fmt.Errorf("expected one registration email, got %v", registrationEmails))
+	}
+
+	registrationEmail := GetPlainMessage(registrationEmails[0].ID)
+
+	activationLink := ""
+	for _, field := range strings.Fields(registrationEmail) {
+		if strings.HasPrefix(field, strings.TrimSuffix(apiBaseURL, "/api/v2")) {
+			// remove trailing dot "."
+			activationLink = strings.TrimSuffix(field, ".")
+			break
+		}
+	}
+
+	if activationLink == "" {
+		panic("couldn't find activation link in the received email")
+	}
+
+	resp, err := http.DefaultClient.Get(activationLink)
+	if err != nil {
+		panic(err)
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		panic(fmt.Errorf("got unexpected status: %d", resp.StatusCode))
 	}
 }
