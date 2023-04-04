@@ -102,20 +102,6 @@ type Software struct {
 	Parameters []ConfigFileParameter `json:"parameters"`
 }
 
-// checkPreCondition returns true if pre-condition succeeds or is not defined.
-func (s Software) checkPreCondition(ctx context.Context) bool {
-	if strings.TrimSpace(s.PreCondition) == "" {
-		return true
-	}
-
-	// return with no error when pre-condition fails
-	if _, err := utils.RunCommand(ctx, []string{getShell(), "-c", s.PreCondition}); err != nil {
-		return false
-	}
-
-	return true
-}
-
 func (s Software) serviceName(ctx context.Context, srv *Service) string {
 	if s.ServiceName != "" {
 		return s.ServiceName
@@ -139,7 +125,7 @@ func (s Software) serviceName(ctx context.Context, srv *Service) string {
 
 // Execute a Software configuration on the system.
 func (s Software) Execute(ctx context.Context, srv *Service, pkgManager software.PackageManager) error {
-	if !s.checkPreCondition(ctx) {
+	if !CheckPreCondition(ctx, s.PreCondition) {
 		return nil
 	}
 

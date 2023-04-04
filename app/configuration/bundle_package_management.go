@@ -3,10 +3,8 @@ package configuration
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/qbee-io/qbee-agent/app/software"
-	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
 // PackageManagementBundle controls system packages.
@@ -48,7 +46,7 @@ type Package struct {
 
 // Execute package management configuration bundle.
 func (p PackageManagementBundle) Execute(ctx context.Context, service *Service) error {
-	if !p.checkPreCondition(ctx) {
+	if !CheckPreCondition(ctx, p.PreCondition) {
 		return nil
 	}
 
@@ -80,20 +78,6 @@ func (p PackageManagementBundle) Execute(ctx context.Context, service *Service) 
 	}
 
 	return err
-}
-
-// checkPreCondition returns true if pre-condition succeeds or is not defined.
-func (p PackageManagementBundle) checkPreCondition(ctx context.Context) bool {
-	if strings.TrimSpace(p.PreCondition) == "" {
-		return true
-	}
-
-	// return with no error when pre-condition fails
-	if _, err := utils.RunCommand(ctx, []string{getShell(), "-c", p.PreCondition}); err != nil {
-		return false
-	}
-
-	return true
 }
 
 // fullUpgrade performs full system upgrade and reports the results.
