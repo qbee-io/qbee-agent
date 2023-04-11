@@ -53,7 +53,7 @@ func (agent *Agent) Run(ctx context.Context) error {
 	signal.Notify(updateSignalCh, syscall.SIGUSR1)
 
 	// ticker won't trigger the first run immediately, so let's do that ourselves
-	go agent.RunOnce(ctx)
+	go agent.RunOnce(ctx, FullRun)
 
 	log.Infof("starting agent scheduler")
 	for {
@@ -77,20 +77,27 @@ func (agent *Agent) Run(ctx context.Context) error {
 			agent.loopTicker.Reset(newInterval)
 
 		case <-agent.loopTicker.C:
-			go agent.RunOnce(ctx)
+			go agent.RunOnce(ctx, FullRun)
 
 		case <-updateSignalCh:
 			log.Debugf("received update signal")
 			// reset the ticker, so we don't run the update twice (scheduled and manually triggered)
 			agent.loopTicker.Reset(agent.Configuration.RunInterval())
 
-			go agent.RunOnce(ctx)
+			go agent.RunOnce(ctx, FullRun)
 		}
 	}
 }
 
+type RunOnceMode int
+
+const (
+	FullRun RunOnceMode = iota
+	QuickRun
+)
+
 // RunOnce performs a single run of the agent routines.
-func (agent *Agent) RunOnce(ctx context.Context) {
+func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Errorf("fatal agent error: %v", err)
@@ -107,10 +114,14 @@ func (agent *Agent) RunOnce(ctx context.Context) {
 
 	agent.Configuration.UpdateSettings(configData)
 
-	agent.doHeartbeat(ctx)
-	agent.doMetrics(ctx)
-	agent.doInventories(ctx)
-	agent.doConfig(ctx, configData)
+	if mode == FullRun {
+		agent.doHeartbeat(ctx)
+		agent.doMetrics(ctx)
+		agent.doInventories(ctx)
+		agent.doConfig(ctx, configData)
+	} else {
+		agent.doSystemInventory(ctx)
+	}
 
 	if agent.Configuration.ShouldReboot() {
 		agent.RebootSystem(ctx)
