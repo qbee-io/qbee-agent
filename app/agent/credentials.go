@@ -1,72 +1,101 @@
 package agent
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
-	_ "embed"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"math/big"
+	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
+	"github.com/qbee-io/qbee-agent/app/api"
 	"github.com/qbee-io/qbee-agent/app/log"
 )
 
 const (
+	caCertFilename      = "qbee-ca-cert.pem"
 	privateKeyFilename  = "qbee.key"
 	certificateFilename = "qbee.cert"
 	credentialsFileMode = 0600
 )
 
-//go:embed ca/dev.crt
-var devRootCA []byte
-
-//go:embed ca/prod.crt
-var prodRootCA []byte
-
-// loadCACertificatesPool loads all trusted CA certificate.
+// loadCACertificatesPool loads trusted CA certificate.
 func (agent *Agent) loadCACertificatesPool() error {
-	prodCACert, err := x509.ParseCertificate(prodRootCA)
+	// to allow bootstrapping with non-production environments
+	if agent.cfg.DeviceHubServer != DefaultDeviceHubServer && os.Getenv("INSECURE_CA_DOWNLOAD") == "1" {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+
+		if err := agent.updateCACertificate(ctx, true); err != nil {
+			return nil
+		}
+	}
+
+	caCertPath := filepath.Join(agent.cfg.Directory, credentialsDirectory, caCertFilename)
+
+	pemCert, err := os.ReadFile(caCertPath)
 	if err != nil {
-		return fmt.Errorf("error parsing CA certificate: %w", err)
+		return fmt.Errorf("error reading CA certificate %s: %w", caCertPath, err)
+	}
+
+	pemBlock, _ := pem.Decode(pemCert)
+	if pemBlock == nil {
+		return fmt.Errorf("error decoding CA certificate %s: %w", caCertPath, err)
+	}
+
+	var envCACert *x509.Certificate
+	if envCACert, err = x509.ParseCertificate(pemBlock.Bytes); err != nil {
+		return fmt.Errorf("error parsing CA certificate %s: %w", caCertPath, err)
 	}
 
 	agent.caCertPool = x509.NewCertPool()
-	agent.caCertPool.AddCert(prodCACert)
+	agent.caCertPool.AddCert(envCACert)
 
-	// for non-production device-hub host, allow dev CA
-	if agent.cfg.DeviceHubServer != DefaultDeviceHubServer {
-		var devCACert *x509.Certificate
-		if devCACert, err = x509.ParseCertificate(devRootCA); err != nil {
-			return fmt.Errorf("error parsing dev-CA certificate: %w", err)
-		}
+	return nil
+}
 
-		agent.caCertPool.AddCert(devCACert)
+// updateCACertificate updates existing CA certificate file with the one provided by the device hub.
+// For development and testing, the insecure flag allows to download initial CA certificate.
+func (agent *Agent) updateCACertificate(ctx context.Context, insecure bool) error {
+	cli := agent.api
+
+	if insecure {
+		cli = api.NewClient(agent.cfg.DeviceHubServer, agent.cfg.DeviceHubPort, nil)
+		cli.SkipCAVerification()
 	}
 
-	// for testing, we want to allow
-	if envCA := os.Getenv("CA_CERT"); envCA != "" {
-		pemCert, err := os.ReadFile(envCA)
-		if err != nil {
-			return fmt.Errorf("error reading env-CA certificate %s: %w", envCA, err)
-		}
+	path := "/ca.crt"
 
-		pemBlock, _ := pem.Decode(pemCert)
-		if pemBlock == nil {
-			return fmt.Errorf("error decoding env-CA certificate %s: %w", envCA, err)
-		}
+	request, err := cli.NewRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return err
+	}
 
-		var envCACert *x509.Certificate
-		if envCACert, err = x509.ParseCertificate(pemBlock.Bytes); err != nil {
-			return fmt.Errorf("error parsing env-CA certificate %s: %w", envCA, err)
-		}
+	var response *http.Response
+	if response, err = cli.Do(request); err != nil {
+		return err
+	}
 
-		agent.caCertPool.AddCert(envCACert)
+	defer response.Body.Close()
+
+	var pemCert []byte
+	if pemCert, err = io.ReadAll(response.Body); err != nil {
+		return fmt.Errorf("failed to read CA certificate from the API response: %w", err)
+	}
+
+	caCertPath := filepath.Join(agent.cfg.Directory, credentialsDirectory, caCertFilename)
+
+	if err = os.WriteFile(caCertPath, pemCert, 0600); err != nil {
+		return fmt.Errorf("failed to write CA certificate to %s: %w", caCertPath, err)
 	}
 
 	return nil
