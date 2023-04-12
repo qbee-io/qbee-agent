@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	startOnceOption = "run-once"
+	startOnceOption              = "run-once"
 )
 
 var startCommand = Command{
