@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"text/tabwriter"
 )
@@ -113,11 +114,19 @@ func (cmd Command) renderSubCommands() {
 		return
 	}
 
+	// sort sub-commands by name
+	subCommands := make([]string, 0, len(cmd.SubCommands))
+	for subCmdName := range cmd.SubCommands {
+		subCommands = append(subCommands, subCmdName)
+	}
+
+	sort.Strings(subCommands)
+
 	fmt.Println("\nCommands:")
 
 	writer := tabwriter.NewWriter(os.Stdout, 0, 1, 1, ' ', 0)
-	for subCmdName, subCmd := range cmd.SubCommands {
-		_, _ = fmt.Fprintln(writer, fmt.Sprintf("  %s\t- %s\t", subCmdName, subCmd.Description))
+	for _, subCmdName := range subCommands {
+		_, _ = fmt.Fprintln(writer, fmt.Sprintf("  %s\t- %s\t", subCmdName, cmd.SubCommands[subCmdName].Description))
 	}
 	_ = writer.Flush()
 
