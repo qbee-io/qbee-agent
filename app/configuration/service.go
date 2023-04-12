@@ -339,3 +339,65 @@ func (srv *Service) flushReportsBuffer(ctx context.Context) error {
 
 	return nil
 }
+
+// Get returns the agent configuration.
+// If the configuration cannot be retrieved from the API, it will be loaded from the local cache.
+func (srv *Service) Get(ctx context.Context) (*CommittedConfig, error) {
+	cfg, err := srv.get(ctx)
+	if err != nil {
+		// if we failed to get config from API, try to load it from local file cache
+		cfg = new(CommittedConfig)
+
+		if loadErr := srv.loadConfig(cfg); loadErr != nil {
+			log.Warnf("failed to load config from cache: %v", loadErr)
+			return nil, err
+		}
+
+		log.Warnf("failed to get config from API: %v", err)
+
+		return cfg, nil
+	}
+
+	srv.persistConfig(cfg)
+
+	return cfg, nil
+}
+
+const (
+	configCacheFileName = "config.json"
+	configCacheFileMode = 0600
+)
+
+// persistConfig saves the agent configuration to the cache file.
+func (srv *Service) persistConfig(cfg *CommittedConfig) {
+	filename := filepath.Join(srv.appDirectory, configCacheFileName)
+
+	fp, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, configCacheFileMode)
+	if err != nil {
+		log.Errorf("failed to open config cache file: %v", err)
+		return
+	}
+	defer fp.Close()
+
+	if err = json.NewEncoder(fp).Encode(cfg); err != nil {
+		log.Errorf("failed to marshal config: %v", err)
+		return
+	}
+}
+
+// loadConfig loads the agent configuration from the cache file.
+func (srv *Service) loadConfig(cfg *CommittedConfig) error {
+	filename := filepath.Join(srv.appDirectory, configCacheFileName)
+
+	fp, err := os.Open(filename)
+	if err != nil {
+		return fmt.Errorf("failed to open config cache file: %v", err)
+	}
+	defer fp.Close()
+
+	if err = json.NewDecoder(fp).Decode(cfg); err != nil {
+		return fmt.Errorf("failed to unmarshal config: %v", err)
+	}
+
+	return nil
+}

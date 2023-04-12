@@ -1,9 +1,11 @@
 package configuration
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	"github.com/qbee-io/qbee-agent/app/api"
 	"github.com/qbee-io/qbee-agent/app/test"
 )
 
@@ -78,5 +80,41 @@ func TestService_reportsBuffer(t *testing.T) {
 		if err := srv.clearReportsBuffer(); err != nil {
 			t.Fatalf("failed to clear reports buffer: %v", err)
 		}
+	})
+}
+
+func TestService_persistConfig(t *testing.T) {
+	apiClient := api.NewClient("invalid-host.example", "12345", nil)
+	srv := New(apiClient, t.TempDir(), "")
+
+	cfg := &CommittedConfig{
+		CommitID: "abc",
+		Bundles:  []string{BundleSettings},
+		BundleData: BundleData{
+			Settings: SettingsBundle{
+				RunInterval: 10,
+			},
+		},
+	}
+
+	srv.persistConfig(cfg)
+
+	t.Run("load config from file", func(t *testing.T) {
+		loadedCfg := new(CommittedConfig)
+
+		if err := srv.loadConfig(loadedCfg); err != nil {
+			t.Fatalf("failed to load config: %v", err)
+		}
+
+		test.Equal(t, loadedCfg, cfg)
+	})
+
+	t.Run("load config through public Get method", func(t *testing.T) {
+		committedConfig, err := srv.Get(context.Background())
+		if err != nil {
+			t.Fatalf("failed to get config: %v", err)
+		}
+
+		test.Equal(t, committedConfig, cfg)
 	})
 }
