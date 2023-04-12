@@ -18,7 +18,7 @@ import (
 	"github.com/qbee-io/qbee-agent/app"
 )
 
-const UserAgent = "qbee-agent/" + app.Version
+var UserAgent = "qbee-agent/" + app.Version
 
 // apiCallTimeout defines total request/response time we allow for any API call.
 // This timeout doesn't apply to file downloads.
