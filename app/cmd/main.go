@@ -34,7 +34,7 @@ var Main = Command{
 		{
 			Name:    mainLogLevel,
 			Short:   "l",
-			Help:    "Logging level: DEBUG, INFO or ERROR.",
+			Help:    "Logging level: DEBUG, INFO, WARNING or ERROR.",
 			Default: "INFO",
 		},
 	},
@@ -54,6 +54,8 @@ func loadConfig(opts Options) (*agent.Config, error) {
 		log.SetLevel(log.DEBUG)
 	case "INFO":
 		log.SetLevel(log.INFO)
+	case "WARNING":
+		log.SetLevel(log.WARNING)
 	case "ERROR":
 		log.SetLevel(log.ERROR)
 	}

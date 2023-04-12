@@ -349,11 +349,11 @@ func (srv *Service) Get(ctx context.Context) (*CommittedConfig, error) {
 		cfg = new(CommittedConfig)
 
 		if loadErr := srv.loadConfig(cfg); loadErr != nil {
-			log.Errorf("failed to load config from cache: %v", loadErr)
+			log.Warnf("failed to load config from cache: %v", loadErr)
 			return nil, err
 		}
 
-		log.Errorf("failed to get config from API: %v", err)
+		log.Warnf("failed to get config from API: %v", err)
 
 		return cfg, nil
 	}
