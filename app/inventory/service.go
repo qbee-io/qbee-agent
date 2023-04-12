@@ -6,16 +6,14 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"sync"
 
 	"github.com/qbee-io/qbee-agent/app/api"
 )
 
 // Service provides methods for collecting and delivering inventory data.
 type Service struct {
-	api                           *api.Client
-	deliveredInventoryDigests     map[Type]string
-	deliveredInventoryDigestsLock sync.Mutex
+	api                       *api.Client
+	deliveredInventoryDigests map[Type]string
 }
 
 // New returns a new instance of inventory Service.
@@ -172,9 +170,7 @@ func (srv *Service) Send(ctx context.Context, inventoryType Type, inventoryData 
 		return fmt.Errorf("error sending %s inventory request: %w", inventoryType, err)
 	}
 
-	srv.deliveredInventoryDigestsLock.Lock()
 	srv.deliveredInventoryDigests[inventoryType] = currentDigest
-	srv.deliveredInventoryDigestsLock.Unlock()
 
 	return nil
 }

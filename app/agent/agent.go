@@ -211,9 +211,10 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 
 	agent.api = api.NewClient(cfg.DeviceHubServer, cfg.DeviceHubPort, agent.caCertPool)
 
-	cacheDir := filepath.Join(cfg.StateDirectory, appWorkingDirectory, cacheDirectory)
+	appDir := filepath.Join(cfg.StateDirectory, appWorkingDirectory)
+	cacheDir := filepath.Join(appDir, cacheDirectory)
 	agent.Inventory = inventory.New(agent.api)
-	agent.Configuration = configuration.New(agent.api, cacheDir)
+	agent.Configuration = configuration.New(agent.api, appDir, cacheDir)
 	agent.Metrics = metrics.New(agent.api)
 	agent.loopTicker = time.NewTicker(agent.Configuration.RunInterval())
 
