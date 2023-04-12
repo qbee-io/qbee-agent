@@ -69,7 +69,7 @@ func Bootstrap(ctx context.Context, cfg *Config, bootstrapKey string) error {
 		return err
 	}
 
-	agent.RunOnce(ctx)
+	agent.RunOnce(ctx, QuickRun)
 	agent.inProgress.Wait()
 
 	log.Infof("Bootstrap successfully completed")
