@@ -10,7 +10,8 @@ import (
 	"github.com/qbee-io/qbee-agent/app/log"
 )
 
-const defaultAgentInterval = 5 // minutes
+const defaultAgentInterval = 5                      // minutes
+const reportsBufferExpiration = 10 * 24 * time.Hour // 10 days
 
 type Service struct {
 	api            *api.Client
@@ -33,13 +34,13 @@ type Service struct {
 	runInterval               int
 	runIntervalChangeNotifier chan time.Duration
 
-	// runLock prevents system from executing configuration concurrently
-	runLock sync.Mutex
-
 	// connectivityWatchdogThreshold defines failed API connections threshold at which server will be rebooted
 	// 0 -> disabled
 	connectivityWatchdogThreshold int
 	failedConnectionsCount        int
+
+	reportsBuffer     []Report
+	reportsBufferLock sync.Mutex
 }
 
 // New returns a new instance of configuration Service.
@@ -48,6 +49,7 @@ func New(apiClient *api.Client, cacheDirectory string) *Service {
 		api:            apiClient,
 		cacheDirectory: cacheDirectory,
 		runInterval:    defaultAgentInterval,
+		reportsBuffer:  make([]Report, 0),
 
 		// this will notify the main agent loop about changes to the agent run interval
 		// we don't expect more than a single consumer of this, that's why a buffered channel is used
@@ -119,11 +121,11 @@ func (srv *Service) UpdateSettings(configData *CommittedConfig) {
 
 // Execute configuration bundles on the system and return true if system should be rebooted.
 func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) error {
-	if !srv.runLock.TryLock() {
-		log.Infof("configuration changes already in progress")
+	if err := acquireLock(); err != nil {
+		log.Infof("failed to acquire execution lock - %v", err)
 		return nil
 	}
-	defer srv.runLock.Unlock()
+	defer releaseLock()
 
 	// disable connectivity watchdog if not set in the configData
 	if !configData.HasBundle(BundleConnectivityWatchdog) {
@@ -206,4 +208,24 @@ func (srv *Service) reportAPIError(ctx context.Context, err error) {
 // RunIntervalChangedNotifier returns a channel which will send a new agent interval duration when it changes.
 func (srv *Service) RunIntervalChangedNotifier() <-chan time.Duration {
 	return srv.runIntervalChangeNotifier
+}
+
+// addReportsToBuffer adds reports to the end of the delivery buffer.
+func (srv *Service) addReportsToBuffer(reports []Report) {
+	srv.reportsBufferLock.Lock()
+	defer srv.reportsBufferLock.Unlock()
+
+	// identify reports which are older than the buffer expiration
+	reportsExpirationCutoff := time.Now().Add(-reportsBufferExpiration).Unix()
+
+	i := 0
+	for _, report := range srv.reportsBuffer {
+		if report.Timestamp > reportsExpirationCutoff {
+			break
+		}
+
+		i++
+	}
+
+	srv.reportsBuffer = append(srv.reportsBuffer[i:], reports...)
 }

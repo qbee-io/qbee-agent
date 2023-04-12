@@ -4,6 +4,7 @@ import "log"
 
 const (
 	ERROR = iota
+	WARNING
 	INFO
 	DEBUG
 )
@@ -26,6 +27,15 @@ func Infof(msg string, args ...any) {
 	}
 
 	log.Printf("[INFO] "+msg, args...)
+}
+
+// Warnf logs message with WARNING severity.
+func Warnf(msg string, args ...any) {
+	if level < WARNING {
+		return
+	}
+
+	log.Printf("[WARNING] "+msg, args...)
 }
 
 // Errorf logs message with ERROR severity.

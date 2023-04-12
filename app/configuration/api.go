@@ -66,6 +66,7 @@ func (srv *Service) getFile(ctx context.Context, src string) (io.ReadCloser, err
 }
 
 const reportsAPIPath = "/v1/org/device/auth/report"
+const reportsDeliveryBatchSize = 100
 
 // sendReports delivers reports from a configuration execution.
 func (srv *Service) sendReports(ctx context.Context, reports []Report) error {
@@ -73,17 +74,34 @@ func (srv *Service) sendReports(ctx context.Context, reports []Report) error {
 		return nil
 	}
 
-	buf := new(bytes.Buffer)
-	jsonEncoder := json.NewEncoder(buf)
+	srv.addReportsToBuffer(reports)
 
-	for _, report := range reports {
-		if err := jsonEncoder.Encode(report); err != nil {
-			return fmt.Errorf("error encoding report into JSON: %w", err)
+	// attempt to deliver reports to the device hub
+
+	srv.reportsBufferLock.Lock()
+	defer srv.reportsBufferLock.Unlock()
+
+	for len(srv.reportsBuffer) > 0 {
+		buf := new(bytes.Buffer)
+		jsonEncoder := json.NewEncoder(buf)
+		count := 0
+
+		for _, report := range srv.reportsBuffer {
+			if err := jsonEncoder.Encode(report); err != nil {
+				return fmt.Errorf("error encoding report into JSON: %w", err)
+			}
+
+			if count++; count >= reportsDeliveryBatchSize {
+				break
+			}
 		}
-	}
 
-	if err := srv.api.Post(ctx, reportsAPIPath, buf, nil); err != nil {
-		return fmt.Errorf("error delivering reports: %w", err)
+		if err := srv.api.Post(ctx, reportsAPIPath, buf, nil); err != nil {
+			return fmt.Errorf("error delivering reports: %w", err)
+		}
+
+		// remove delivered reports from the buffer
+		srv.reportsBuffer = srv.reportsBuffer[count:]
 	}
 
 	return nil
