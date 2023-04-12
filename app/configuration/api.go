@@ -11,8 +11,8 @@ import (
 
 const deviceConfigurationAPIPath = "/v1/org/device/auth/config"
 
-// Get returns currently committed device configuration.
-func (srv *Service) Get(ctx context.Context) (*CommittedConfig, error) {
+// get retrieves currently committed device configuration from the device hub API.
+func (srv *Service) get(ctx context.Context) (*CommittedConfig, error) {
 	cfg := new(CommittedConfig)
 
 	err := srv.api.Get(ctx, deviceConfigurationAPIPath, cfg)
