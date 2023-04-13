@@ -88,7 +88,7 @@ func (runner *Runner) Bootstrap(args ...string) {
 
 	runner.DeviceID = getPublicKeyHexDigest(privateKeyPEM)
 
-	//runner.t.Cleanup(runner.RemoveDevice)
+	runner.t.Cleanup(runner.RemoveDevice)
 }
 
 func (runner *Runner) RemoveDevice() {
