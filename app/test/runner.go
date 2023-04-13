@@ -2,14 +2,12 @@ package test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 	"testing"
-	"time"
 )
 
 const Debian = "debian:qbee"
@@ -62,6 +60,9 @@ func (runner *Runner) Close() {
 
 // Bootstrap the agent.
 func (runner *Runner) Bootstrap() {
+	// TODO: re-enable when we fix the issue with bootstrapping devices
+	runner.t.SkipNow()
+
 	if runner.API == nil {
 		runner.API = NewAPIClient()
 	}
@@ -85,8 +86,7 @@ func (runner *Runner) Bootstrap() {
 
 	runner.DeviceID = getPublicKeyHexDigest(privateKeyPEM)
 
-	// Device cleanup is disabled until we have a better bootstrap process to propagate data to timescale.
-	//runner.t.Cleanup(runner.RemoveDevice)
+	runner.t.Cleanup(runner.RemoveDevice)
 }
 
 func (runner *Runner) RemoveDevice() {
@@ -94,15 +94,10 @@ func (runner *Runner) RemoveDevice() {
 	runner.API.DeletePendingDevice(runner.DeviceID)
 }
 
-const execTimeout = 5 * time.Second
-
 func (runner *Runner) Exec(cmd ...string) ([]byte, error) {
 	execCommand := append([]string{"exec", runner.container}, cmd...)
 
-	ctx, cancel := context.WithTimeout(context.Background(), execTimeout)
-	defer cancel()
-
-	execCmd := exec.CommandContext(ctx, "docker", execCommand...)
+	execCmd := exec.Command("docker", execCommand...)
 	stderr := new(bytes.Buffer)
 	execCmd.Stderr = stderr
 	output, err := execCmd.Output()

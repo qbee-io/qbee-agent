@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -219,10 +220,6 @@ func (agent *Agent) RebootSystem(ctx context.Context) {
 
 // NewWithoutCredentials returns a new instance of Agent without loaded credentials.
 func NewWithoutCredentials(cfg *Config) (*Agent, error) {
-	if err := prepareDirectories(cfg.Directory, cfg.CacheDirectory); err != nil {
-		return nil, err
-	}
-
 	agent := &Agent{
 		cfg:        cfg,
 		inProgress: new(sync.WaitGroup),
@@ -239,8 +236,11 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 	}
 
 	agent.api = api.NewClient(cfg.DeviceHubServer, cfg.DeviceHubPort, agent.caCertPool)
+
+	appDir := filepath.Join(cfg.StateDirectory, appWorkingDirectory)
+	cacheDir := filepath.Join(appDir, cacheDirectory)
 	agent.Inventory = inventory.New(agent.api)
-	agent.Configuration = configuration.New(agent.api, cfg.CacheDirectory)
+	agent.Configuration = configuration.New(agent.api, appDir, cacheDir)
 	agent.Metrics = metrics.New(agent.api)
 	agent.loopTicker = time.NewTicker(agent.Configuration.RunInterval())
 

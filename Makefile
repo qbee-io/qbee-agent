@@ -20,3 +20,6 @@ docker-image:
 
 auto-docker-image:
 	inotifywait -e close_write,moved_to,create -r -q -m app/ | while read line; do $(MAKE) build docker-image; done
+
+test:
+	go test ./app/...

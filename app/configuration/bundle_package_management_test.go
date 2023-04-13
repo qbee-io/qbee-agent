@@ -157,6 +157,10 @@ func Test_PackageManagement_InstallPackage_UpdateWithReboot(t *testing.T) {
 func Test_PackageManagement_UpgradeAll(t *testing.T) {
 	r := test.New(t)
 
+	// ensure we have the latest updates
+	r.MustExec("apt-get", "update")
+	r.MustExec("apt-get", "upgrade", "-y")
+
 	installOlderVersionOfTestPackage(r)
 
 	reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
@@ -174,6 +178,10 @@ func Test_PackageManagement_UpgradeAll(t *testing.T) {
 
 func Test_PackageManagement_UpgradeAll_WithReboot(t *testing.T) {
 	r := test.New(t)
+
+	// ensure we have the latest updates
+	r.MustExec("apt-get", "update")
+	r.MustExec("apt-get", "upgrade", "-y")
 
 	installOlderVersionOfTestPackage(r)
 
@@ -196,6 +204,10 @@ func Test_PackageManagement_UpgradeAll_WithReboot(t *testing.T) {
 
 func Test_PackageManagement_UpgradeAll_WithRebootWithoutChanges(t *testing.T) {
 	r := test.New(t)
+
+	// ensure we have the latest updates
+	r.MustExec("apt-get", "update")
+	r.MustExec("apt-get", "upgrade", "-y")
 
 	reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
 		FullUpgrade: true,
