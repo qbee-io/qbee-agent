@@ -84,15 +84,21 @@ func (agent *Agent) updateAgent(ctx context.Context) error {
 
 	log.Debugf("path#2: %s", agentBinPath)
 
-	tmpAgentPath := agentBinPath + ".tmp"
-
-	log.Debugf("path#3: %s", tmpAgentPath)
-
 	var fp *os.File
-	if fp, err = os.OpenFile(tmpAgentPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, nonExecutableFileMode); err != nil {
+	if fp, err = os.CreateTemp(filepath.Dir(agentBinPath), filepath.Base(agentBinPath)+".*.tmp"); err != nil {
 		return fmt.Errorf("cannot create temporary agent binary: %w", err)
 	}
 	defer fp.Close()
+
+	if err = fp.Chmod(nonExecutableFileMode); err != nil {
+		return fmt.Errorf("cannot set permissions on temporary agent binary: %w", err)
+	}
+
+	tmpAgentPath := fp.Name()
+
+	defer os.Remove(tmpAgentPath)
+
+	log.Debugf("path#3: %s", tmpAgentPath)
 
 	var metadata *Metadata
 	if metadata, err = agent.downloadUpdate(ctxWithTimeout, fp); err != nil {

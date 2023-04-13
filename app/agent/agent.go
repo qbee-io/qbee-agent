@@ -43,9 +43,9 @@ func (agent *Agent) Run(ctx context.Context) error {
 	// look for run interval changes
 	intervalChange := agent.Configuration.RunIntervalChangedNotifier()
 
-	// catch SIGINT and SIGKILL to gracefully shut down the agent
+	// catch SIGINT and SIGTERM to gracefully shut down the agent
 	stopSignalCh := make(chan os.Signal, 1)
-	signal.Notify(stopSignalCh, os.Interrupt, os.Kill)
+	signal.Notify(stopSignalCh, os.Interrupt, syscall.SIGTERM)
 
 	// use SIGUSR1 to force processing outside normal schedule
 	updateSignalCh := make(chan os.Signal, 1)
@@ -129,9 +129,9 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 		agent.doMetrics(ctx)
 		agent.doInventories(ctx)
 		agent.doConfig(ctx, configData)
-	} else {
-		agent.doSystemInventory(ctx)
 	}
+
+	agent.doSystemInventory(ctx)
 
 	if agent.Configuration.ShouldReboot() {
 		agent.RebootSystem(ctx)
@@ -145,17 +145,13 @@ func (agent *Agent) doCheckIn(ctx context.Context) {
 	go func() {
 		defer agent.inProgress.Done()
 
-		response, err := agent.checkIn(ctx, !agent.cfg.DisableAutoUpdate)
+		response, err := agent.checkIn(ctx, agent.cfg.AutoUpdate)
 		if err != nil {
 			log.Errorf("failed to check-in: %v", err)
 			return
 		}
 
-		if agent.cfg.DisableAutoUpdate {
-			return
-		}
-
-		if response.UpdateAvailable() {
+		if agent.cfg.AutoUpdate && response.UpdateAvailable() {
 			agent.update <- true
 		}
 	}()
@@ -203,6 +199,8 @@ func (agent *Agent) RebootSystem(ctx context.Context) {
 		log.Errorf("cannot reboot: %s - %v", shutdownBinPath, err)
 		return
 	}
+
+	agent.inProgress.Wait()
 
 	if output, err := utils.RunCommand(ctx, []string{"/sbin/shutdown", "-r", "+1"}); err != nil {
 		log.Errorf("scheduling system reboot failed: %v", err)

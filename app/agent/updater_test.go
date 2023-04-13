@@ -40,7 +40,10 @@ func Test_Update_Manual_UsingRelativePath(t *testing.T) {
 
 func Test_Update_Automatic(t *testing.T) {
 	r := test.New(t)
-	r.Bootstrap()
+
+	// since auto-update is disabled by default,
+	// we need to enable it during bootstrap with --enable-auto-update flag
+	r.Bootstrap("--enable-auto-update")
 
 	version := r.MustExec("qbee-agent", "version")
 

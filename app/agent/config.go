@@ -37,8 +37,8 @@ type Config struct {
 	// TPM Configuration
 	TPMDevice string `json:"tpm_device,omitempty"`
 
-	// DisableAutoUpdate functionality
-	DisableAutoUpdate bool `json:"disable_auto_update,omitempty"`
+	// AutoUpdate enables automatic updates of the agent binary.
+	AutoUpdate bool `json:"auto_update,omitempty"`
 }
 
 // LoadConfig loads config from a provided config file path.

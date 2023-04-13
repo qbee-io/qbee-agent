@@ -8,15 +8,15 @@ import (
 )
 
 const (
-	boostrapKeyOption                = "bootstrap-key"
-	bootstrapDisableAutoUpdateOption = "no-auto-update"
-	bootstrapDeviceHubHostOption     = "device-hub-host"
-	bootstrapDeviceHubPortOption     = "device-hub-port"
-	bootstrapTPMDeviceOption         = "tpm-device"
-	bootstrapProxyHostOption         = "proxy-host"
-	bootstrapProxyPortOption         = "proxy-port"
-	bootstrapProxyUserOption         = "proxy-user"
-	bootstrapProxyPasswordOption     = "proxy-password"
+	boostrapKeyOption            = "bootstrap-key"
+	bootstrapAutoUpdateOption    = "enable-auto-update"
+	bootstrapDeviceHubHostOption = "device-hub-host"
+	bootstrapDeviceHubPortOption = "device-hub-port"
+	bootstrapTPMDeviceOption     = "tpm-device"
+	bootstrapProxyHostOption     = "proxy-host"
+	bootstrapProxyPortOption     = "proxy-port"
+	bootstrapProxyUserOption     = "proxy-user"
+	bootstrapProxyPasswordOption = "proxy-password"
 )
 
 var bootstrapCommand = Command{
@@ -29,9 +29,9 @@ var bootstrapCommand = Command{
 			Required: true,
 		},
 		{
-			Name: bootstrapDisableAutoUpdateOption,
+			Name: bootstrapAutoUpdateOption,
 			Flag: "true",
-			Help: "Disable auto-update.",
+			Help: "Enable auto-update.",
 		},
 		{
 			Name:    bootstrapDeviceHubHostOption,
@@ -70,16 +70,16 @@ var bootstrapCommand = Command{
 
 	Target: func(opts Options) error {
 		cfg := &agent.Config{
-			Directory:         opts[mainConfigDirOption],
-			StateDirectory:    opts[mainStateDirOption],
-			DisableAutoUpdate: opts[bootstrapDisableAutoUpdateOption] == "true",
-			DeviceHubServer:   opts[bootstrapDeviceHubHostOption],
-			DeviceHubPort:     opts[bootstrapDeviceHubPortOption],
-			TPMDevice:         opts[bootstrapTPMDeviceOption],
-			ProxyServer:       opts[bootstrapProxyHostOption],
-			ProxyPort:         opts[bootstrapProxyPortOption],
-			ProxyUser:         opts[bootstrapProxyUserOption],
-			ProxyPassword:     opts[bootstrapProxyPasswordOption],
+			Directory:       opts[mainConfigDirOption],
+			StateDirectory:  opts[mainStateDirOption],
+			AutoUpdate:      opts[bootstrapAutoUpdateOption] == "true",
+			DeviceHubServer: opts[bootstrapDeviceHubHostOption],
+			DeviceHubPort:   opts[bootstrapDeviceHubPortOption],
+			TPMDevice:       opts[bootstrapTPMDeviceOption],
+			ProxyServer:     opts[bootstrapProxyHostOption],
+			ProxyPort:       opts[bootstrapProxyPortOption],
+			ProxyUser:       opts[bootstrapProxyUserOption],
+			ProxyPassword:   opts[bootstrapProxyPasswordOption],
 		}
 
 		bootstrapKey, ok := opts[boostrapKeyOption]
