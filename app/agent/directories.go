@@ -13,17 +13,21 @@ import (
 const (
 	directoryMode        = 0700
 	credentialsDirectory = "ppkeys"
+	appWorkingDirectory  = "app_workdir"
+	cacheDirectory       = "cache"
 )
 
 // prepareDirectories makes sure that agent's directories are in place.
-func prepareDirectories(cfgDirectory, cacheDirectory string) error {
-	log.Debugf("Preparing agent directories")
+func prepareDirectories(cfgDirectory, stateDirectory string) error {
+	log.Infof("Preparing agent directories")
+
+	cacheDirectoryPath := filepath.Join(stateDirectory, appWorkingDirectory, cacheDirectory)
 
 	directories := []string{
 		filepath.Join(cfgDirectory, credentialsDirectory),
-		filepath.Join(cacheDirectory, configuration.FileDistributionCacheDirectory),
-		filepath.Join(cacheDirectory, configuration.SoftwareCacheDirectory),
-		filepath.Join(cacheDirectory, configuration.DockerContainerDirectory),
+		filepath.Join(cacheDirectoryPath, configuration.FileDistributionCacheDirectory),
+		filepath.Join(cacheDirectoryPath, configuration.SoftwareCacheDirectory),
+		filepath.Join(cacheDirectoryPath, configuration.DockerContainerDirectory),
 	}
 
 	for _, directory := range directories {

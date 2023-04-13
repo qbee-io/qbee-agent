@@ -7,13 +7,13 @@ import (
 
 const (
 	mainConfigDirOption = "config-dir"
-	mainCacheDirOption  = "cache-dir"
+	mainStateDirOption  = "state-dir"
 	mainLogLevel        = "log-level"
 )
 
 const (
 	DefaultConfigDir = "/etc/qbee"
-	DefaultCacheDir  = "/var/cache/qbee"
+	DefaultStateDir  = "/var/lib/qbee"
 )
 
 var Main = Command{
@@ -26,10 +26,10 @@ var Main = Command{
 			Default: DefaultConfigDir,
 		},
 		{
-			Name:    mainCacheDirOption,
-			Short:   "x",
-			Help:    "Cache directory.",
-			Default: DefaultCacheDir,
+			Name:    mainStateDirOption,
+			Short:   "s",
+			Help:    "State directory.",
+			Default: DefaultStateDir,
 		},
 		{
 			Name:    mainLogLevel,
@@ -61,5 +61,5 @@ func loadConfig(opts Options) (*agent.Config, error) {
 		log.SetLevel(log.ERROR)
 	}
 
-	return agent.LoadConfig(opts[mainConfigDirOption], opts[mainCacheDirOption])
+	return agent.LoadConfig(opts[mainConfigDirOption], opts[mainStateDirOption])
 }

@@ -118,13 +118,8 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 
 	configData, err := agent.Configuration.Get(ctx)
 	if err != nil {
-		// if we can't get the config, let's try to get the last known config
-		if configData = agent.Configuration.Current(); configData == nil {
-			log.Errorf("failed to get device configuration from the device hub: %v", err)
-			return
-		} else {
-			log.Warnf("failed to get device configuration from the device hub: %v - using last known config", err)
-		}
+		log.Errorf("failed to get device configuration from the device hub: %v", err)
+		return
 	}
 
 	agent.Configuration.UpdateSettings(configData)

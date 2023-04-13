@@ -71,7 +71,7 @@ var bootstrapCommand = Command{
 	Target: func(opts Options) error {
 		cfg := &agent.Config{
 			Directory:         opts[mainConfigDirOption],
-			CacheDirectory:    opts[mainCacheDirOption],
+			StateDirectory:    opts[mainStateDirOption],
 			DisableAutoUpdate: opts[bootstrapDisableAutoUpdateOption] == "true",
 			DeviceHubServer:   opts[bootstrapDeviceHubHostOption],
 			DeviceHubPort:     opts[bootstrapDeviceHubPortOption],
