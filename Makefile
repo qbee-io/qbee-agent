@@ -9,7 +9,7 @@ PUBLIC_SINGING_KEY_VAR=github.com/qbee-io/qbee-agent/app/updater.PublicSigningKe
 
 build:
 	docker run --rm \
-	-v $(PWD):/src \
+	-v .:/src \
 	-w /src \
 	-e CGO_ENABLED=0 \
 	golang:1.20 \
