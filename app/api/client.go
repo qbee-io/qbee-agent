@@ -18,7 +18,7 @@ import (
 	"github.com/qbee-io/qbee-agent/app"
 )
 
-const UserAgent = "qbee-agent/" + app.Version
+var UserAgent = "qbee-agent/" + app.Version
 
 // apiCallTimeout defines total request/response time we allow for any API call.
 // This timeout doesn't apply to file downloads.
@@ -54,6 +54,11 @@ func NewClient(host, port string, rootCAPool *x509.CertPool) *Client {
 			Timeout: 60 * time.Second,
 		},
 	}
+}
+
+// SkipCAVerification makes the client accept untrusted certificates.
+func (cli *Client) SkipCAVerification() {
+	cli.httpClient.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify = true
 }
 
 // UseTLSCredentials adds TLS certificate to TLSClientConfig.

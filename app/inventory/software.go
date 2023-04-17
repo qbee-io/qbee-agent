@@ -4,22 +4,22 @@ import (
 	"context"
 	"fmt"
 
-	software2 "github.com/qbee-io/qbee-agent/app/software"
+	"github.com/qbee-io/qbee-agent/app/software"
 )
 
 const TypeSoftware Type = "software"
 
 type Software struct {
 	// PackageManager - type of package manager generating the report
-	PackageManager software2.PackageManagerType `json:"pkg_manager"`
+	PackageManager software.PackageManagerType `json:"pkg_manager"`
 
 	// Items - list of installed software
-	Items []software2.Package `json:"items"`
+	Items []software.Package `json:"items"`
 }
 
 // CollectSoftwareInventory returns populated Software inventory based on current system status.
 func CollectSoftwareInventory(ctx context.Context) (*Software, error) {
-	pkgManager := software2.DefaultPackageManager
+	pkgManager := software.DefaultPackageManager
 	if pkgManager == nil {
 		return nil, fmt.Errorf("no supported package manager found")
 	}

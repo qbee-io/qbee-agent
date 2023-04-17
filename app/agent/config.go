@@ -37,7 +37,7 @@ type Config struct {
 	// TPM Configuration
 	TPMDevice string `json:"tpm_device,omitempty"`
 
-	// AutoUpdate enables auto-update functionality
+	// AutoUpdate enables automatic updates of the agent binary.
 	AutoUpdate bool `json:"auto_update,omitempty"`
 }
 
@@ -58,16 +58,9 @@ func LoadConfig(configDir, stateDir string) (*Config, error) {
 
 	config.Directory = configDir
 
-	if !filepath.IsAbs(stateDir) {
-		var currentWorkingDir string
-		if currentWorkingDir, err = os.Getwd(); err != nil {
-			return nil, fmt.Errorf("cannot determine current working directory: %w", err)
-		}
-
-		stateDir = filepath.Join(currentWorkingDir, stateDir)
+	if config.StateDirectory, err = filepath.Abs(stateDir); err != nil {
+		return nil, fmt.Errorf("cannot determine state directory path: %w", err)
 	}
-
-	config.StateDirectory = stateDir
 
 	return config, nil
 }

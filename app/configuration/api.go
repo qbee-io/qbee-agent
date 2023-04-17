@@ -11,8 +11,8 @@ import (
 
 const deviceConfigurationAPIPath = "/v1/org/device/auth/config"
 
-// Get returns currently committed device configuration.
-func (srv *Service) Get(ctx context.Context) (*CommittedConfig, error) {
+// get retrieves currently committed device configuration from the device hub API.
+func (srv *Service) get(ctx context.Context) (*CommittedConfig, error) {
 	cfg := new(CommittedConfig)
 
 	err := srv.api.Get(ctx, deviceConfigurationAPIPath, cfg)
@@ -66,25 +66,39 @@ func (srv *Service) getFile(ctx context.Context, src string) (io.ReadCloser, err
 }
 
 const reportsAPIPath = "/v1/org/device/auth/report"
+const reportsDeliveryBatchSize = 100
 
 // sendReports delivers reports from a configuration execution.
-func (srv *Service) sendReports(ctx context.Context, reports []Report) error {
+// Returns number of reports successfully delivered.
+func (srv *Service) sendReports(ctx context.Context, reports []Report) (int, error) {
+	delivered := 0
+
 	if len(reports) == 0 {
-		return nil
+		return delivered, nil
 	}
 
-	buf := new(bytes.Buffer)
-	jsonEncoder := json.NewEncoder(buf)
+	// attempt to deliver reports to the device hub
+	for len(reports) > 0 {
+		buf := new(bytes.Buffer)
+		jsonEncoder := json.NewEncoder(buf)
+		count := 0
 
-	for _, report := range reports {
-		if err := jsonEncoder.Encode(report); err != nil {
-			return fmt.Errorf("error encoding report into JSON: %w", err)
+		for _, report := range reports {
+			if err := jsonEncoder.Encode(report); err != nil {
+				return delivered, fmt.Errorf("error encoding report into JSON: %w", err)
+			}
+
+			if count++; count >= reportsDeliveryBatchSize {
+				break
+			}
 		}
+
+		if err := srv.api.Post(ctx, reportsAPIPath, buf, nil); err != nil {
+			return delivered, fmt.Errorf("error delivering reports: %w", err)
+		}
+
+		delivered += count
 	}
 
-	if err := srv.api.Post(ctx, reportsAPIPath, buf, nil); err != nil {
-		return fmt.Errorf("error delivering reports: %w", err)
-	}
-
-	return nil
+	return delivered, nil
 }

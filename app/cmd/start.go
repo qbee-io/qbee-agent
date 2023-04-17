@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	startDisableAutoUpdateOption = "no-auto-update"
+	startOnceOption              = "run-once"
 )
 
 var startCommand = Command{
@@ -15,15 +15,15 @@ var startCommand = Command{
 
 	Options: []Option{
 		{
-			Name:  startDisableAutoUpdateOption,
-			Short: "n",
-			Help:  "Disable auto-update.",
+			Name:  startOnceOption,
+			Short: "1",
+			Help:  "Run once.",
 			Flag:  "true",
 		},
 	},
 
 	Target: func(opts Options) error {
-		disableAutoUpdate := opts[startDisableAutoUpdateOption] == "true"
+		runOnce := opts[startOnceOption] == "true"
 
 		ctx := context.Background()
 
@@ -32,10 +32,10 @@ var startCommand = Command{
 			return err
 		}
 
-		if disableAutoUpdate || !cfg.AutoUpdate {
-			return agent.Start(ctx, cfg)
+		if runOnce {
+			return agent.RunOnce(ctx, cfg)
 		}
 
-		return agent.StartWithAutoUpdate(ctx, cfg)
+		return agent.Start(ctx, cfg)
 	},
 }

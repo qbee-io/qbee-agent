@@ -1,6 +1,6 @@
 module github.com/qbee-io/qbee-agent
 
-go 1.18
+go 1.20
 
 require (
 	github.com/google/go-tpm v0.3.3
