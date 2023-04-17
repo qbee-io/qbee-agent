@@ -8,7 +8,12 @@ PUBLIC_SIGNING_KEY=xSHbUBG7LTuNfXd3zod4EX8_Es8FTCINgrjvx1WXFE4.plCHzlDAeb3IWW1wK
 PUBLIC_SINGING_KEY_VAR=github.com/qbee-io/qbee-agent/app/updater.PublicSigningKey
 
 build:
-	CGO_ENABLED=0 go build \
+	docker run --rm \
+	-v $(PWD):/src \
+	-w /src \
+	-e CGO_ENABLED=0 \
+	golang:1.20 \
+	go build \
 		-ldflags "-s -w -X $(VERSION_VAR)=$(VERSION) -X $(PUBLIC_SINGING_KEY_VAR)=$(PUBLIC_SIGNING_KEY)" \
 		-o bin/qbee-agent cmd/agent/main.go
 
