@@ -1,23 +1,16 @@
-//go:build linux
-
 package inventory_test
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"testing"
 
-	"github.com/qbee-io/qbee-agent/app/inventory"
+	"github.com/qbee-io/qbee-agent/app/test"
 )
 
 func TestCollectSoftwareInventory_Deb(t *testing.T) {
-	softwareInventory, err := inventory.CollectSoftwareInventory(context.Background())
-	if err != nil {
-		t.Fatalf("error collecting software inventory: %v", err)
-	}
+	r := test.New(t)
 
-	data, _ := json.MarshalIndent(softwareInventory, " ", " ")
+	data := r.MustExec("qbee-agent", "inventory", "-t", "software", "-d")
 
 	fmt.Println(string(data))
 }

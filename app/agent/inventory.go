@@ -39,6 +39,7 @@ func (agent *Agent) doSystemInventory(ctx context.Context) {
 		systemInventory.System.LastConfigUpdate = fmt.Sprintf("%d", agent.Configuration.ConfigChangeTimestamp())
 		systemInventory.System.LastPolicyUpdate = systemInventory.System.LastConfigUpdate
 		systemInventory.System.AgentVersion = app.Version
+		systemInventory.System.AutoUpdateEnabled = agent.cfg.AutoUpdate
 
 		if err = agent.Inventory.Send(ctx, inventory.TypeSystem, systemInventory); err != nil {
 			log.Errorf("failed to send system inventory: %v", err)

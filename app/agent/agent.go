@@ -31,6 +31,7 @@ type Agent struct {
 	inProgress *sync.WaitGroup
 	loopTicker *time.Ticker
 	stop       chan bool
+	update     chan bool
 
 	Inventory     *inventory.Service
 	Configuration *configuration.Service
@@ -39,14 +40,12 @@ type Agent struct {
 
 // Run the main control loop of the agent.
 func (agent *Agent) Run(ctx context.Context) error {
-	// TODO: check for updates
-
 	// look for run interval changes
 	intervalChange := agent.Configuration.RunIntervalChangedNotifier()
 
-	// catch SIGINT and SIGKILL to gracefully shut down the agent
+	// catch SIGINT and SIGTERM to gracefully shut down the agent
 	stopSignalCh := make(chan os.Signal, 1)
-	signal.Notify(stopSignalCh, os.Interrupt, os.Kill)
+	signal.Notify(stopSignalCh, os.Interrupt, syscall.SIGTERM)
 
 	// use SIGUSR1 to force processing outside normal schedule
 	updateSignalCh := make(chan os.Signal, 1)
@@ -85,6 +84,17 @@ func (agent *Agent) Run(ctx context.Context) error {
 			agent.loopTicker.Reset(agent.Configuration.RunInterval())
 
 			go agent.RunOnce(ctx, FullRun)
+
+		case <-agent.update:
+			log.Infof("starting agent update")
+
+			// wait for all the processing to finish
+			agent.inProgress.Wait()
+
+			// and run the update (this will block until the update is finished)
+			if err := agent.updateAgent(ctx); err != nil {
+				log.Errorf("failed to update the agent: %v", err)
+			}
 		}
 	}
 }
@@ -115,28 +125,34 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 	agent.Configuration.UpdateSettings(configData)
 
 	if mode == FullRun {
-		agent.doHeartbeat(ctx)
+		agent.doCheckIn(ctx)
 		agent.doMetrics(ctx)
 		agent.doInventories(ctx)
 		agent.doConfig(ctx, configData)
-	} else {
-		agent.doSystemInventory(ctx)
 	}
+
+	agent.doSystemInventory(ctx)
 
 	if agent.Configuration.ShouldReboot() {
 		agent.RebootSystem(ctx)
 	}
 }
 
-// doHeartbeat sends a heartbeat to the device hub.
-func (agent *Agent) doHeartbeat(ctx context.Context) {
+// doCheckIn sends a heartbeat to the device hub and checks for updates.
+func (agent *Agent) doCheckIn(ctx context.Context) {
 	agent.inProgress.Add(1)
 
 	go func() {
 		defer agent.inProgress.Done()
 
-		if err := agent.sendHeartbeat(ctx); err != nil {
-			log.Errorf("failed to send heartbeat: %v", err)
+		response, err := agent.checkIn(ctx, agent.cfg.AutoUpdate)
+		if err != nil {
+			log.Errorf("failed to check-in: %v", err)
+			return
+		}
+
+		if agent.cfg.AutoUpdate && response.UpdateAvailable() {
+			agent.update <- true
 		}
 	}()
 }
@@ -184,6 +200,8 @@ func (agent *Agent) RebootSystem(ctx context.Context) {
 		return
 	}
 
+	agent.inProgress.Wait()
+
 	if output, err := utils.RunCommand(ctx, []string{"/sbin/shutdown", "-r", "+1"}); err != nil {
 		log.Errorf("scheduling system reboot failed: %v", err)
 	} else {
@@ -199,6 +217,7 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 		cfg:        cfg,
 		inProgress: new(sync.WaitGroup),
 		stop:       make(chan bool, 1),
+		update:     make(chan bool, 1),
 	}
 
 	if err := api.UseProxy(cfg.ProxyServer, cfg.ProxyPort, cfg.ProxyUser, cfg.ProxyPassword); err != nil {
@@ -211,9 +230,10 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 
 	agent.api = api.NewClient(cfg.DeviceHubServer, cfg.DeviceHubPort, agent.caCertPool)
 
-	cacheDir := filepath.Join(cfg.StateDirectory, appWorkingDirectory, cacheDirectory)
+	appDir := filepath.Join(cfg.StateDirectory, appWorkingDirectory)
+	cacheDir := filepath.Join(appDir, cacheDirectory)
 	agent.Inventory = inventory.New(agent.api)
-	agent.Configuration = configuration.New(agent.api, cacheDir)
+	agent.Configuration = configuration.New(agent.api, appDir, cacheDir)
 	agent.Metrics = metrics.New(agent.api)
 	agent.loopTicker = time.NewTicker(agent.Configuration.RunInterval())
 

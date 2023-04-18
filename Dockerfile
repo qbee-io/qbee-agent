@@ -1,3 +1,25 @@
+FROM golang:1.20 as builder
+
+ARG version
+ENV VERSION_VAR=github.com/qbee-io/qbee-agent/app.Version
+
+ARG public_signing_key
+ENV PUBLIC_SINGING_KEY_VAR=github.com/qbee-io/qbee-agent/app/updater.PublicSigningKey
+
+ENV CGO_ENABLED=0
+
+WORKDIR /src
+
+COPY . /src
+
+# build the agent
+RUN --mount=type=cache,target=/go \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go build \
+    -ldflags "-s -w -X ${VERSION_VAR}=$version -X ${PUBLIC_SINGING_KEY_VAR}=$public_signing_key" \
+    -o /usr/sbin/qbee-agent \
+    cmd/agent/main.go
+
 FROM debian:stable
 
 # add qbee-dev apt repo
@@ -15,5 +37,7 @@ RUN apt-get update && apt-get upgrade -y
 # create empty agent configuration directory
 RUN mkdir /etc/qbee && echo '{}' > /etc/qbee/qbee-agent.json
 
+WORKDIR /app
+
 # copy the agent
-COPY bin/qbee-agent /usr/sbin/qbee-agent
+COPY --from=builder /usr/sbin/qbee-agent /usr/sbin/qbee-agent

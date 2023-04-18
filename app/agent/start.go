@@ -15,11 +15,6 @@ func Start(ctx context.Context, cfg *Config) error {
 	return agent.Run(ctx)
 }
 
-// StartWithAutoUpdate starts the agent with auto-update functionality.
-func StartWithAutoUpdate(ctx context.Context, cfg *Config) error {
-	return Start(ctx, cfg)
-}
-
 // RunOnce starts the agent and exits after the first run.
 func RunOnce(ctx context.Context, cfg *Config) error {
 	agent, err := New(cfg)
