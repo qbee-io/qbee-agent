@@ -7,17 +7,25 @@ import (
 
 const proxyEnvVar = "HTTP_PROXY"
 
+// Proxy represents a proxy server configuration.
+type Proxy struct {
+	Host     string
+	Port     string
+	User     string
+	Password string
+}
+
 // UseProxy sets HTTP_PROXY environmental variable, so HTTP clients can make use of it.
-func UseProxy(host, port, user, password string) error {
+func UseProxy(proxy Proxy) error {
 	// if proxy server is not specified or proxy is already set in the environment, return nil.
-	if host == "" || os.Getenv(proxyEnvVar) != "" {
+	if proxy.Host == "" || os.Getenv(proxyEnvVar) != "" {
 		return nil
 	}
 
-	proxyURL := fmt.Sprintf("%s:%s", host, port)
+	proxyURL := fmt.Sprintf("%s:%s", proxy.Host, proxy.Port)
 
-	if user != "" {
-		proxyURL = fmt.Sprintf("%s:%s@%s", user, password, proxyURL)
+	if proxy.User != "" {
+		proxyURL = fmt.Sprintf("%s:%s@%s", proxy.User, proxy.Password, proxyURL)
 	}
 
 	proxyURL = "http://" + proxyURL

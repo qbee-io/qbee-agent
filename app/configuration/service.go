@@ -67,8 +67,8 @@ func (srv *Service) MetricsEnabled() bool {
 	return srv.metricsEnabled
 }
 
-// RemoteConsoleEnabled returns true if remote console access is enabled.
-func (srv *Service) RemoteConsoleEnabled() bool {
+// RemoteAccessEnabled returns true if remote access is enabled.
+func (srv *Service) RemoteAccessEnabled() bool {
 	return srv.remoteConsoleEnabled
 }
 

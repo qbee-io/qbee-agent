@@ -17,6 +17,7 @@ import (
 	"github.com/qbee-io/qbee-agent/app/inventory"
 	"github.com/qbee-io/qbee-agent/app/log"
 	"github.com/qbee-io/qbee-agent/app/metrics"
+	"github.com/qbee-io/qbee-agent/app/remoteaccess"
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
@@ -36,6 +37,7 @@ type Agent struct {
 	Inventory     *inventory.Service
 	Configuration *configuration.Service
 	Metrics       *metrics.Service
+	remoteAccess  *remoteaccess.Service
 }
 
 // Run the main control loop of the agent.
@@ -129,6 +131,7 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 		agent.doMetrics(ctx)
 		agent.doInventories(ctx)
 		agent.doConfig(ctx, configData)
+		agent.doRemoteAccess(ctx)
 	}
 
 	agent.doSystemInventory(ctx)
@@ -191,6 +194,19 @@ func (agent *Agent) doConfig(ctx context.Context, configData *configuration.Comm
 	}
 }
 
+// doRemoteAccess maintains remote access for the agent - if enabled.
+func (agent *Agent) doRemoteAccess(ctx context.Context) {
+	agent.inProgress.Add(1)
+
+	go func() {
+		defer agent.inProgress.Done()
+
+		if err := agent.remoteAccess.UpdateState(ctx, agent.Configuration.RemoteAccessEnabled()); err != nil {
+			log.Errorf("failed to ensure remote access state: %v", err)
+		}
+	}()
+}
+
 const shutdownBinPath = "/sbin/shutdown"
 
 // RebootSystem reboots the host system.
@@ -220,7 +236,18 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 		update:     make(chan bool, 1),
 	}
 
-	if err := api.UseProxy(cfg.ProxyServer, cfg.ProxyPort, cfg.ProxyUser, cfg.ProxyPassword); err != nil {
+	if err := prepareDirectories(cfg.Directory, cfg.StateDirectory); err != nil {
+		return nil, err
+	}
+
+	proxy := api.Proxy{
+		Host:     cfg.ProxyServer,
+		Port:     cfg.ProxyPort,
+		User:     cfg.ProxyUser,
+		Password: cfg.ProxyPassword,
+	}
+
+	if err := api.UseProxy(proxy); err != nil {
 		return nil, err
 	}
 
@@ -231,10 +258,14 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 	agent.api = api.NewClient(cfg.DeviceHubServer, cfg.DeviceHubPort, agent.caCertPool)
 
 	appDir := filepath.Join(cfg.StateDirectory, appWorkingDirectory)
+	binDir := filepath.Join(appDir, binDirectory)
 	cacheDir := filepath.Join(appDir, cacheDirectory)
+	certDir := filepath.Join(cfg.Directory, credentialsDirectory)
+
 	agent.Inventory = inventory.New(agent.api)
 	agent.Configuration = configuration.New(agent.api, appDir, cacheDir)
 	agent.Metrics = metrics.New(agent.api)
+	agent.remoteAccess = remoteaccess.New(agent.api, certDir, binDir, proxy)
 	agent.loopTicker = time.NewTicker(agent.Configuration.RunInterval())
 
 	return agent, nil

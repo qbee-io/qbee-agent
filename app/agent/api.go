@@ -3,11 +3,11 @@ package agent
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"runtime"
 
 	"github.com/qbee-io/qbee-agent/app"
+	"github.com/qbee-io/qbee-agent/app/binary"
 )
 
 type BootstrapRequest struct {
@@ -94,7 +94,7 @@ func (agent *Agent) sendBootstrapRequest(
 var checkInPath = fmt.Sprintf("/v1/org/device/auth/agent/%s/checkin", runtime.GOARCH)
 
 type CheckInResponse struct {
-	Agent Metadata `json:"agent"`
+	Agent binary.Metadata `json:"agent"`
 }
 
 // UpdateAvailable returns true if the agent version is different from the one currently running.
@@ -116,37 +116,4 @@ func (agent *Agent) checkIn(ctx context.Context, withMetadata bool) (*CheckInRes
 	}
 
 	return response, nil
-}
-
-var downloadPath = fmt.Sprintf("/v1/org/device/auth/agent/%s/download", runtime.GOARCH)
-
-// downloadUpdate downloads the latest agent binary.
-func (agent *Agent) downloadUpdate(ctx context.Context, writer io.Writer) (*Metadata, error) {
-	request, err := agent.api.NewRequest(ctx, http.MethodGet, downloadPath, nil)
-	if err != nil {
-		return nil, fmt.Errorf("cannot create request: %v", err)
-	}
-
-	var response *http.Response
-	if response, err = agent.api.Do(request); err != nil {
-		return nil, fmt.Errorf("cannot fetch latest version: %v", err)
-	}
-
-	defer response.Body.Close()
-
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("cannot fetch latest version: unexpected API response - %d", response.StatusCode)
-	}
-
-	agentVersion := &Metadata{
-		Version:   response.Header.Get("X-Agent-Version"),
-		Digest:    response.Header.Get("X-Agent-Digest"),
-		Signature: response.Header.Get("X-Agent-Signature"),
-	}
-
-	if _, err = io.Copy(writer, response.Body); err != nil {
-		return nil, fmt.Errorf("failed to download the agent binary: %v", err)
-	}
-
-	return agentVersion, nil
 }
