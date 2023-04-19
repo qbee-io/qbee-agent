@@ -3,14 +3,7 @@ package remoteaccess
 import (
 	"context"
 	"fmt"
-
-	"github.com/qbee-io/qbee-agent/app/binary"
 )
-
-type API interface {
-	binary.API
-	Get(ctx context.Context, path string, dst any) error
-}
 
 const vpnCertPath = "/v1/org/device/auth/vpncert"
 

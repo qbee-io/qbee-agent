@@ -16,9 +16,9 @@ type Proxy struct {
 }
 
 // UseProxy sets HTTP_PROXY environmental variable, so HTTP clients can make use of it.
-func UseProxy(proxy Proxy) error {
+func UseProxy(proxy *Proxy) error {
 	// if proxy server is not specified or proxy is already set in the environment, return nil.
-	if proxy.Host == "" || os.Getenv(proxyEnvVar) != "" {
+	if proxy == nil || os.Getenv(proxyEnvVar) != "" {
 		return nil
 	}
 

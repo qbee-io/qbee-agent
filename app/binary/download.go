@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/qbee-io/qbee-agent/app/api"
 )
 
 const (
@@ -13,7 +15,7 @@ const (
 )
 
 // Download and verify the latest binary version.
-func Download(api API, ctx context.Context, name, dstPath string) error {
+func Download(apiClient *api.Client, ctx context.Context, name, dstPath string) error {
 	fp, err := os.CreateTemp(filepath.Dir(dstPath), filepath.Base(dstPath)+".*.tmp")
 	if err != nil {
 		return fmt.Errorf("cannot create temporary binary file: %w", err)
@@ -30,7 +32,7 @@ func Download(api API, ctx context.Context, name, dstPath string) error {
 	defer os.Remove(tmpPath)
 
 	var metadata *Metadata
-	if metadata, err = download(api, ctx, name, fp); err != nil {
+	if metadata, err = download(apiClient, ctx, name, fp); err != nil {
 		return fmt.Errorf("cannot download update: %w", err)
 	}
 

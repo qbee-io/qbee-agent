@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/qbee-io/qbee-agent/app/utils"
@@ -26,6 +27,7 @@ const (
 
 type DebianPackageManager struct {
 	supportsAllowDowngradesFlag bool
+	lock                        sync.Mutex
 }
 
 // Type returns type of the package manager.
@@ -52,6 +54,9 @@ func (deb *DebianPackageManager) IsSupported() bool {
 
 // Busy returns true if dpkg is currently locked.
 func (deb *DebianPackageManager) Busy() (bool, error) {
+	deb.lock.Lock()
+	defer deb.lock.Unlock()
+
 	// check the lock by attempting to acquire one
 	file, err := os.OpenFile(dpkgLockPath, syscall.O_CREAT|syscall.O_RDWR|syscall.O_CLOEXEC, dpkgLockMode)
 	if err != nil {
@@ -76,6 +81,9 @@ func (deb *DebianPackageManager) Busy() (bool, error) {
 
 // ListPackages returns a list of packages with available updates.
 func (deb *DebianPackageManager) ListPackages(ctx context.Context) ([]Package, error) {
+	deb.lock.Lock()
+	defer deb.lock.Unlock()
+
 	if installedPackages, cached := getCachedPackages(PackageManagerTypeDebian); cached {
 		return installedPackages, nil
 	}
@@ -195,6 +203,9 @@ var aptGetBaseCommand = []string{
 // UpgradeAll performs system upgrade if there are available upgrades.
 // On success, return number of packages upgraded, output of the upgrade command and nil error.
 func (deb *DebianPackageManager) UpgradeAll(ctx context.Context) (int, []byte, error) {
+	deb.lock.Lock()
+	defer deb.lock.Unlock()
+
 	// check for updates
 	inventory, err := deb.ListPackages(ctx)
 	if err != nil {
@@ -235,6 +246,9 @@ func (deb *DebianPackageManager) UpgradeAll(ctx context.Context) (int, []byte, e
 // If version is empty, the latest version of the package is installed.
 // Returns output of the installation command.
 func (deb *DebianPackageManager) Install(ctx context.Context, pkgName, version string) ([]byte, error) {
+	deb.lock.Lock()
+	defer deb.lock.Unlock()
+
 	if version != "" {
 		pkgName = fmt.Sprintf("%s=%s", pkgName, version)
 	}
@@ -257,6 +271,9 @@ func (deb *DebianPackageManager) Install(ctx context.Context, pkgName, version s
 
 // InstallLocal package.
 func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath string) ([]byte, error) {
+	deb.lock.Lock()
+	defer deb.lock.Unlock()
+
 	installCommand := append(
 		// install package using dpkg,
 		[]string{dpkgPath, "-i", pkgFilePath, "||"},

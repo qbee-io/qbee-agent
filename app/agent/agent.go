@@ -53,6 +53,9 @@ func (agent *Agent) Run(ctx context.Context) error {
 	updateSignalCh := make(chan os.Signal, 1)
 	signal.Notify(updateSignalCh, syscall.SIGUSR1)
 
+	// remote access state change notification
+	remoteAccessStateChange := agent.remoteAccess.GetNotificationChannel()
+
 	// ticker won't trigger the first run immediately, so let's do that ourselves
 	go agent.RunOnce(ctx, FullRun)
 
@@ -79,6 +82,10 @@ func (agent *Agent) Run(ctx context.Context) error {
 
 		case <-agent.loopTicker.C:
 			go agent.RunOnce(ctx, FullRun)
+
+		case <-remoteAccessStateChange:
+			log.Debugf("remote access state changed, sending system inventory")
+			go agent.doSystemInventory(ctx)
 
 		case <-updateSignalCh:
 			log.Debugf("received update signal")
@@ -240,15 +247,18 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 		return nil, err
 	}
 
-	proxy := api.Proxy{
-		Host:     cfg.ProxyServer,
-		Port:     cfg.ProxyPort,
-		User:     cfg.ProxyUser,
-		Password: cfg.ProxyPassword,
-	}
+	var proxy *api.Proxy
+	if cfg.ProxyServer != "" {
+		proxy = &api.Proxy{
+			Host:     cfg.ProxyServer,
+			Port:     cfg.ProxyPort,
+			User:     cfg.ProxyUser,
+			Password: cfg.ProxyPassword,
+		}
 
-	if err := api.UseProxy(proxy); err != nil {
-		return nil, err
+		if err := api.UseProxy(proxy); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := agent.loadCACertificatesPool(); err != nil {

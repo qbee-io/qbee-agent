@@ -55,6 +55,13 @@ func False(t *testing.T, value bool) {
 	}
 }
 
+// True asserts that provided value is true.
+func True(t *testing.T, value bool) {
+	if !value {
+		failTest(t, "expected true, got false")
+	}
+}
+
 // failTest prints out a formatted failure message and fails the test immediately.
 func failTest(t *testing.T, msg string, args ...any) {
 	logMsg := fmt.Sprintf(msg, args...)

@@ -3,6 +3,7 @@ package remoteaccess
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,29 +17,42 @@ import (
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
+const networkInterfaceName = "qbee0"
+
 // New creates a new instance of the remote access service.
-func New(api API, certDir, binDir string, proxy api.Proxy) *Service {
+func New(apiClient *api.Client, certDir, binDir string, proxy *api.Proxy) *Service {
 	return &Service{
-		api:      api,
-		binDir:   binDir,
-		certDir:  certDir,
-		proxy:    proxy,
-		stopLoop: make(chan bool, 1),
+		api:          apiClient,
+		binDir:       binDir,
+		certDir:      certDir,
+		proxy:        proxy,
+		stopLoop:     make(chan bool, 1),
+		notification: make(chan bool, 1),
 	}
 }
 
 // Service controls remote access for the agent.
 type Service struct {
-	enabled     bool
-	binDir      string
-	certDir     string
-	api         API
-	proxy       api.Proxy
-	cmd         *exec.Cmd
-	lock        sync.Mutex
-	credentials Credentials
-	loopRunning bool
-	stopLoop    chan bool
+	enabled      bool
+	binDir       string
+	certDir      string
+	api          *api.Client
+	proxy        *api.Proxy
+	cmd          *exec.Cmd
+	lock         sync.Mutex
+	credentials  Credentials
+	loopRunning  bool
+	stopLoop     chan bool
+	notification chan bool
+
+	// activeProcesses is a wait group that keeps track of all active processes.
+	// It's used for testing only.
+	activeProcesses sync.WaitGroup
+}
+
+// GetNotificationChannel returns a channel that is used to notify user about remote access state changes.
+func (s *Service) GetNotificationChannel() <-chan bool {
+	return s.notification
 }
 
 // binPath returns the path to the openvpn binary.
@@ -105,6 +119,8 @@ func (s *Service) startWatchdogLoop() {
 		if err := recover(); err != nil {
 			log.Errorf("remote access watchdog loop crashed:", err)
 		}
+
+		s.notification <- true
 	}()
 
 	for {
@@ -112,21 +128,7 @@ func (s *Service) startWatchdogLoop() {
 		case <-s.stopLoop:
 			return
 		case <-ticker.C:
-			if !s.enabled {
-				return
-			}
-
-			s.lock.Lock()
-			if err := s.refreshCredentials(context.Background()); err != nil {
-				log.Errorf("failed to refresh remote access credentials:", err)
-			}
-
-			if !s.checkStatus() {
-				if err := s.start(); err != nil {
-					log.Errorf("failed to restart remote access:", err)
-				}
-			}
-			s.lock.Unlock()
+			s.ensureRunning()
 		}
 	}
 }
@@ -161,26 +163,26 @@ func (s *Service) start() error {
 	args := []string{
 		"--client",
 		"--remote", "99.80.24.171",
-		"--dev", "qbee0",
+		"--comp-lzo",
+		"--dev", networkInterfaceName,
 		"--dev-type", "tun",
 		"--proto", "tcp",
 		"--port", "443",
 		"--nobind",
 		"--auth-nocache",
 		"--script-security", "0",
-		"--allow-compression", "no",
 		"--persist-key",
 		"--persist-tun",
 		"--ca", s.caCertPath(),
 		"--cert", s.certPath(),
 		"--key", s.keyPath(),
 		"--verb", "0",
+		"--suppress-timestamps",
 		"--remote-cert-tls", "server",
-		"--log", "/dev/null",
 	}
 
 	// add proxy settings if configured
-	if s.proxy.Host != "" {
+	if s.proxy != nil {
 		args = append(args, "--http-proxy", s.proxy.Host, s.proxy.Port)
 
 		if s.proxy.User == "" {
@@ -196,19 +198,49 @@ func (s *Service) start() error {
 	}
 
 	s.cmd = exec.Command(s.binPath(), args...)
-	s.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	s.cmd.Stdout = os.DevNull
-	s.cmd.Stderr = os.DevNull
+	s.cmd.Stdout = log.NewWriter(log.INFO, "remote-access: ")
+	s.cmd.Stderr = log.NewWriter(log.ERROR, "remote-access: ")
+	s.cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid:   true,
+		Pdeathsig: syscall.SIGKILL,
+	}
 
 	if err := s.cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start remote access process: %w", err)
 	}
 
+	s.activeProcesses.Add(1)
+
 	go func() {
+		if waitForInterface() {
+			s.notification <- true
+		}
+
 		_ = s.cmd.Wait()
+		s.activeProcesses.Done()
 	}()
 
 	return nil
+}
+
+func waitForInterface() bool {
+	for i := 0; i < 60; i++ {
+		interfaces, err := net.Interfaces()
+		if err != nil {
+			log.Errorf("failed to list network interfaces: %v", err)
+			return false
+		}
+
+		for _, networkInterface := range interfaces {
+			if networkInterface.Name == networkInterfaceName {
+				return true
+			}
+		}
+
+		time.Sleep(time.Second)
+	}
+
+	return false
 }
 
 // disable remote access.
@@ -292,4 +324,24 @@ func (s *Service) downloadOpenVPN(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// ensureRunning checks if remote access is running and restarts it if not.
+func (s *Service) ensureRunning() {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	if !s.enabled {
+		return
+	}
+
+	if err := s.refreshCredentials(context.Background()); err != nil {
+		log.Errorf("failed to refresh remote access credentials:", err)
+	}
+
+	if !s.checkStatus() {
+		if err := s.start(); err != nil {
+			log.Errorf("failed to restart remote access:", err)
+		}
+	}
 }
