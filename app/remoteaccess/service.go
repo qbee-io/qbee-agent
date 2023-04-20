@@ -20,8 +20,9 @@ import (
 const networkInterfaceName = "qbee0"
 
 // New creates a new instance of the remote access service.
-func New(apiClient *api.Client, certDir, binDir string, proxy *api.Proxy) *Service {
+func New(apiClient *api.Client, server, certDir, binDir string, proxy *api.Proxy) *Service {
 	return &Service{
+		server:       server,
 		api:          apiClient,
 		binDir:       binDir,
 		certDir:      certDir,
@@ -77,13 +78,12 @@ func (s *Service) keyPath() string {
 }
 
 // UpdateState ensures that remote access is enabled or disabled based on the enabled parameter.
-func (s *Service) UpdateState(ctx context.Context, server string, expectedActive bool) error {
+func (s *Service) UpdateState(ctx context.Context, expectedActive bool) error {
 	if !s.lock.TryLock() {
 		return nil
 	}
 	defer s.lock.Unlock()
 
-	s.server = server
 	s.enabled = expectedActive
 
 	isActive := s.checkStatus()
@@ -216,35 +216,38 @@ func (s *Service) start() error {
 	s.activeProcesses.Add(1)
 
 	go func() {
-		if waitForInterface() {
-			s.notification <- true
+		go s.notifyWhenInterfaceReady()
+
+		if err := s.cmd.Wait(); err != nil {
+			log.Errorf("remote access process exited with error: %v", err)
 		}
 
-		_ = s.cmd.Wait()
 		s.activeProcesses.Done()
 	}()
 
 	return nil
 }
 
-func waitForInterface() bool {
-	for i := 0; i < 60; i++ {
+func (s *Service) notifyWhenInterfaceReady() {
+	for i := 0; i < 10; i++ {
+		if !s.loopRunning {
+			return
+		}
+
 		interfaces, err := net.Interfaces()
 		if err != nil {
 			log.Errorf("failed to list network interfaces: %v", err)
-			return false
+			return
 		}
 
 		for _, networkInterface := range interfaces {
 			if networkInterface.Name == networkInterfaceName {
-				return true
+				s.notification <- true
 			}
 		}
 
 		time.Sleep(time.Second)
 	}
-
-	return false
 }
 
 // disable remote access.

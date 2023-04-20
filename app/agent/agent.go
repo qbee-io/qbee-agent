@@ -208,8 +208,7 @@ func (agent *Agent) doRemoteAccess(ctx context.Context) {
 	go func() {
 		defer agent.inProgress.Done()
 
-		err := agent.remoteAccess.UpdateState(ctx, agent.cfg.VPNServer, agent.Configuration.RemoteAccessEnabled())
-		if err != nil {
+		if err := agent.remoteAccess.UpdateState(ctx, agent.Configuration.RemoteAccessEnabled()); err != nil {
 			log.Errorf("failed to ensure remote access state: %v", err)
 		}
 	}()
@@ -276,7 +275,7 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 	agent.Inventory = inventory.New(agent.api)
 	agent.Configuration = configuration.New(agent.api, appDir, cacheDir)
 	agent.Metrics = metrics.New(agent.api)
-	agent.remoteAccess = remoteaccess.New(agent.api, certDir, binDir, proxy)
+	agent.remoteAccess = remoteaccess.New(agent.api, cfg.VPNServer, certDir, binDir, proxy)
 	agent.loopTicker = time.NewTicker(agent.Configuration.RunInterval())
 
 	return agent, nil

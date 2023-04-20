@@ -36,7 +36,7 @@ func TestService_downloadOpenVPN(t *testing.T) {
 		Body: io.NopCloser(bytes.NewBufferString("test")),
 	})
 
-	service := New(apiClient, certDir, binDir, nil)
+	service := New(apiClient, "127.0.0.1", certDir, binDir, nil)
 
 	ctx := context.Background()
 
@@ -76,7 +76,7 @@ func TestService_downloadOpenVPN_alreadyExists(t *testing.T) {
 		t.Errorf("cannot write binary file = %v", err)
 	}
 
-	service := New(apiClient, certDir, binDir, nil)
+	service := New(apiClient, "127.0.0.1", certDir, binDir, nil)
 
 	ctx := context.Background()
 
@@ -98,7 +98,7 @@ func TestService_refreshCredentials(t *testing.T) {
 		"status": "OK"
 	}`)
 
-	service := New(apiClient, certDir, binDir, nil)
+	service := New(apiClient, "127.0.0.1", certDir, binDir, nil)
 
 	ctx := context.Background()
 
@@ -159,7 +159,7 @@ func TestService_refreshCredentials_expiring(t *testing.T) {
 		"status": "OK"
 	}`, newExpiry)
 
-	service := New(apiClient, certDir, binDir, nil)
+	service := New(apiClient, "127.0.0.1", certDir, binDir, nil)
 
 	// Set the credentials to expire in 14 minutes.
 	service.credentials.Expiry = time.Now().Add(14 * time.Minute).Unix()
@@ -200,7 +200,7 @@ func TestService_ensureRunning(t *testing.T) {
 
 	credentialsAPIMock := apiMock.Add(http.StatusOK, `{"status": "OK"}`)
 
-	service := New(apiClient, certDir, binDir, nil)
+	service := New(apiClient, "127.0.0.1", certDir, binDir, nil)
 
 	service.enabled = true
 
@@ -221,7 +221,8 @@ func TestService_ensureRunning(t *testing.T) {
 	arguments := strings.Fields(string(data))
 	expectedArguments := []string{
 		"--client",
-		"--remote", "99.80.24.171",
+		"--remote", "127.0.0.1",
+		"--comp-lzo",
 		"--dev", "qbee0",
 		"--dev-type", "tun",
 		"--proto", "tcp",
@@ -229,15 +230,16 @@ func TestService_ensureRunning(t *testing.T) {
 		"--nobind",
 		"--auth-nocache",
 		"--script-security", "0",
-		"--allow-compression", "no",
 		"--persist-key",
 		"--persist-tun",
 		"--ca", filepath.Join(certDir, "qbee-ca-vpn.cert"),
 		"--cert", filepath.Join(certDir, "qbee-vpn.cert"),
 		"--key", filepath.Join(certDir, "qbee.key"),
 		"--verb", "0",
+		"--suppress-timestamps",
 		"--remote-cert-tls", "server",
-		"--log", "/dev/null",
+		"--disable-occ",
+		"--cipher", "AES-256-GCM",
 	}
 	test.Equal(t, arguments, expectedArguments)
 }
@@ -258,7 +260,7 @@ func TestService_start_checkStatus_stop(t *testing.T) {
 		t.Errorf("cannot write binary file = %v", err)
 	}
 
-	service := New(apiClient, certDir, binDir, nil)
+	service := New(apiClient, "127.0.0.1", certDir, binDir, nil)
 	service.credentials.Expiry = time.Now().Add(time.Hour).Unix()
 
 	ctx := context.Background()
