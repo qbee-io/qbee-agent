@@ -10,6 +10,7 @@ import (
 const (
 	DefaultDeviceHubServer = "device.app.qbee.io"
 	DefaultDeviceHubPort   = "443"
+	DefaultVPNServer       = "99.80.24.171"
 )
 
 const (
@@ -39,6 +40,9 @@ type Config struct {
 
 	// AutoUpdate enables automatic updates of the agent binary.
 	AutoUpdate bool `json:"auto_update,omitempty"`
+
+	// VPNServer is the IP address of the VPN server to connect to.
+	VPNServer string
 }
 
 // LoadConfig loads config from a provided config file path.

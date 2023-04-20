@@ -34,6 +34,7 @@ func New(apiClient *api.Client, certDir, binDir string, proxy *api.Proxy) *Servi
 // Service controls remote access for the agent.
 type Service struct {
 	enabled      bool
+	server       string
 	binDir       string
 	certDir      string
 	api          *api.Client
@@ -76,12 +77,13 @@ func (s *Service) keyPath() string {
 }
 
 // UpdateState ensures that remote access is enabled or disabled based on the enabled parameter.
-func (s *Service) UpdateState(ctx context.Context, expectedActive bool) error {
+func (s *Service) UpdateState(ctx context.Context, server string, expectedActive bool) error {
 	if !s.lock.TryLock() {
 		return nil
 	}
 	defer s.lock.Unlock()
 
+	s.server = server
 	s.enabled = expectedActive
 
 	isActive := s.checkStatus()
@@ -162,7 +164,7 @@ func (s *Service) enable(ctx context.Context) error {
 func (s *Service) start() error {
 	args := []string{
 		"--client",
-		"--remote", "99.80.24.171",
+		"--remote", s.server,
 		"--comp-lzo",
 		"--dev", networkInterfaceName,
 		"--dev-type", "tun",
@@ -179,6 +181,8 @@ func (s *Service) start() error {
 		"--verb", "0",
 		"--suppress-timestamps",
 		"--remote-cert-tls", "server",
+		"--disable-occ",
+		"--cipher", "AES-256-GCM",
 	}
 
 	// add proxy settings if configured
@@ -198,8 +202,8 @@ func (s *Service) start() error {
 	}
 
 	s.cmd = exec.Command(s.binPath(), args...)
-	s.cmd.Stdout = log.NewWriter(log.INFO, "remote-access: ")
-	s.cmd.Stderr = log.NewWriter(log.ERROR, "remote-access: ")
+	s.cmd.Stdout = log.NewWriter(log.DEBUG, "remote-access: ")
+	s.cmd.Stderr = log.NewWriter(log.DEBUG, "remote-access: ")
 	s.cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid:   true,
 		Pdeathsig: syscall.SIGKILL,

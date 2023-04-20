@@ -12,6 +12,7 @@ const (
 	bootstrapAutoUpdateOption    = "enable-auto-update"
 	bootstrapDeviceHubHostOption = "device-hub-host"
 	bootstrapDeviceHubPortOption = "device-hub-port"
+	bootstrapVPNServerOption     = "vpn-server"
 	bootstrapTPMDeviceOption     = "tpm-device"
 	bootstrapProxyHostOption     = "proxy-host"
 	bootstrapProxyPortOption     = "proxy-port"
@@ -46,6 +47,12 @@ var bootstrapCommand = Command{
 			Default: agent.DefaultDeviceHubPort,
 		},
 		{
+			Name:    bootstrapVPNServerOption,
+			Hidden:  true,
+			Help:    "VPN Server IP address.",
+			Default: agent.DefaultVPNServer,
+		},
+		{
 			Name:  bootstrapTPMDeviceOption,
 			Short: "t",
 			// Hiding for now, since TPM protected key can't be used with OpenVPN.
@@ -78,6 +85,7 @@ var bootstrapCommand = Command{
 			AutoUpdate:      opts[bootstrapAutoUpdateOption] == "true",
 			DeviceHubServer: opts[bootstrapDeviceHubHostOption],
 			DeviceHubPort:   opts[bootstrapDeviceHubPortOption],
+			VPNServer:       opts[bootstrapVPNServerOption],
 			TPMDevice:       opts[bootstrapTPMDeviceOption],
 			ProxyServer:     opts[bootstrapProxyHostOption],
 			ProxyPort:       opts[bootstrapProxyPortOption],

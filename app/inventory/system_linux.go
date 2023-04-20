@@ -28,6 +28,7 @@ func CollectSystemInventory() (*System, error) {
 		AgentVersion: app.Version,
 		Class:        systemClass,
 		OS:           systemOS,
+		VPNIndex:     "1",
 	}
 
 	if err := systemInfo.parseOSRelease(); err != nil {

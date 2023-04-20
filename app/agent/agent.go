@@ -208,7 +208,8 @@ func (agent *Agent) doRemoteAccess(ctx context.Context) {
 	go func() {
 		defer agent.inProgress.Done()
 
-		if err := agent.remoteAccess.UpdateState(ctx, agent.Configuration.RemoteAccessEnabled()); err != nil {
+		err := agent.remoteAccess.UpdateState(ctx, agent.cfg.VPNServer, agent.Configuration.RemoteAccessEnabled())
+		if err != nil {
 			log.Errorf("failed to ensure remote access state: %v", err)
 		}
 	}()
