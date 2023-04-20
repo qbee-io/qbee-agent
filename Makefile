@@ -5,7 +5,7 @@ VERSION_VAR=github.com/qbee-io/qbee-agent/app.Version
 # For production release, it must be replaced with the correct public key.
 # Use cmd/get-public-signing-key/main.go to obtain a public key from a private key.
 PUBLIC_SIGNING_KEY=xSHbUBG7LTuNfXd3zod4EX8_Es8FTCINgrjvx1WXFE4.plCHzlDAeb3IWW1wK6P6paMRYO4f8qceV3lrNCqNpWo
-PUBLIC_SINGING_KEY_VAR=github.com/qbee-io/qbee-agent/app/updater.PublicSigningKey
+PUBLIC_SINGING_KEY_VAR=github.com/qbee-io/qbee-agent/app/binary.PublicSigningKey
 
 build:
 	CGO_ENABLED=0 go build \
