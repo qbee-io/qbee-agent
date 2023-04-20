@@ -165,7 +165,7 @@ func (s *Service) start() error {
 	args := []string{
 		"--client",
 		"--remote", s.server,
-		"--comp-lzo",
+		"--comp-lzo", "no",
 		"--dev", networkInterfaceName,
 		"--dev-type", "tun",
 		"--proto", "tcp",

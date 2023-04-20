@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/qbee-io/qbee-agent/app/log"
 )
 
 const deviceConfigurationAPIPath = "/v1/org/device/auth/config"
@@ -71,6 +73,8 @@ const reportsDeliveryBatchSize = 100
 // sendReports delivers reports from a configuration execution.
 // Returns number of reports successfully delivered.
 func (srv *Service) sendReports(ctx context.Context, reports []Report) (int, error) {
+	log.Debugf("sending %d reports", len(reports))
+
 	delivered := 0
 
 	if len(reports) == 0 {
@@ -93,11 +97,13 @@ func (srv *Service) sendReports(ctx context.Context, reports []Report) (int, err
 			}
 		}
 
+		log.Debugf("sending batch of %d reports", count)
 		if err := srv.api.Post(ctx, reportsAPIPath, buf, nil); err != nil {
 			return delivered, fmt.Errorf("error delivering reports: %w", err)
 		}
 
 		delivered += count
+		reports = reports[count:]
 	}
 
 	return delivered, nil

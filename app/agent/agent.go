@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/x509"
+	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -35,6 +36,7 @@ type Agent struct {
 	update     chan bool
 
 	Inventory     *inventory.Service
+	inventoryLock sync.Mutex
 	Configuration *configuration.Service
 	Metrics       *metrics.Service
 	remoteAccess  *remoteaccess.Service
@@ -85,7 +87,7 @@ func (agent *Agent) Run(ctx context.Context) error {
 
 		case <-remoteAccessStateChange:
 			log.Debugf("remote access state changed, sending system inventory")
-			go agent.doSystemInventory(ctx)
+			agent.do(ctx, "system-inventory", agent.doSystemInventory)
 
 		case <-updateSignalCh:
 			log.Debugf("received update signal")
@@ -134,84 +136,85 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 	agent.Configuration.UpdateSettings(configData)
 
 	if mode == FullRun {
-		agent.doCheckIn(ctx)
-		agent.doMetrics(ctx)
-		agent.doInventories(ctx)
-		agent.doConfig(ctx, configData)
-		agent.doRemoteAccess(ctx)
+		agent.do(ctx, "inventories", agent.doInventories)
+		agent.do(ctx, "check-in", agent.doCheckIn)
+		agent.do(ctx, "metrics", agent.doMetrics)
+		agent.do(ctx, "config", agent.doConfig(configData))
+		agent.do(ctx, "remote-access", agent.doRemoteAccess)
+	} else {
+		agent.do(ctx, "system-inventory", agent.doSystemInventory)
 	}
-
-	agent.doSystemInventory(ctx)
 
 	if agent.Configuration.ShouldReboot() {
 		agent.RebootSystem(ctx)
 	}
 }
 
-// doCheckIn sends a heartbeat to the device hub and checks for updates.
-func (agent *Agent) doCheckIn(ctx context.Context) {
+// do execute a function in a background goroutine.
+func (agent *Agent) do(ctx context.Context, name string, fn func(ctx context.Context) error) {
+	log.Debugf("starting %s", name)
 	agent.inProgress.Add(1)
 
 	go func() {
-		defer agent.inProgress.Done()
+		defer func() {
+			log.Debugf("stopping %s", name)
+			agent.inProgress.Done()
+		}()
 
-		response, err := agent.checkIn(ctx, agent.cfg.AutoUpdate)
-		if err != nil {
-			log.Errorf("failed to check-in: %v", err)
-			return
-		}
-
-		if agent.cfg.AutoUpdate && response.UpdateAvailable() {
-			agent.update <- true
+		if err := fn(ctx); err != nil {
+			log.Errorf("failed to do %s: %v", name, err)
 		}
 	}()
+}
+
+// doCheckIn sends a heartbeat to the device hub and checks for updates.
+func (agent *Agent) doCheckIn(ctx context.Context) error {
+	response, err := agent.checkIn(ctx, agent.cfg.AutoUpdate)
+	if err != nil {
+		return fmt.Errorf("failed to check-in: %w", err)
+	}
+
+	if agent.cfg.AutoUpdate && response.UpdateAvailable() {
+		agent.update <- true
+	}
+
+	return nil
 }
 
 // doMetrics collects system metrics - if enabled - and delivers them to the device hub API.
-func (agent *Agent) doMetrics(ctx context.Context) {
+func (agent *Agent) doMetrics(ctx context.Context) error {
 	if !agent.Configuration.MetricsEnabled() {
-		return
+		return nil
 	}
 
-	agent.inProgress.Add(1)
+	if err := agent.Metrics.Send(ctx, metrics.Collect()); err != nil {
+		return fmt.Errorf("failed to send metrics: %w", err)
+	}
 
-	go func() {
-		defer agent.inProgress.Done()
-
-		if err := agent.Metrics.Send(ctx, metrics.Collect()); err != nil {
-			log.Errorf("failed to send metrics: %v", err)
-		}
-	}()
+	return nil
 }
 
-// doConfig executes the committed configuration.
-func (agent *Agent) doConfig(ctx context.Context, configData *configuration.CommittedConfig) {
-	agent.inProgress.Add(1)
-	defer agent.inProgress.Done()
+// doConfig returns a function which executes the committed configuration.
+func (agent *Agent) doConfig(configData *configuration.CommittedConfig) func(ctx context.Context) error {
+	return func(ctx context.Context) error {
+		currentCommitID := agent.Configuration.CurrentCommitID()
 
-	currentCommitID := agent.Configuration.CurrentCommitID()
+		if err := agent.Configuration.Execute(ctx, configData); err != nil {
+			return fmt.Errorf("failed to apply configuration: %w", err)
+		}
 
-	if err := agent.Configuration.Execute(ctx, configData); err != nil {
-		log.Errorf("failed to apply configuration: %v", err)
-	}
+		// when new config has a different commitID then applied to the system, let's push new inventories out
+		if currentCommitID != configData.CommitID {
+			agent.do(ctx, "inventories", agent.doInventories)
+		}
 
-	// when new config has a different commitID then applied to the system, let's push new inventories out
-	if currentCommitID != configData.CommitID {
-		agent.doInventories(ctx)
+		return nil
 	}
 }
 
 // doRemoteAccess maintains remote access for the agent - if enabled.
-func (agent *Agent) doRemoteAccess(ctx context.Context) {
-	agent.inProgress.Add(1)
-
-	go func() {
-		defer agent.inProgress.Done()
-
-		if err := agent.remoteAccess.UpdateState(ctx, agent.Configuration.RemoteAccessEnabled()); err != nil {
-			log.Errorf("failed to ensure remote access state: %v", err)
-		}
-	}()
+func (agent *Agent) doRemoteAccess(ctx context.Context) error {
+	return agent.remoteAccess.UpdateState(ctx, agent.Configuration.RemoteAccessEnabled())
 }
 
 const shutdownBinPath = "/sbin/shutdown"
