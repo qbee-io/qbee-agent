@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"runtime"
 
 	"github.com/qbee-io/qbee-agent/app"
 	"github.com/qbee-io/qbee-agent/app/binary"
@@ -90,9 +91,7 @@ func (agent *Agent) sendBootstrapRequest(
 	return bootstrapResponse, nil
 }
 
-// TODO: cleanup this
-// var checkInPath = fmt.Sprintf("/v1/org/device/auth/agent/%s/checkin", runtime.GOARCH)
-var checkInPath = fmt.Sprintf("/v1/org/device/auth/cfgmetadata/latest")
+var checkInPath = fmt.Sprintf("/v1/org/device/auth/agent/%s/checkin", runtime.GOARCH)
 
 type CheckInResponse struct {
 	Agent binary.Metadata `json:"agent"`
