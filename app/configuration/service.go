@@ -126,11 +126,11 @@ func (srv *Service) UpdateSettings(configData *CommittedConfig) {
 
 // Execute configuration bundles on the system and return true if system should be rebooted.
 func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) error {
-	if err := acquireLock(); err != nil {
+	if err := srv.acquireLock(); err != nil {
 		log.Infof("failed to acquire execution lock - %v", err)
 		return nil
 	}
-	defer releaseLock()
+	defer srv.releaseLock()
 
 	// disable connectivity watchdog if not set in the configData
 	if !configData.HasBundle(BundleConnectivityWatchdog) {
