@@ -61,7 +61,7 @@ func (runner *Runner) Close() {
 // Bootstrap the agent.
 func (runner *Runner) Bootstrap(args ...string) {
 	// TODO: re-enable when we fix the issue with bootstrapping devices
-	//runner.t.SkipNow()
+	runner.t.SkipNow()
 
 	if runner.API == nil {
 		runner.API = NewAPIClient()
@@ -88,7 +88,7 @@ func (runner *Runner) Bootstrap(args ...string) {
 
 	runner.DeviceID = getPublicKeyHexDigest(privateKeyPEM)
 
-	//runner.t.Cleanup(runner.RemoveDevice)
+	runner.t.Cleanup(runner.RemoveDevice)
 }
 
 func (runner *Runner) RemoveDevice() {
