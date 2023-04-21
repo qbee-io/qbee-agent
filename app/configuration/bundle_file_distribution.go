@@ -3,6 +3,7 @@ package configuration
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 // FileDistributionBundle controls files in the system.
@@ -81,6 +82,8 @@ type TemplateParameter struct {
 	Value string `json:"value"`
 }
 
+const afterCommandDeadline = 30 * time.Minute
+
 // Execute file distribution config on the system.
 func (fd FileDistributionBundle) Execute(ctx context.Context, service *Service) error {
 	for _, fileSet := range fd.FileSets {
@@ -117,7 +120,7 @@ func (fd FileDistributionBundle) Execute(ctx context.Context, service *Service) 
 		}
 
 		if anythingChanged && fileSet.AfterCommand != "" {
-			output, err := RunCommand(ctx, fileSet.AfterCommand)
+			output, err := RunCommand(ctx, fileSet.AfterCommand, afterCommandDeadline)
 			if err != nil {
 				ReportError(ctx, output, "After command failed: %v", err)
 				return err

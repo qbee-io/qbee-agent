@@ -124,14 +124,9 @@ func (srv *Service) UpdateSettings(configData *CommittedConfig) {
 	configData.BundleData.Settings.Execute(srv)
 }
 
-const executeTimeout = time.Hour
-
 // Execute configuration bundles on the system and return true if system should be rebooted.
 func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) error {
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, executeTimeout)
-	defer cancel()
-
-	if err := acquireLock(executeTimeout); err != nil {
+	if err := acquireLock(); err != nil {
 		log.Infof("failed to acquire execution lock - %v", err)
 		return nil
 	}
@@ -145,11 +140,6 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 	reporter := NewReporter(configData.CommitID, srv.reportToConsole)
 
 	for _, bundleName := range configData.Bundles {
-		// Check if context deadline was reached and stop bundles execution if so.
-		if err := ctxWithTimeout.Err(); err != nil {
-			break
-		}
-
 		// we use srv.UpdateSettings method to execute the settings bundle
 		if bundleName == BundleSettings {
 			continue
@@ -165,7 +155,7 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 			continue
 		}
 
-		bundleCtx := reporter.BundleContext(ctxWithTimeout, bundleName, bundle.BundleCommitID())
+		bundleCtx := reporter.BundleContext(ctx, bundleName, bundle.BundleCommitID())
 
 		if err := bundle.Execute(bundleCtx, srv); err != nil {
 			log.Errorf("bundle %s execution failed: %v", bundleName, err)
@@ -225,18 +215,7 @@ func (srv *Service) reportAPIError(ctx context.Context, err error) {
 	srv.failedConnectionsCount++
 
 	if srv.failedConnectionsCount >= srv.connectivityWatchdogThreshold {
-		// since we don't have a reporter defined on this context, we need to create a new one
-		reporter := NewReporter(srv.currentCommitID, srv.reportToConsole)
-		bundleCtx := reporter.BundleContext(ctx, BundleConnectivityWatchdog, "")
-
-		srv.RebootAfterRun(bundleCtx)
-
-		// Since we are reporting API issue, there is probably no point sending the reports,
-		// so we just add them straight to the buffer on the filesystem.
-		// They will be delivered on the next successful run.
-		if err := srv.addReportsToBuffer(reporter.Reports()); err != nil {
-			log.Errorf("failed to add reports to buffer: %v", err)
-		}
+		srv.RebootAfterRun(ctx)
 	}
 }
 

@@ -7,9 +7,10 @@ import (
 )
 
 const lockFilePath = "/run/lock/LCK..qbee-agent-configuration"
+const lockFileTimeout = time.Hour
 
 // acquireLock for the configuration execution.
-func acquireLock(lockFileTimeout time.Duration) error {
+func acquireLock() error {
 	// Check if lock file exists and is not expired
 	if lockFileStat, err := os.Stat(lockFilePath); err == nil {
 		lockFileExpired := time.Since(lockFileStat.ModTime()) > lockFileTimeout
