@@ -47,18 +47,23 @@ func (agent *Agent) loadCACertificatesPool() error {
 		return fmt.Errorf("error reading CA certificate %s: %w", caCertPath, err)
 	}
 
-	pemBlock, _ := pem.Decode(pemCert)
-	if pemBlock == nil {
-		return fmt.Errorf("error decoding CA certificate %s: %w", caCertPath, err)
+	caCertPool := x509.NewCertPool()
+
+	for len(pemCert) > 0 {
+		var pemBlock *pem.Block
+		if pemBlock, pemCert = pem.Decode(pemCert); pemBlock == nil {
+			return fmt.Errorf("error decoding CA certificate %s: %w", caCertPath, err)
+		}
+
+		var envCACert *x509.Certificate
+		if envCACert, err = x509.ParseCertificate(pemBlock.Bytes); err != nil {
+			return fmt.Errorf("error parsing CA certificate %s: %w", caCertPath, err)
+		}
+
+		caCertPool.AddCert(envCACert)
 	}
 
-	var envCACert *x509.Certificate
-	if envCACert, err = x509.ParseCertificate(pemBlock.Bytes); err != nil {
-		return fmt.Errorf("error parsing CA certificate %s: %w", caCertPath, err)
-	}
-
-	agent.caCertPool = x509.NewCertPool()
-	agent.caCertPool.AddCert(envCACert)
+	agent.caCertPool = caCertPool
 
 	return nil
 }
