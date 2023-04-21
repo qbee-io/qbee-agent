@@ -246,10 +246,6 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 		update:     make(chan bool, 1),
 	}
 
-	if err := prepareDirectories(cfg.Directory, cfg.StateDirectory); err != nil {
-		return nil, err
-	}
-
 	var proxy *api.Proxy
 	if cfg.ProxyServer != "" {
 		proxy = &api.Proxy{

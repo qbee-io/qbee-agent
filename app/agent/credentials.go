@@ -47,7 +47,7 @@ func (agent *Agent) loadCACertificatesPool() error {
 		return fmt.Errorf("error reading CA certificate %s: %w", caCertPath, err)
 	}
 
-	agent.caCertPool = x509.NewCertPool()
+	caCertPool := x509.NewCertPool()
 
 	for len(pemCert) > 0 {
 		var pemBlock *pem.Block
@@ -60,8 +60,10 @@ func (agent *Agent) loadCACertificatesPool() error {
 			return fmt.Errorf("error parsing CA certificate %s: %w", caCertPath, err)
 		}
 
-		agent.caCertPool.AddCert(envCACert)
+		caCertPool.AddCert(envCACert)
 	}
+
+	agent.caCertPool = caCertPool
 
 	return nil
 }

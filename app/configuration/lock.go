@@ -3,29 +3,34 @@ package configuration
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 )
 
-const lockFilePath = "/run/lock/LCK..qbee-agent-configuration"
-const lockFileTimeout = time.Hour
+const lockFileName = "config.lock"
+
+// lockFilePath returns the path to the lock file.
+func (srv *Service) lockFilePath() string {
+	return filepath.Join(srv.appDirectory, lockFileName)
+}
 
 // acquireLock for the configuration execution.
-func acquireLock() error {
+func (srv *Service) acquireLock(lockFileTimeout time.Duration) error {
 	// Check if lock file exists and is not expired
-	if lockFileStat, err := os.Stat(lockFilePath); err == nil {
+	if lockFileStat, err := os.Stat(srv.lockFilePath()); err == nil {
 		lockFileExpired := time.Since(lockFileStat.ModTime()) > lockFileTimeout
 
 		if !lockFileExpired {
 			return fmt.Errorf("another process is running configuration")
 		}
 
-		if err = releaseLock(); err != nil {
+		if err = srv.releaseLock(); err != nil {
 			return err
 		}
 	}
 
 	// Create lock file
-	lockFile, err := os.OpenFile(lockFilePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+	lockFile, err := os.OpenFile(srv.lockFilePath(), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("could not create lock file: %w", err)
 	}
@@ -40,8 +45,8 @@ func acquireLock() error {
 }
 
 // releaseLock for the configuration execution.
-func releaseLock() error {
-	if err := os.Remove(lockFilePath); err != nil {
+func (srv *Service) releaseLock() error {
+	if err := os.Remove(srv.lockFilePath()); err != nil {
 		return fmt.Errorf("could not remove lock file: %w", err)
 	}
 
