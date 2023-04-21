@@ -220,8 +220,18 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 		update:     make(chan bool, 1),
 	}
 
-	if err := api.UseProxy(cfg.ProxyServer, cfg.ProxyPort, cfg.ProxyUser, cfg.ProxyPassword); err != nil {
-		return nil, err
+	var proxy *api.Proxy
+	if cfg.ProxyServer != "" {
+		proxy = &api.Proxy{
+			Host:     cfg.ProxyServer,
+			Port:     cfg.ProxyPort,
+			User:     cfg.ProxyUser,
+			Password: cfg.ProxyPassword,
+		}
+
+		if err := api.UseProxy(proxy); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := agent.loadCACertificatesPool(); err != nil {

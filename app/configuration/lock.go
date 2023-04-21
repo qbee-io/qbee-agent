@@ -8,7 +8,6 @@ import (
 )
 
 const lockFileName = "config.lock"
-const lockFileTimeout = time.Hour
 
 // lockFilePath returns the path to the lock file.
 func (srv *Service) lockFilePath() string {
@@ -16,7 +15,7 @@ func (srv *Service) lockFilePath() string {
 }
 
 // acquireLock for the configuration execution.
-func (srv *Service) acquireLock() error {
+func (srv *Service) acquireLock(lockFileTimeout time.Duration) error {
 	// Check if lock file exists and is not expired
 	if lockFileStat, err := os.Stat(srv.lockFilePath()); err == nil {
 		lockFileExpired := time.Since(lockFileStat.ModTime()) > lockFileTimeout
