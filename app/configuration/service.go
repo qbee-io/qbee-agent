@@ -133,11 +133,11 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, executeTimeout)
 	defer cancel()
 
-	if err := acquireLock(executeTimeout); err != nil {
+	if err := srv.acquireLock(executeTimeout); err != nil {
 		log.Infof("failed to acquire execution lock - %v", err)
 		return nil
 	}
-	defer releaseLock()
+	defer srv.releaseLock()
 
 	// disable connectivity watchdog if not set in the configData
 	if !configData.HasBundle(BundleConnectivityWatchdog) {
