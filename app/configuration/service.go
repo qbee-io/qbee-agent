@@ -128,6 +128,8 @@ const executeTimeout = time.Hour
 
 // Execute configuration bundles on the system and return true if system should be rebooted.
 func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) error {
+	log.Debugf("trying to acquire execution lock")
+
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, executeTimeout)
 	defer cancel()
 
@@ -139,12 +141,15 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 
 	// disable connectivity watchdog if not set in the configData
 	if !configData.HasBundle(BundleConnectivityWatchdog) {
+		log.Debugf("connectivity watchdog bundle not found - disabling watchdog")
 		srv.connectivityWatchdogThreshold = 0
 	}
 
 	reporter := NewReporter(configData.CommitID, srv.reportToConsole)
 
 	for _, bundleName := range configData.Bundles {
+		log.Debugf("starting processing of bundle %s", bundleName)
+
 		// Check if context deadline was reached and stop bundles execution if so.
 		if err := ctxWithTimeout.Err(); err != nil {
 			break
@@ -152,6 +157,8 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 
 		// we use srv.UpdateSettings method to execute the settings bundle
 		if bundleName == BundleSettings {
+			// we use srv.UpdateSettings method to execute the settings bundle
+			log.Debugf("skipping settings bundle execution, as it's processed separately")
 			continue
 		}
 
@@ -162,35 +169,47 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 		}
 
 		if !bundle.IsEnabled() {
+			log.Debugf("bundle %s is disabled - skipping", bundleName)
 			continue
 		}
 
 		bundleCtx := reporter.BundleContext(ctxWithTimeout, bundleName, bundle.BundleCommitID())
 
+		log.Debugf("executing bundle %s", bundleName)
 		if err := bundle.Execute(bundleCtx, srv); err != nil {
 			log.Errorf("bundle %s execution failed: %v", bundleName, err)
 		}
+
+		log.Debugf("bundle %s execution finished", bundleName)
 	}
 
 	// assign config's commitID as current
 	if srv.currentCommitID != configData.CommitID {
+		log.Debugf("updating current commit ID to %s", configData.CommitID)
 		srv.currentCommitID = configData.CommitID
 		srv.configChangeTime = time.Now()
 	}
 
-	if srv.reportingEnabled {
-		if _, err := srv.sendReports(ctx, reporter.Reports()); err != nil {
-			if bufferErr := srv.addReportsToBuffer(reporter.Reports()); bufferErr != nil {
-				log.Errorf("failed to add reports to buffer: %v", bufferErr)
-			}
+	if !srv.reportingEnabled {
+		log.Debugf("reporting is disabled - skipping sending reports")
+		return nil
+	}
 
-			return err
+	log.Debugf("sending reports to the server")
+	if _, err := srv.sendReports(ctx, reporter.Reports()); err != nil {
+		log.Debugf("failed to send reports to the server: %v, adding to the buffer", err)
+
+		if bufferErr := srv.addReportsToBuffer(reporter.Reports()); bufferErr != nil {
+			log.Errorf("failed to add reports to buffer: %v", bufferErr)
 		}
 
-		// attempt to flush reports buffer if reports were sent successfully
-		if err := srv.flushReportsBuffer(ctx); err != nil {
-			log.Errorf("failed to flush reports buffer: %v", err)
-		}
+		return err
+	}
+
+	log.Debugf("attempting to flush reports buffer")
+
+	if err := srv.flushReportsBuffer(ctx); err != nil {
+		log.Errorf("failed to flush reports buffer: %v", err)
 	}
 
 	return nil
