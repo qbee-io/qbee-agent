@@ -172,7 +172,7 @@ func (s *Service) start() error {
 		"--port", "443",
 		"--nobind",
 		"--auth-nocache",
-		"--script-security", "2",
+		"--script-security", "1",
 		"--persist-key",
 		"--persist-tun",
 		"--ca", s.caCertPath(),
