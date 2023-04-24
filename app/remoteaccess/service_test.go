@@ -229,7 +229,7 @@ func TestService_ensureRunning(t *testing.T) {
 		"--port", "443",
 		"--nobind",
 		"--auth-nocache",
-		"--script-security", "0",
+		"--script-security", "2",
 		"--persist-key",
 		"--persist-tun",
 		"--ca", filepath.Join(certDir, "qbee-ca-vpn.cert"),
