@@ -7,6 +7,7 @@ import (
 
 	"github.com/qbee-io/qbee-agent/app/configuration"
 	"github.com/qbee-io/qbee-agent/app/test"
+	"qbee.io/platform/shared/test/assert"
 )
 
 const cacheDir = "/var/lib/qbee/app_workdir/cache"
@@ -43,11 +44,11 @@ func Test_SoftwareManagementBundle_InstallPackageFromFile(t *testing.T) {
 		// since we are not installing systemctl on the test docker image, we will get the following warning
 		fmt.Sprintf("[WARN] Required restart of '%s' cannot be performed.", pkgFilename),
 	}
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	// check if package was correctly installed
 	output := r.MustExec("qbee-test")
-	test.Equal(t, string(output), "2.1.1")
+	assert.Equal(t, string(output), "2.1.1")
 }
 
 func Test_SoftwareManagementBundle_InstallPackageFromFile_WithDependencies(t *testing.T) {
@@ -81,11 +82,11 @@ func Test_SoftwareManagementBundle_InstallPackageFromFile_WithDependencies(t *te
 		// since we are not installing systemctl on the test docker image, we will get the following warning
 		fmt.Sprintf("[WARN] Required restart of '%s' cannot be performed.", pkgFilename),
 	}
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	// check if package was correctly installed
 	output := r.MustExec("qbee-test-dep")
-	test.Equal(t, string(output), "dep 1.0.0")
+	assert.Equal(t, string(output), "dep 1.0.0")
 }
 
 func Test_SoftwareManagementBundle_InstallPackage_WithConfigFileTemplate(t *testing.T) {
@@ -131,16 +132,16 @@ func Test_SoftwareManagementBundle_InstallPackage_WithConfigFileTemplate(t *test
 		// since we are not installing systemctl on the test docker image, we will get the following warning
 		"[WARN] Required restart of 'qbee-test' cannot be performed.",
 	}
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	// check if package was correctly installed
 	output := r.MustExec("qbee-test")
-	test.Equal(t, string(output), "2.1.1")
+	assert.Equal(t, string(output), "2.1.1")
 
 	// check that the config files is present and correct
 	gotFileContents := r.ReadFile("/etc/config.test")
 	expectedContents := "test\nkey: test-value"
-	test.Equal(t, string(gotFileContents), expectedContents)
+	assert.Equal(t, string(gotFileContents), expectedContents)
 }
 
 func Test_SoftwareManagementBundle_InstallPackage_RestartService_WithoutSystemctl(t *testing.T) {
@@ -155,7 +156,7 @@ func Test_SoftwareManagementBundle_InstallPackage_RestartService_WithoutSystemct
 		"[INFO] Successfully installed 'qbee-test'",
 		"[WARN] Required restart of 'qbee-test' cannot be performed.",
 	}
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 }
 
 func Test_SoftwareManagementBundle_InstallPackage_RestartService_NotAService(t *testing.T) {
@@ -172,7 +173,7 @@ func Test_SoftwareManagementBundle_InstallPackage_RestartService_NotAService(t *
 	expectedReports := []string{
 		"[INFO] Successfully installed 'qbee-test'",
 	}
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 }
 
 func Test_SoftwareManagementBundle_InstallPackage_RestartService_NoServiceName(t *testing.T) {
@@ -189,7 +190,7 @@ func Test_SoftwareManagementBundle_InstallPackage_RestartService_NoServiceName(t
 	expectedReports := []string{
 		"[INFO] Successfully installed 'qbee-test-service'",
 	}
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 }
 
 func Test_SoftwareManagementBundle_InstallPackage_RestartService_WithServiceName(t *testing.T) {
@@ -212,7 +213,7 @@ func Test_SoftwareManagementBundle_InstallPackage_RestartService_WithServiceName
 		"[INFO] Successfully installed 'qbee-test-service'",
 		"[INFO] Restarted service 'test'.",
 	}
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 }
 
 func Test_SoftwareManagementBundle_InstallPackage_PreCondition(t *testing.T) {
@@ -250,7 +251,7 @@ func Test_SoftwareManagementBundle_InstallPackage_PreCondition(t *testing.T) {
 
 			reports := executeSoftwareManagementBundle(r, items)
 
-			test.Equal(t, reports, testCase.expectedReports)
+			assert.Equal(t, reports, testCase.expectedReports)
 		})
 	}
 }

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/qbee-io/qbee-agent/app/test"
+	"qbee.io/platform/shared/test/assert"
 )
 
 func TestCollectFilesystem(t *testing.T) {
@@ -19,7 +19,7 @@ func TestCollectFilesystem(t *testing.T) {
 	}
 
 	for _, metric := range gotMetrics {
-		test.Equal(t, metric.Label, Filesystem)
+		assert.Equal(t, metric.Label, Filesystem)
 
 		if !strings.HasPrefix(metric.ID, "/") {
 			t.Fatalf("expected filesystem mount to be under root, got %s", metric.ID)

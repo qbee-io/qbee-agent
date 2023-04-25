@@ -30,7 +30,7 @@ type PackageManagementBundle struct {
 	Packages     []Package  `json:"items"`
 }
 
-// RebootMode defines whether system should be rebooted after package maintanance or not.
+// RebootMode defines whether system should be rebooted after package maintenance or not.
 type RebootMode string
 
 const (

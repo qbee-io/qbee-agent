@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/qbee-io/qbee-agent/app/test"
+	"qbee.io/platform/shared/test/assert"
 )
 
 func TestCollectNetwork(t *testing.T) {
@@ -19,7 +19,7 @@ func TestCollectNetwork(t *testing.T) {
 	}
 
 	for _, metric := range gotMetrics {
-		test.Equal(t, metric.Label, Network)
+		assert.Equal(t, metric.Label, Network)
 		if metric.ID == "" {
 			t.Fatalf("expected metric ID to be a network interface name, got an empty string")
 		}

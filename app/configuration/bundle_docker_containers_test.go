@@ -8,6 +8,7 @@ import (
 
 	"github.com/qbee-io/qbee-agent/app/configuration"
 	"github.com/qbee-io/qbee-agent/app/test"
+	"qbee.io/platform/shared/test/assert"
 )
 
 func Test_DockerContainers_Auths(t *testing.T) {
@@ -31,7 +32,7 @@ func Test_DockerContainers_Auths(t *testing.T) {
 		"[INFO] Configured credentials for https://index.docker.io/v1/.",
 	}
 
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	// check that a correct docker config file is created
 	output := r.MustExec("cat", "/root/.docker/config.json")
@@ -48,11 +49,11 @@ func Test_DockerContainers_Auths(t *testing.T) {
 			},
 		},
 	}
-	test.Equal(t, dockerConfig, expectedDockerConfig)
+	assert.Equal(t, dockerConfig, expectedDockerConfig)
 
 	// running it the second time does nothing
 	reports = executeDockerContainersBundle(r, dockerBundle)
-	test.Empty(t, reports)
+	assert.Empty(t, reports)
 }
 
 func Test_DockerContainers_Container_Start(t *testing.T) {
@@ -79,15 +80,15 @@ func Test_DockerContainers_Container_Start(t *testing.T) {
 		"[INFO] Successfully started container for image debian:qbee.",
 	}
 
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	// check that there is a container running with the specified command
 	output := r.MustExec("docker", "container", "ls", "--filter", "name="+containerName, "--format", "{{.Command}}")
-	test.Equal(t, string(output), fmt.Sprintf(`"%s"`, dockerBundle.Containers[0].Command))
+	assert.Equal(t, string(output), fmt.Sprintf(`"%s"`, dockerBundle.Containers[0].Command))
 
 	// running it the second time does nothing, since the correct container is already running
 	reports = executeDockerContainersBundle(r, dockerBundle)
-	test.Empty(t, reports)
+	assert.Empty(t, reports)
 }
 
 func Test_DockerContainers_Container_StartExited(t *testing.T) {
@@ -112,7 +113,7 @@ func Test_DockerContainers_Container_StartExited(t *testing.T) {
 	expectedReports := []string{
 		"[INFO] Successfully started container for image debian:qbee.",
 	}
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	time.Sleep(time.Second)
 
@@ -132,11 +133,11 @@ func Test_DockerContainers_Container_StartExited(t *testing.T) {
 		"[WARN] Container exited for image debian:qbee.",
 		"[INFO] Successfully restarted container for image debian:qbee.",
 	}
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	// check that there is a container running with the specified command
 	output := r.MustExec("docker", "container", "ls", "--filter", "name="+containerName, "--format", "{{.Command}}")
-	test.Equal(t, string(output), fmt.Sprintf(`"%s"`, dockerBundle.Containers[0].Command))
+	assert.Equal(t, string(output), fmt.Sprintf(`"%s"`, dockerBundle.Containers[0].Command))
 }
 
 func Test_DockerContainers_Container_RestartOnConfigChange(t *testing.T) {
@@ -161,7 +162,7 @@ func Test_DockerContainers_Container_RestartOnConfigChange(t *testing.T) {
 	expectedReports := []string{
 		"[INFO] Successfully started container for image debian:qbee.",
 	}
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	// running it the second time re-starts running container
 	dockerBundle = configuration.DockerContainersBundle{
@@ -179,11 +180,11 @@ func Test_DockerContainers_Container_RestartOnConfigChange(t *testing.T) {
 		"[WARN] Container configuration update detected for image debian:qbee.",
 		"[INFO] Successfully restarted container for image debian:qbee.",
 	}
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	// check that there is a container running with the specified command
 	output := r.MustExec("docker", "container", "ls", "--filter", "name="+containerName, "--format", "{{.Command}}")
-	test.Equal(t, string(output), fmt.Sprintf(`"%s"`, dockerBundle.Containers[0].Command))
+	assert.Equal(t, string(output), fmt.Sprintf(`"%s"`, dockerBundle.Containers[0].Command))
 }
 
 // executeDockerContainersBundle is a helper method to quickly execute docker containers bundle.

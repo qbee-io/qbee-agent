@@ -5,8 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"qbee.io/platform/shared/test/assert"
+
 	"github.com/qbee-io/qbee-agent/app/api"
-	"github.com/qbee-io/qbee-agent/app/test"
 )
 
 func TestService_reportsBuffer(t *testing.T) {
@@ -16,7 +17,7 @@ func TestService_reportsBuffer(t *testing.T) {
 		if bufferedReports, err := srv.readReportsBuffer(); err != nil {
 			t.Fatalf("failed to read reports from buffer: %v", err)
 		} else {
-			test.Empty(t, bufferedReports)
+			assert.Empty(t, bufferedReports)
 		}
 	})
 
@@ -33,7 +34,7 @@ func TestService_reportsBuffer(t *testing.T) {
 		if bufferedReports, err := srv.readReportsBuffer(); err != nil {
 			t.Fatalf("failed to read reports from buffer: %v", err)
 		} else {
-			test.Empty(t, bufferedReports)
+			assert.Empty(t, bufferedReports)
 		}
 	})
 
@@ -47,7 +48,7 @@ func TestService_reportsBuffer(t *testing.T) {
 		if bufferedReports, err := srv.readReportsBuffer(); err != nil {
 			t.Fatalf("failed to read reports from buffer: %v", err)
 		} else {
-			test.Equal(t, bufferedReports, newReports)
+			assert.Equal(t, bufferedReports, newReports)
 		}
 	})
 
@@ -60,7 +61,7 @@ func TestService_reportsBuffer(t *testing.T) {
 		if bufferedReports, err := srv.readReportsBuffer(); err != nil {
 			t.Fatalf("failed to read reports from buffer: %v", err)
 		} else {
-			test.Equal(t, bufferedReports, append(newReports, newReports2...))
+			assert.Equal(t, bufferedReports, append(newReports, newReports2...))
 		}
 	})
 
@@ -73,7 +74,7 @@ func TestService_reportsBuffer(t *testing.T) {
 		if bufferedReports, err := srv.readReportsBuffer(); err != nil {
 			t.Fatalf("failed to read reports from buffer: %v", err)
 		} else {
-			test.Empty(t, bufferedReports)
+			assert.Empty(t, bufferedReports)
 		}
 
 		// clearing empty buffer shouldn't fail
@@ -106,7 +107,7 @@ func TestService_persistConfig(t *testing.T) {
 			t.Fatalf("failed to load config: %v", err)
 		}
 
-		test.Equal(t, loadedCfg, cfg)
+		assert.Equal(t, loadedCfg, cfg)
 	})
 
 	t.Run("load config through public Get method", func(t *testing.T) {
@@ -115,6 +116,6 @@ func TestService_persistConfig(t *testing.T) {
 			t.Fatalf("failed to get config: %v", err)
 		}
 
-		test.Equal(t, committedConfig, cfg)
+		assert.Equal(t, committedConfig, cfg)
 	})
 }

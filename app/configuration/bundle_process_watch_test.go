@@ -5,6 +5,7 @@ import (
 
 	"github.com/qbee-io/qbee-agent/app/configuration"
 	"github.com/qbee-io/qbee-agent/app/test"
+	"qbee.io/platform/shared/test/assert"
 )
 
 func Test_BundleProcessWatch_ProcessPresent_NotRunning(t *testing.T) {
@@ -28,11 +29,11 @@ func Test_BundleProcessWatch_ProcessPresent_NotRunning(t *testing.T) {
 		"[INFO] Successfully ran command for process testProcess",
 	}
 
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	expectedLogs := []string{"starting testProcess"}
 
-	test.Equal(t, logs, expectedLogs)
+	assert.Equal(t, logs, expectedLogs)
 }
 
 func Test_BundleProcessWatch_ProcessPresent_AlreadyRunning(t *testing.T) {
@@ -52,8 +53,8 @@ func Test_BundleProcessWatch_ProcessPresent_AlreadyRunning(t *testing.T) {
 		Command: "echo 'starting testProcess'",
 	}})
 
-	test.Empty(t, reports)
-	test.Empty(t, logs)
+	assert.Empty(t, reports)
+	assert.Empty(t, logs)
 }
 
 func Test_BundleProcessWatch_ProcessAbsent_NotRunning(t *testing.T) {
@@ -65,8 +66,8 @@ func Test_BundleProcessWatch_ProcessAbsent_NotRunning(t *testing.T) {
 		Command: "echo 'stopping testProcess'",
 	}})
 
-	test.Empty(t, reports)
-	test.Empty(t, logs)
+	assert.Empty(t, reports)
+	assert.Empty(t, logs)
 }
 
 func Test_BundleProcessWatch_ProcessAbsent_Running(t *testing.T) {
@@ -91,11 +92,11 @@ func Test_BundleProcessWatch_ProcessAbsent_Running(t *testing.T) {
 		"[INFO] Successfully ran command for process testProcess",
 	}
 
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	expectedLogs := []string{"stopping testProcess"}
 
-	test.Equal(t, logs, expectedLogs)
+	assert.Equal(t, logs, expectedLogs)
 }
 
 func Test_BundleProcessWatch_CommandError(t *testing.T) {
@@ -113,14 +114,14 @@ func Test_BundleProcessWatch_CommandError(t *testing.T) {
 		"[ERR] Error running command for process testProcess",
 	}
 
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	expectedLogs := []string{
 		"error running command [/bin/bash -c invalidCommand]: exit status 127",
 		"/bin/bash: line 1: invalidCommand: command not found",
 	}
 
-	test.Equal(t, logs, expectedLogs)
+	assert.Equal(t, logs, expectedLogs)
 }
 
 // executePackageManagementBundle is a helper method to quickly execute process watch bundle.

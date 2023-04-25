@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/qbee-io/qbee-agent/app/test"
+	"qbee.io/platform/shared/test/assert"
 )
 
 func TestCollectCPU(t *testing.T) {
@@ -13,12 +13,12 @@ func TestCollectCPU(t *testing.T) {
 		t.Fatalf("unexpected error = %v", err)
 	}
 
-	test.Length(t, got, 1)
+	assert.Length(t, got, 1)
 
 	metric := got[0]
 
-	test.Equal(t, metric.Label, CPU)
-	test.Empty(t, metric.ID)
+	assert.Equal(t, metric.Label, CPU)
+	assert.Empty(t, metric.ID)
 
 	if time.Since(time.Unix(metric.Timestamp, 0)) > time.Second {
 		t.Fatalf("invalid timestamp, got: %v", metric.Timestamp)

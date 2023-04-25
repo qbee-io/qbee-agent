@@ -7,6 +7,7 @@ import (
 
 	"github.com/qbee-io/qbee-agent/app/configuration"
 	"github.com/qbee-io/qbee-agent/app/test"
+	"qbee.io/platform/shared/test/assert"
 )
 
 func Test_Firewall_NoIPTablesInstalled(t *testing.T) {
@@ -26,7 +27,7 @@ func Test_Firewall_NoIPTablesInstalled(t *testing.T) {
 		"[ERR] Firewall configuration failed.",
 	}
 
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 }
 
 func Test_Firewall(t *testing.T) {
@@ -72,7 +73,7 @@ func Test_Firewall(t *testing.T) {
 		"[INFO] Load of new iptables rules succeeded for table filter.",
 	}
 
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	// check that correct rules are set on the filter/INPUT
 	output := r.MustExec("iptables", "-t", "filter", "-S", "INPUT")
@@ -87,11 +88,11 @@ func Test_Firewall(t *testing.T) {
 		"-A INPUT -p tcp -m tcp --dport 333 -j ACCEPT",
 	}
 
-	test.Equal(t, gotRules, expectedRules)
+	assert.Equal(t, gotRules, expectedRules)
 
 	// check that the second run doesn't change the firewall
 	reports = executeFirewallBundle(r, firewallBundle)
-	test.Empty(t, reports)
+	assert.Empty(t, reports)
 }
 
 // executeFirewallBundle is a helper method to quickly execute firewall bundle.

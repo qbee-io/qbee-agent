@@ -239,6 +239,10 @@ func (agent *Agent) RebootSystem(ctx context.Context) {
 
 // NewWithoutCredentials returns a new instance of Agent without loaded credentials.
 func NewWithoutCredentials(cfg *Config) (*Agent, error) {
+	if err := prepareDirectories(cfg.Directory, cfg.StateDirectory); err != nil {
+		return nil, err
+	}
+
 	agent := &Agent{
 		cfg:        cfg,
 		inProgress: new(sync.WaitGroup),

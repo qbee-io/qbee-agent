@@ -203,14 +203,14 @@ var aptGetBaseCommand = []string{
 // UpgradeAll performs system upgrade if there are available upgrades.
 // On success, return number of packages upgraded, output of the upgrade command and nil error.
 func (deb *DebianPackageManager) UpgradeAll(ctx context.Context) (int, []byte, error) {
-	deb.lock.Lock()
-	defer deb.lock.Unlock()
-
 	// check for updates
 	inventory, err := deb.ListPackages(ctx)
 	if err != nil {
 		return 0, nil, err
 	}
+
+	deb.lock.Lock()
+	defer deb.lock.Unlock()
 
 	updatesAvailable := 0
 

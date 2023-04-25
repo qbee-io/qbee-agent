@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/qbee-io/qbee-agent/app/test"
+	"qbee.io/platform/shared/test/assert"
 )
 
 func TestCollectLoadAverage(t *testing.T) {
@@ -13,12 +13,12 @@ func TestCollectLoadAverage(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	test.Length(t, gotMetrics, 1)
+	assert.Length(t, gotMetrics, 1)
 
 	metric := gotMetrics[0]
 
-	test.Equal(t, metric.Label, LoadAverage)
-	test.Empty(t, metric.ID)
+	assert.Equal(t, metric.Label, LoadAverage)
+	assert.Empty(t, metric.ID)
 
 	if time.Since(time.Unix(metric.Timestamp, 0)) > time.Second {
 		t.Fatalf("invalid timestamp, got: %v", metric.Timestamp)

@@ -6,6 +6,7 @@ import (
 
 	"github.com/qbee-io/qbee-agent/app/configuration"
 	"github.com/qbee-io/qbee-agent/app/test"
+	"qbee.io/platform/shared/test/assert"
 )
 
 func Test_Password(t *testing.T) {
@@ -14,7 +15,7 @@ func Test_Password(t *testing.T) {
 	// assert that root is without a password
 	rootLine := string(r.MustExec("sh", "-c", "cat /etc/shadow | grep 'root:'"))
 	rootFields := strings.Split(rootLine, ":")
-	test.Equal(t, rootFields[1], "*")
+	assert.Equal(t, rootFields[1], "*")
 
 	originalShadowWithoutRoot := r.MustExec("sh", "-c", "cat /etc/shadow | grep -v 'root:'")
 
@@ -39,20 +40,20 @@ func Test_Password(t *testing.T) {
 		"[INFO] Password for user root successfully set.",
 	}
 
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	// check that root's password is updated
 	rootLine = string(r.MustExec("sh", "-c", "cat /etc/shadow | grep 'root:'"))
 	rootFields = strings.Split(rootLine, ":")
-	test.Equal(t, rootFields[1], newPassword)
+	assert.Equal(t, rootFields[1], newPassword)
 
 	// check that executing the bundle again, won't make any changes
 	reports = executePasswordBundle(r, userPasswords)
-	test.Empty(t, reports)
+	assert.Empty(t, reports)
 
 	// check that remaining records are untouched
 	modifiedShadowWithoutRoot := r.MustExec("sh", "-c", "cat /etc/shadow | grep -v 'root:'")
-	test.Equal(t, string(modifiedShadowWithoutRoot), string(originalShadowWithoutRoot))
+	assert.Equal(t, string(modifiedShadowWithoutRoot), string(originalShadowWithoutRoot))
 }
 
 // executePasswordBundle is a helper method to quickly execute password bundle.

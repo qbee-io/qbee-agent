@@ -6,6 +6,7 @@ import (
 
 	"github.com/qbee-io/qbee-agent/app/configuration"
 	"github.com/qbee-io/qbee-agent/app/test"
+	"qbee.io/platform/shared/test/assert"
 )
 
 func Test_PackageManagement_PreCondition(t *testing.T) {
@@ -32,11 +33,11 @@ func Test_PackageManagement_InstallPackage_PreConditionFailed(t *testing.T) {
 	})
 
 	// check that no reports are recorded
-	test.Empty(t, reports)
+	assert.Empty(t, reports)
 
 	// check that the test program is not installed
 	installedVersion := checkInstalledVersionOfTestPackage(r)
-	test.Empty(t, installedVersion)
+	assert.Empty(t, installedVersion)
 }
 
 func Test_PackageManagement_InstallPackage_NoPrecondition(t *testing.T) {
@@ -49,11 +50,11 @@ func Test_PackageManagement_InstallPackage_NoPrecondition(t *testing.T) {
 
 	// check if a correct report is recorded
 	expectedReports := []string{"[INFO] Package 'qbee-test' successfully installed."}
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	// check that the newest version of test package is installed
 	installedVersion := checkInstalledVersionOfTestPackage(r)
-	test.Equal(t, installedVersion, "2.1.1")
+	assert.Equal(t, installedVersion, "2.1.1")
 }
 
 func Test_PackageManagement_InstallPackage_PreconditionSuccess(t *testing.T) {
@@ -67,11 +68,11 @@ func Test_PackageManagement_InstallPackage_PreconditionSuccess(t *testing.T) {
 
 	// check if a correct report is recorded
 	expectedReports := []string{"[INFO] Package 'qbee-test' successfully installed."}
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	// check that the newest version of test package is installed
 	installedVersion := checkInstalledVersionOfTestPackage(r)
-	test.Equal(t, installedVersion, "2.1.1")
+	assert.Equal(t, installedVersion, "2.1.1")
 }
 
 func Test_PackageManagement_InstallPackage_Downgrade(t *testing.T) {
@@ -86,11 +87,11 @@ func Test_PackageManagement_InstallPackage_Downgrade(t *testing.T) {
 
 	// check if a correct report is recorded
 	expectedReports := []string{"[INFO] Package 'qbee-test' successfully installed."}
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	// check that the newest version of test package is installed
 	installedVersion := checkInstalledVersionOfTestPackage(r)
-	test.Equal(t, installedVersion, "1.0.1")
+	assert.Equal(t, installedVersion, "1.0.1")
 }
 
 func Test_PackageManagement_InstallPackage_UpdateWithEmptyVersion(t *testing.T) {
@@ -105,11 +106,11 @@ func Test_PackageManagement_InstallPackage_UpdateWithEmptyVersion(t *testing.T) 
 
 	// check if a correct report is recorded
 	expectedReports := []string{"[INFO] Package 'qbee-test' successfully installed."}
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	// check that the newest version of test package is installed
 	installedVersion := checkInstalledVersionOfTestPackage(r)
-	test.Equal(t, installedVersion, "2.1.1")
+	assert.Equal(t, installedVersion, "2.1.1")
 }
 
 func Test_PackageManagement_InstallPackage_UpdateWithLatestVersion(t *testing.T) {
@@ -124,11 +125,11 @@ func Test_PackageManagement_InstallPackage_UpdateWithLatestVersion(t *testing.T)
 
 	// check if a correct report is recorded
 	expectedReports := []string{"[INFO] Package 'qbee-test' successfully installed."}
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	// check that the newest version of test package is installed
 	installedVersion := checkInstalledVersionOfTestPackage(r)
-	test.Equal(t, installedVersion, "2.1.1")
+	assert.Equal(t, installedVersion, "2.1.1")
 }
 
 func Test_PackageManagement_InstallPackage_UpdateWithReboot(t *testing.T) {
@@ -147,11 +148,11 @@ func Test_PackageManagement_InstallPackage_UpdateWithReboot(t *testing.T) {
 		"[INFO] Package 'qbee-test' successfully installed.",
 		"[WARN] Scheduling system reboot.",
 	}
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	// check that the newest version of test package is installed
 	installedVersion := checkInstalledVersionOfTestPackage(r)
-	test.Equal(t, installedVersion, "2.1.1")
+	assert.Equal(t, installedVersion, "2.1.1")
 }
 
 func Test_PackageManagement_UpgradeAll(t *testing.T) {
@@ -169,11 +170,11 @@ func Test_PackageManagement_UpgradeAll(t *testing.T) {
 
 	// check if a correct report is recorded
 	expectedReports := []string{"[INFO] Full upgrade was successful - 1 packages updated."}
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	// check that the newest version of test package is installed
 	installedVersion := checkInstalledVersionOfTestPackage(r)
-	test.Equal(t, installedVersion, "2.1.1")
+	assert.Equal(t, installedVersion, "2.1.1")
 }
 
 func Test_PackageManagement_UpgradeAll_WithReboot(t *testing.T) {
@@ -195,11 +196,11 @@ func Test_PackageManagement_UpgradeAll_WithReboot(t *testing.T) {
 		"[INFO] Full upgrade was successful - 1 packages updated.",
 		"[WARN] Scheduling system reboot.",
 	}
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	// check that the newest version of test package is installed
 	installedVersion := checkInstalledVersionOfTestPackage(r)
-	test.Equal(t, installedVersion, "2.1.1")
+	assert.Equal(t, installedVersion, "2.1.1")
 }
 
 func Test_PackageManagement_UpgradeAll_WithRebootWithoutChanges(t *testing.T) {
@@ -214,7 +215,7 @@ func Test_PackageManagement_UpgradeAll_WithRebootWithoutChanges(t *testing.T) {
 		RebootMode:  configuration.RebootAlways,
 	})
 
-	test.Empty(t, reports)
+	assert.Empty(t, reports)
 }
 
 // helper functions

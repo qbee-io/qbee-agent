@@ -7,6 +7,7 @@ import (
 
 	"github.com/qbee-io/qbee-agent/app/configuration"
 	"github.com/qbee-io/qbee-agent/app/test"
+	"qbee.io/platform/shared/test/assert"
 )
 
 func Test_FileDistributionBundle(t *testing.T) {
@@ -37,11 +38,11 @@ func Test_FileDistributionBundle(t *testing.T) {
 		fmt.Sprintf("[INFO] Successfully downloaded file %[1]s to /tmp/test1",
 			pkgFilename),
 	}
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	// check if package was correctly installed
 	output := r.MustExec("md5sum", "/tmp/test1")
-	test.Equal(t, string(output), "8562ee4d61fba99c1525e85215cc59f3  /tmp/test1")
+	assert.Equal(t, string(output), "8562ee4d61fba99c1525e85215cc59f3  /tmp/test1")
 }
 
 func Test_FileDistributionBundle_IsTemplate(t *testing.T) {
@@ -81,11 +82,11 @@ func Test_FileDistributionBundle_IsTemplate(t *testing.T) {
 			fileManagerPath),
 		fmt.Sprintf("[INFO] Successfully rendered template file %[1]s to /tmp/test1", fileManagerPath),
 	}
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	// check if package was correctly installed
 	output := r.MustExec("cat", "/tmp/test1")
-	test.Equal(t, string(output), "example: test-value, {{unknown-key}}, {{broken-tag")
+	assert.Equal(t, string(output), "example: test-value, {{unknown-key}}, {{broken-tag")
 }
 
 func Test_FileDistributionBundle_AfterCommand(t *testing.T) {
@@ -122,14 +123,14 @@ func Test_FileDistributionBundle_AfterCommand(t *testing.T) {
 			pkgFilename),
 		"[INFO] Successfully executed after command",
 	}
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	// check if package was correctly installed
 	output := r.MustExec("md5sum", "/tmp/test1")
-	test.Equal(t, string(output), "8562ee4d61fba99c1525e85215cc59f3  /tmp/test1")
+	assert.Equal(t, string(output), "8562ee4d61fba99c1525e85215cc59f3  /tmp/test1")
 
 	output = r.MustExec("cat", "/tmp/test2")
-	test.Equal(t, string(output), "it worked!")
+	assert.Equal(t, string(output), "it worked!")
 }
 
 func Test_FileDistributionBundle_PreCondition_True(t *testing.T) {
@@ -165,11 +166,11 @@ func Test_FileDistributionBundle_PreCondition_True(t *testing.T) {
 		fmt.Sprintf("[INFO] Successfully downloaded file %[1]s to /tmp/test1",
 			pkgFilename),
 	}
-	test.Equal(t, reports, expectedReports)
+	assert.Equal(t, reports, expectedReports)
 
 	// check if package was correctly installed
 	output := r.MustExec("md5sum", "/tmp/test1")
-	test.Equal(t, string(output), "8562ee4d61fba99c1525e85215cc59f3  /tmp/test1")
+	assert.Equal(t, string(output), "8562ee4d61fba99c1525e85215cc59f3  /tmp/test1")
 }
 
 func Test_FileDistributionBundle_PreCondition_False(t *testing.T) {
@@ -200,9 +201,9 @@ func Test_FileDistributionBundle_PreCondition_False(t *testing.T) {
 	// execute configuration bundles
 	reports, _ := configuration.ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r"))
 
-	test.Empty(t, reports)
+	assert.Empty(t, reports)
 
 	// check if file was created
 	output := r.MustExec("ls", "/tmp/")
-	test.Equal(t, string(output), "")
+	assert.Equal(t, string(output), "")
 }

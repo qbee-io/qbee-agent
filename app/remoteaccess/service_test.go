@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/qbee-io/qbee-agent/app/api"
-	"github.com/qbee-io/qbee-agent/app/test"
+	"qbee.io/platform/shared/test/assert"
 )
 
 func TestService_downloadOpenVPN(t *testing.T) {
@@ -61,9 +61,9 @@ func TestService_downloadOpenVPN(t *testing.T) {
 		t.Errorf("binary file not executable: %v", stats.Mode())
 	}
 
-	test.True(t, mock1.Called())
-	test.Equal(t, mock1.Request().Method, http.MethodGet)
-	test.Equal(t, mock1.Request().URL.RequestURI(), "/v1/org/device/auth/download/openvpn/"+runtime.GOARCH)
+	assert.True(t, mock1.Called())
+	assert.Equal(t, mock1.Request().Method, http.MethodGet)
+	assert.Equal(t, mock1.Request().URL.RequestURI(), "/v1/org/device/auth/download/openvpn/"+runtime.GOARCH)
 }
 
 func TestService_downloadOpenVPN_alreadyExists(t *testing.T) {
@@ -107,9 +107,9 @@ func TestService_refreshCredentials(t *testing.T) {
 	}
 
 	// Make sure that the right API was called.
-	test.True(t, mock1.Called())
-	test.Equal(t, mock1.Request().Method, http.MethodGet)
-	test.Equal(t, mock1.Request().URL.RequestURI(), "/v1/org/device/auth/vpncert")
+	assert.True(t, mock1.Called())
+	assert.Equal(t, mock1.Request().Method, http.MethodGet)
+	assert.Equal(t, mock1.Request().URL.RequestURI(), "/v1/org/device/auth/vpncert")
 
 	// check that the files were written to disk with correct mode
 	expectedFiles := []string{
@@ -140,9 +140,9 @@ func TestService_refreshCredentials(t *testing.T) {
 	}
 
 	// Check that the credentials were saved to the service.
-	test.Equal(t, service.credentials.CACertificatePEM(), []byte("line1\nline2"))
-	test.Equal(t, service.credentials.CertificatePEM(), []byte("line3\nline4"))
-	test.Equal(t, service.credentials.Expiry, int64(1234567890))
+	assert.Equal(t, service.credentials.CACertificatePEM(), []byte("line1\nline2"))
+	assert.Equal(t, service.credentials.CertificatePEM(), []byte("line3\nline4"))
+	assert.Equal(t, service.credentials.Expiry, int64(1234567890))
 }
 
 func TestService_refreshCredentials_expiring(t *testing.T) {
@@ -170,8 +170,8 @@ func TestService_refreshCredentials_expiring(t *testing.T) {
 		t.Errorf("refreshCredentials() error = %v", err)
 	}
 
-	test.True(t, mock1.Called())
-	test.Equal(t, service.credentials.Expiry, newExpiry)
+	assert.True(t, mock1.Called())
+	assert.Equal(t, service.credentials.Expiry, newExpiry)
 
 	// Call again, should not refresh the credentials.
 	// API mock will fail if a new request is made,
@@ -208,9 +208,9 @@ func TestService_ensureRunning(t *testing.T) {
 	service.activeProcesses.Wait()
 
 	// make sure that the credentials were refreshed.
-	test.True(t, credentialsAPIMock.Called())
-	test.Equal(t, credentialsAPIMock.Request().Method, http.MethodGet)
-	test.Equal(t, credentialsAPIMock.Request().URL.RequestURI(), "/v1/org/device/auth/vpncert")
+	assert.True(t, credentialsAPIMock.Called())
+	assert.Equal(t, credentialsAPIMock.Request().Method, http.MethodGet)
+	assert.Equal(t, credentialsAPIMock.Request().URL.RequestURI(), "/v1/org/device/auth/vpncert")
 
 	// Check that the openvpn binary was called with the right parameters.
 	data, err := os.ReadFile(testFilePath)
@@ -241,7 +241,7 @@ func TestService_ensureRunning(t *testing.T) {
 		"--disable-occ",
 		"--cipher", "AES-256-GCM",
 	}
-	test.Equal(t, arguments, expectedArguments)
+	assert.Equal(t, arguments, expectedArguments)
 }
 
 func TestService_start_checkStatus_stop(t *testing.T) {
