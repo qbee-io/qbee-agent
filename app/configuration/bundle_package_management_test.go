@@ -5,12 +5,12 @@ import (
 	"testing"
 
 	"github.com/qbee-io/qbee-agent/app/configuration"
-	"github.com/qbee-io/qbee-agent/app/test"
 	"qbee.io/platform/shared/test/assert"
+	"qbee.io/platform/shared/test/device"
 )
 
 func Test_PackageManagement_PreCondition(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 
 	// by touch-ing a file on the file system as a pre-condition, we can check if the pre-condition was executed
 	executePackageManagementBundle(r, configuration.PackageManagementBundle{
@@ -24,7 +24,7 @@ func Test_PackageManagement_PreCondition(t *testing.T) {
 }
 
 func Test_PackageManagement_InstallPackage_PreConditionFailed(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 
 	// with pre-condition returning non-zero exit code, we shouldn't see test package installed
 	reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
@@ -41,7 +41,7 @@ func Test_PackageManagement_InstallPackage_PreConditionFailed(t *testing.T) {
 }
 
 func Test_PackageManagement_InstallPackage_NoPrecondition(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 
 	// with empty pre-condition system should work as if the pre-condition is successful
 	reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
@@ -58,7 +58,7 @@ func Test_PackageManagement_InstallPackage_NoPrecondition(t *testing.T) {
 }
 
 func Test_PackageManagement_InstallPackage_PreconditionSuccess(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 
 	// with condition returning zero exit code, package should be installed
 	reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
@@ -76,7 +76,7 @@ func Test_PackageManagement_InstallPackage_PreconditionSuccess(t *testing.T) {
 }
 
 func Test_PackageManagement_InstallPackage_Downgrade(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 
 	installNewestVersionOfTestPackage(r)
 
@@ -95,7 +95,7 @@ func Test_PackageManagement_InstallPackage_Downgrade(t *testing.T) {
 }
 
 func Test_PackageManagement_InstallPackage_UpdateWithEmptyVersion(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 
 	installOlderVersionOfTestPackage(r)
 
@@ -114,7 +114,7 @@ func Test_PackageManagement_InstallPackage_UpdateWithEmptyVersion(t *testing.T) 
 }
 
 func Test_PackageManagement_InstallPackage_UpdateWithLatestVersion(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 
 	installOlderVersionOfTestPackage(r)
 
@@ -133,7 +133,7 @@ func Test_PackageManagement_InstallPackage_UpdateWithLatestVersion(t *testing.T)
 }
 
 func Test_PackageManagement_InstallPackage_UpdateWithReboot(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 
 	installOlderVersionOfTestPackage(r)
 
@@ -156,7 +156,7 @@ func Test_PackageManagement_InstallPackage_UpdateWithReboot(t *testing.T) {
 }
 
 func Test_PackageManagement_UpgradeAll(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 
 	// ensure we have the latest updates
 	r.MustExec("apt-get", "update")
@@ -178,7 +178,7 @@ func Test_PackageManagement_UpgradeAll(t *testing.T) {
 }
 
 func Test_PackageManagement_UpgradeAll_WithReboot(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 
 	// ensure we have the latest updates
 	r.MustExec("apt-get", "update")
@@ -204,7 +204,7 @@ func Test_PackageManagement_UpgradeAll_WithReboot(t *testing.T) {
 }
 
 func Test_PackageManagement_UpgradeAll_WithRebootWithoutChanges(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 
 	// ensure we have the latest updates
 	r.MustExec("apt-get", "update")
@@ -221,7 +221,7 @@ func Test_PackageManagement_UpgradeAll_WithRebootWithoutChanges(t *testing.T) {
 // helper functions
 
 // installNewestVersionOfTestPackage makes sure that the newest version of the test package is installed
-func installNewestVersionOfTestPackage(r *test.Runner) {
+func installNewestVersionOfTestPackage(r *device.Runner) {
 	r.MustExec("apt", "install", "qbee-test")
 
 	// check that the newest version of test package is indeed installed
@@ -232,7 +232,7 @@ func installNewestVersionOfTestPackage(r *test.Runner) {
 }
 
 // installOlderVersionOfTestPackage makes sure that the older version of the test package is installed
-func installOlderVersionOfTestPackage(r *test.Runner) {
+func installOlderVersionOfTestPackage(r *device.Runner) {
 	r.MustExec("apt", "install", "qbee-test=1.0.1")
 
 	// check that the newest version of test package is indeed installed
@@ -244,7 +244,7 @@ func installOlderVersionOfTestPackage(r *test.Runner) {
 
 // executePackageManagementBundle is a helper method to quickly execute package management bundle.
 // On success, it returns a slice of produced reports.
-func executePackageManagementBundle(r *test.Runner, bundle configuration.PackageManagementBundle) []string {
+func executePackageManagementBundle(r *device.Runner, bundle configuration.PackageManagementBundle) []string {
 	config := configuration.CommittedConfig{
 		Bundles: []string{configuration.BundlePackageManagement},
 		BundleData: configuration.BundleData{
@@ -260,7 +260,7 @@ func executePackageManagementBundle(r *test.Runner, bundle configuration.Package
 }
 
 // checkInstalledVersionOfTestPackage returns a version of installed test package or empty string if not found.
-func checkInstalledVersionOfTestPackage(r *test.Runner) string {
+func checkInstalledVersionOfTestPackage(r *device.Runner) string {
 	output, err := r.Exec("qbee-test", "--version")
 	if err != nil {
 		if bytes.Contains(output, []byte(`"qbee-test": executable file not found`)) {

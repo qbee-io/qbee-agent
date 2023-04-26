@@ -3,7 +3,7 @@ package configuration
 import (
 	"strings"
 
-	"github.com/qbee-io/qbee-agent/app/test"
+	"qbee.io/platform/shared/test/device"
 )
 
 // ResetRebootAfterRun allows to reset internal rebootAfterRun flag from tests.
@@ -12,7 +12,7 @@ func (srv *Service) ResetRebootAfterRun() {
 }
 
 // ExecuteTestConfigInDocker executes provided config inside a docker container and returns reports and logs.
-func ExecuteTestConfigInDocker(r *test.Runner, config CommittedConfig) ([]string, []string) {
+func ExecuteTestConfigInDocker(r *device.Runner, config CommittedConfig) ([]string, []string) {
 	r.CreateJSON("/app/config.json", config)
 
 	return ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r", "-f", "/app/config.json"))

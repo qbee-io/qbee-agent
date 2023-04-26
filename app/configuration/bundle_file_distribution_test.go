@@ -6,12 +6,12 @@ import (
 	"time"
 
 	"github.com/qbee-io/qbee-agent/app/configuration"
-	"github.com/qbee-io/qbee-agent/app/test"
 	"qbee.io/platform/shared/test/assert"
+	"qbee.io/platform/shared/test/device"
 )
 
 func Test_FileDistributionBundle(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 	r.Bootstrap()
 
 	// upload a known debian package to the file manager
@@ -46,7 +46,7 @@ func Test_FileDistributionBundle(t *testing.T) {
 }
 
 func Test_FileDistributionBundle_IsTemplate(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 	r.Bootstrap()
 
 	// upload a known debian package to the file manager
@@ -90,7 +90,7 @@ func Test_FileDistributionBundle_IsTemplate(t *testing.T) {
 }
 
 func Test_FileDistributionBundle_AfterCommand(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 	r.Bootstrap()
 
 	// upload a known debian package to the file manager
@@ -134,7 +134,7 @@ func Test_FileDistributionBundle_AfterCommand(t *testing.T) {
 }
 
 func Test_FileDistributionBundle_PreCondition_True(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 	r.Bootstrap()
 
 	// upload a known debian package to the file manager
@@ -174,7 +174,7 @@ func Test_FileDistributionBundle_PreCondition_True(t *testing.T) {
 }
 
 func Test_FileDistributionBundle_PreCondition_False(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 	r.Bootstrap()
 
 	// upload a known debian package to the file manager
