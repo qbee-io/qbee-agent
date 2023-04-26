@@ -1,5 +1,7 @@
 VERSION=0000.00
 VERSION_VAR=github.com/qbee-io/qbee-agent/app.Version
+GOOS=linux
+GOARCH=amd64
 
 # PUBLIC_SIGNING_KEY is a public part of services/devicehub/cmd/agent-upload/dev-signing.key
 # For production release, it must be replaced with the correct public key.
@@ -8,7 +10,7 @@ PUBLIC_SIGNING_KEY=xSHbUBG7LTuNfXd3zod4EX8_Es8FTCINgrjvx1WXFE4.plCHzlDAeb3IWW1wK
 PUBLIC_SINGING_KEY_VAR=github.com/qbee-io/qbee-agent/app/binary.PublicSigningKey
 
 build:
-	CGO_ENABLED=0 go build \
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
 		-ldflags "-s -w -X $(VERSION_VAR)=$(VERSION) -X $(PUBLIC_SINGING_KEY_VAR)=$(PUBLIC_SIGNING_KEY)" \
 		-o bin/qbee-agent cmd/agent/main.go
 

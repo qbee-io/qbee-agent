@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+
+set -e
+
+SCRIPT_DIR=$(cd $(dirname $0) && pwd)
+BASEDIR=$(dirname $SCRIPT_DIR)
+
+VERSION=${VERSION:-0000.00}
+
+GOOS=${GOOS:-linux}
+GOARCH=${GOARCH:-amd64}
+PKG_OUTPUT=$(mktemp -d /tmp/qbee-agent.packages.XXXXXX)
+
+declare -a SUPPORTED_ARCHS
+
+SUPPORTED_ARCHS=(
+  "amd64"
+#  "386"
+#  "arm64"
+#  "arm"
+)
+
+SUPPORTED_PKG_FMTS=(
+  "deb"
+  "rpm"
+)
+
+declare -A arch_deb
+
+arch_deb["amd64"]="amd64"
+arch_deb["386"]="i386"
+arch_deb["arm64"]="arm64"
+arch_deb["arm"]="armhf"
+
+declare -A arch_rpm
+
+arch_rpm["amd64"]="x86_64"
+arch_rpm["386"]="i686"
+arch_rpm["arm64"]="aarch64"
+arch_rpm["arm"]="armv7hl"
+
+function build_agent() {
+  local arch
+  arch=$1
+  cd $BASEDIR
+  make VERSION=$VERSION GOOS=$GOOS GOARCH=$arch
+  file ./bin/qbee-agent
+}
+
+function build_package() {
+  local arch
+  local build_dir
+  local pkg_type
+
+  arch=$1
+  build_dir=$2
+  pkg_type=$3
+
+  temp_expr="arch_$pkg_type[$arch]"
+  pkg_arch=${!temp_expr}
+
+  fpm -a ${pkg_arch} \
+    -s dir \
+    -t $pkg_type \
+    -n qbee-agent \
+    --version "$VERSION" \
+    -p $PKG_OUTPUT \
+    -C $build_dir \
+    --after-install $build_dir/postinst \
+    --before-install $build_dir/preinst \
+    --before-remove $build_dir/prerm \
+    usr lib etc
+}
+
+cd $BASEDIR
+
+for arch in "${SUPPORTED_ARCHS[@]}"; do
+  echo $arch
+  
+  build_agent $arch
+
+  build_dir=$(mktemp -d /tmp/qbee-agent.$arch.XXXXXXXX)
+  mkdir -p $build_dir/usr/bin
+  mv ./bin/qbee-agent $build_dir/usr/bin
+  cp -a package/* $build_dir
+
+  chmod 755 $build_dir/usr/bin/*
+  chmod 644 $build_dir/lib/systemd/system/*
+  chmod 700 $build_dir/etc/qbee $build_dir/etc/qbee/ppkeys
+  chmod 600 $build_dir/etc/qbee/ppkeys/qbee-ca-cert.pem
+
+  for pkg_type in "${SUPPORTED_PKG_FMTS[@]}"; do
+    set -x
+    build_package $arch $build_dir $pkg_type
+  done
+  
+  find $build_dir -ls
+  rm $build_dir -rf
+done
+
+rm $BASEDIR/pkg_build/* -f 
+mkdir -p $BASEDIR/pkg_build
+mv $PKG_OUTPUT/*.* $BASEDIR/pkg_build
+
+
+find $PKG_OUTPUT -ls
+rm $PKG_OUTPUT -rf
+

@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+# Remove resources from agent v1
+
+SYSTEMD_UNIT_FILES_V1=(
+  "qbee-agent.service"
+  "qbee-scheduler.service"
+  "qbee-watchdog.service"
+  "qbee-vpn.service"
+)
+
+SYSTEMD_DIR_V1="/etc/systemd/system"
+
+for svc_file in "${SYSTEMD_UNIT_FILES_V1[@]}"; do
+  if [[ -f "$SYSTEMD_DIR_V1/$svc_file" ]]; then
+    rm $SYSTEMD_DIR_V1/$svc_file -f
+  fi
+done
+
+if [[ -d /var/lib/qbee/bin ]]; then
+  rm /var/lib/qbee/bin/*
+  rmdir /var/lib/qbee/bin
+fi
+
+if [[ -d /opt/qbee ]]; then
+  rm /opt/qbee -rf
+fi
+
+#if [[ $DAEMON_RELOAD -eq 1 ]]; then
+#  systemctl daemon-reload
+#fi

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+systemctl daemon-reload
+systemctl enable qbee-agent
+
+if [[ -f /etc/qbee/qbee-agent.json ]]; then
+  systemctl start qbee-agent
+else 
+  echo "Device seems to not have been bootstrapped. Please run 'qbee-agent bootstrap -k <bootstrap-key>' as root to bootstrap."
+fi
