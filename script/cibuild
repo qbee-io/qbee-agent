@@ -69,7 +69,7 @@ function build_package() {
     --after-install $build_dir/postinst \
     --before-install $build_dir/preinst \
     --before-remove $build_dir/prerm \
-    usr lib etc
+    usr lib etc opt
 }
 
 cd $BASEDIR
