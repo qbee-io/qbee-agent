@@ -1,4 +1,4 @@
 .idea
-bin
+/bin
 /app/configuration/reports.jsonl
 pkg_build
