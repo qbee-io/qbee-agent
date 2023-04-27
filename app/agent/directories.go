@@ -58,7 +58,9 @@ func createDirectory(path string) error {
 	}
 
 	if stats.Mode() != directoryMode|fs.ModeDir {
-		return fmt.Errorf("directory %s has incorrect permissions %s", path, stats.Mode())
+		if err = os.Chmod(path, directoryMode); err != nil {
+			return fmt.Errorf("directory %s has incorrect permissions %s and unable to fix: %w,", path, stats.Mode(), err)
+		}
 	}
 
 	return nil
