@@ -11,15 +11,15 @@ SYSTEMD_UNIT_FILES_V1=(
 
 VAR_LIB_QBEE_DIRS_V1=(
   "bin"
-  "inputs"
+# Removing these will make downgrade fail
+# "inputs"
+# "qbee"
   "lastseen"
   "log"
   "masterfiles"
   "modules"
   "outputs"
   "ppkeys"
-  "qbee"
-  "qbee-policy-update"
   "reports"
   "run"
 )
@@ -39,6 +39,11 @@ if [[ -L /var/lib/qbee/bin/cf-promises ]]; then
 fi
 
 if [[ $UPGRADE_FROM_V1 -gt 0 ]]; then
+
+  # Stop old v1 vpn if running
+  if systemctl -q is-active qbee-vpn; then
+    systemctl stop qbee-vpn
+  fi
 
   # Remove old v1 qbee-agent unit files
   for svc_file in "${SYSTEMD_UNIT_FILES_V1[@]}"; do
