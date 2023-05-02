@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/qbee-io/qbee-agent/app/configuration"
+	"qbee.io/platform/shared/test/api"
 	"qbee.io/platform/shared/test/assert"
 	"qbee.io/platform/shared/test/device"
 )
@@ -27,8 +28,11 @@ func Test_FileDistributionBundle(t *testing.T) {
 		},
 	}
 
-	r.API.ChangeConfig(r.DeviceID, configuration.BundleFileDistribution, bundle)
-	r.API.CommitConfig()
+	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+		NodeID:     r.DeviceID,
+		BundleName: configuration.BundleFileDistribution,
+		Config:     bundle}))
+	assert.NoError(t, r.API.CommitConfiguration("test commit"))
 
 	// execute configuration bundles
 	reports, _ := configuration.ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r"))
@@ -69,8 +73,11 @@ func Test_FileDistributionBundle_IsTemplate(t *testing.T) {
 		},
 	}
 
-	r.API.ChangeConfig(r.DeviceID, configuration.BundleFileDistribution, bundle)
-	r.API.CommitConfig()
+	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+		NodeID:     r.DeviceID,
+		BundleName: configuration.BundleFileDistribution,
+		Config:     bundle}))
+	assert.NoError(t, r.API.CommitConfiguration("test commit"))
 
 	// execute configuration bundles
 	reports, _ := configuration.ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r"))
@@ -111,8 +118,11 @@ func Test_FileDistributionBundle_AfterCommand(t *testing.T) {
 		},
 	}
 
-	r.API.ChangeConfig(r.DeviceID, configuration.BundleFileDistribution, bundle)
-	r.API.CommitConfig()
+	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+		NodeID:     r.DeviceID,
+		BundleName: configuration.BundleFileDistribution,
+		Config:     bundle}))
+	assert.NoError(t, r.API.CommitConfiguration("test commit"))
 
 	// execute configuration bundles
 	reports, _ := configuration.ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r"))
@@ -155,8 +165,11 @@ func Test_FileDistributionBundle_PreCondition_True(t *testing.T) {
 		},
 	}
 
-	r.API.ChangeConfig(r.DeviceID, configuration.BundleFileDistribution, bundle)
-	r.API.CommitConfig()
+	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+		NodeID:     r.DeviceID,
+		BundleName: configuration.BundleFileDistribution,
+		Config:     bundle}))
+	assert.NoError(t, r.API.CommitConfiguration("test commit"))
 
 	// execute configuration bundles
 	reports, _ := configuration.ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r"))
@@ -195,8 +208,11 @@ func Test_FileDistributionBundle_PreCondition_False(t *testing.T) {
 		},
 	}
 
-	r.API.ChangeConfig(r.DeviceID, configuration.BundleFileDistribution, bundle)
-	r.API.CommitConfig()
+	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+		NodeID:     r.DeviceID,
+		BundleName: configuration.BundleFileDistribution,
+		Config:     bundle}))
+	assert.NoError(t, r.API.CommitConfiguration("test commit"))
 
 	// execute configuration bundles
 	reports, _ := configuration.ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r"))

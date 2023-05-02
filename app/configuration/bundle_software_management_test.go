@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/qbee-io/qbee-agent/app/configuration"
+	"qbee.io/platform/shared/test/api"
 	"qbee.io/platform/shared/test/assert"
 	"qbee.io/platform/shared/test/device"
 )
@@ -32,8 +33,11 @@ func Test_SoftwareManagementBundle_InstallPackageFromFile(t *testing.T) {
 		},
 	}
 
-	r.API.ChangeConfig(r.DeviceID, configuration.BundleSoftwareManagement, bundle)
-	r.API.CommitConfig()
+	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+		NodeID:     r.DeviceID,
+		BundleName: configuration.BundleSoftwareManagement,
+		Config:     bundle}))
+	assert.NoError(t, r.API.CommitConfiguration("test commit"))
 
 	// execute configuration bundles
 	reports, _ := configuration.ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r"))
@@ -71,8 +75,11 @@ func Test_SoftwareManagementBundle_InstallPackageFromFile_WithDependencies(t *te
 		},
 	}
 
-	r.API.ChangeConfig(r.DeviceID, configuration.BundleSoftwareManagement, bundle)
-	r.API.CommitConfig()
+	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+		NodeID:     r.DeviceID,
+		BundleName: configuration.BundleSoftwareManagement,
+		Config:     bundle}))
+	assert.NoError(t, r.API.CommitConfiguration("test commit"))
 
 	// execute configuration bundles
 	reports, _ := configuration.ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r"))
@@ -120,8 +127,11 @@ func Test_SoftwareManagementBundle_InstallPackage_WithConfigFileTemplate(t *test
 		},
 	}
 
-	r.API.ChangeConfig(r.DeviceID, configuration.BundleSoftwareManagement, bundle)
-	r.API.CommitConfig()
+	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+		NodeID:     r.DeviceID,
+		BundleName: configuration.BundleSoftwareManagement,
+		Config:     bundle}))
+	assert.NoError(t, r.API.CommitConfiguration("test commit"))
 
 	// execute configuration bundles
 	reports, _ := configuration.ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r"))
