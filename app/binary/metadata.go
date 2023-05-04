@@ -1,7 +1,7 @@
 package binary
 
 type Metadata struct {
-	Version   string
-	Digest    string
-	Signature string
+	Version   string `json:"version"`
+	Digest    string `json:"digest"`
+	Signature string `json:"signature"`
 }
