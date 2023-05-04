@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/qbee-io/qbee-agent/app/test"
+	"qbee.io/platform/shared/test/device"
 )
 
 func TestCollectSoftwareInventory_Deb(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 
 	data := r.MustExec("qbee-agent", "inventory", "-t", "software", "-d")
 

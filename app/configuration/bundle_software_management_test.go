@@ -6,14 +6,15 @@ import (
 	"time"
 
 	"github.com/qbee-io/qbee-agent/app/configuration"
-	"github.com/qbee-io/qbee-agent/app/test"
+	"qbee.io/platform/shared/test/api"
 	"qbee.io/platform/shared/test/assert"
+	"qbee.io/platform/shared/test/device"
 )
 
 const cacheDir = "/var/lib/qbee/app_workdir/cache"
 
 func Test_SoftwareManagementBundle_InstallPackageFromFile(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 	r.Bootstrap()
 
 	// upload a known debian package to the file manager
@@ -32,8 +33,11 @@ func Test_SoftwareManagementBundle_InstallPackageFromFile(t *testing.T) {
 		},
 	}
 
-	r.API.ChangeConfig(r.DeviceID, configuration.BundleSoftwareManagement, bundle)
-	r.API.CommitConfig()
+	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+		NodeID:     r.DeviceID,
+		BundleName: configuration.BundleSoftwareManagement,
+		Config:     bundle}))
+	assert.NoError(t, r.API.CommitConfiguration("test commit"))
 
 	// execute configuration bundles
 	reports, _ := configuration.ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r"))
@@ -52,7 +56,7 @@ func Test_SoftwareManagementBundle_InstallPackageFromFile(t *testing.T) {
 }
 
 func Test_SoftwareManagementBundle_InstallPackageFromFile_WithDependencies(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 	r.Bootstrap()
 
 	// upload a known debian package to the file manager
@@ -71,8 +75,11 @@ func Test_SoftwareManagementBundle_InstallPackageFromFile_WithDependencies(t *te
 		},
 	}
 
-	r.API.ChangeConfig(r.DeviceID, configuration.BundleSoftwareManagement, bundle)
-	r.API.CommitConfig()
+	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+		NodeID:     r.DeviceID,
+		BundleName: configuration.BundleSoftwareManagement,
+		Config:     bundle}))
+	assert.NoError(t, r.API.CommitConfiguration("test commit"))
 
 	// execute configuration bundles
 	reports, _ := configuration.ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r"))
@@ -90,7 +97,7 @@ func Test_SoftwareManagementBundle_InstallPackageFromFile_WithDependencies(t *te
 }
 
 func Test_SoftwareManagementBundle_InstallPackage_WithConfigFileTemplate(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 	r.Bootstrap()
 
 	// upload a test file to the file manager
@@ -120,8 +127,11 @@ func Test_SoftwareManagementBundle_InstallPackage_WithConfigFileTemplate(t *test
 		},
 	}
 
-	r.API.ChangeConfig(r.DeviceID, configuration.BundleSoftwareManagement, bundle)
-	r.API.CommitConfig()
+	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+		NodeID:     r.DeviceID,
+		BundleName: configuration.BundleSoftwareManagement,
+		Config:     bundle}))
+	assert.NoError(t, r.API.CommitConfiguration("test commit"))
 
 	// execute configuration bundles
 	reports, _ := configuration.ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r"))
@@ -145,7 +155,7 @@ func Test_SoftwareManagementBundle_InstallPackage_WithConfigFileTemplate(t *test
 }
 
 func Test_SoftwareManagementBundle_InstallPackage_RestartService_WithoutSystemctl(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 
 	// execute configuration bundles
 	items := []configuration.Software{{Package: "qbee-test"}}
@@ -160,7 +170,7 @@ func Test_SoftwareManagementBundle_InstallPackage_RestartService_WithoutSystemct
 }
 
 func Test_SoftwareManagementBundle_InstallPackage_RestartService_NotAService(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 
 	// install systemctl
 	r.MustExec("apt-get", "install", "-y", "systemctl")
@@ -177,7 +187,7 @@ func Test_SoftwareManagementBundle_InstallPackage_RestartService_NotAService(t *
 }
 
 func Test_SoftwareManagementBundle_InstallPackage_RestartService_NoServiceName(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 
 	// install systemctl
 	r.MustExec("apt-get", "install", "-y", "systemctl")
@@ -194,7 +204,7 @@ func Test_SoftwareManagementBundle_InstallPackage_RestartService_NoServiceName(t
 }
 
 func Test_SoftwareManagementBundle_InstallPackage_RestartService_WithServiceName(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 
 	// install systemctl
 	r.MustExec("apt-get", "install", "-y", "systemctl")
@@ -241,7 +251,7 @@ func Test_SoftwareManagementBundle_InstallPackage_PreCondition(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			r := test.New(t)
+			r := device.New(t)
 
 			// install systemctl
 			r.MustExec("apt-get", "install", "-y", "systemctl")
@@ -258,7 +268,7 @@ func Test_SoftwareManagementBundle_InstallPackage_PreCondition(t *testing.T) {
 
 // executeSoftwareManagementBundle is a helper method to quickly execute software management bundle.
 // On success, it returns a slice of produced reports.
-func executeSoftwareManagementBundle(r *test.Runner, items []configuration.Software) []string {
+func executeSoftwareManagementBundle(r *device.Runner, items []configuration.Software) []string {
 	config := configuration.CommittedConfig{
 		Bundles: []string{configuration.BundleSoftwareManagement},
 		BundleData: configuration.BundleData{

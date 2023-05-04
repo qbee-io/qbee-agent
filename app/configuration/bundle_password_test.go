@@ -5,12 +5,12 @@ import (
 	"testing"
 
 	"github.com/qbee-io/qbee-agent/app/configuration"
-	"github.com/qbee-io/qbee-agent/app/test"
 	"qbee.io/platform/shared/test/assert"
+	"qbee.io/platform/shared/test/device"
 )
 
 func Test_Password(t *testing.T) {
-	r := test.New(t)
+	r := device.New(t)
 
 	// assert that root is without a password
 	rootLine := string(r.MustExec("sh", "-c", "cat /etc/shadow | grep 'root:'"))
@@ -58,7 +58,7 @@ func Test_Password(t *testing.T) {
 
 // executePasswordBundle is a helper method to quickly execute password bundle.
 // On success, it returns a slice of produced reports.
-func executePasswordBundle(r *test.Runner, users []configuration.UserPassword) []string {
+func executePasswordBundle(r *device.Runner, users []configuration.UserPassword) []string {
 	config := configuration.CommittedConfig{
 		Bundles: []string{configuration.BundlePassword},
 		BundleData: configuration.BundleData{
