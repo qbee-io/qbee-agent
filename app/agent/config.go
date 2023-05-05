@@ -10,7 +10,7 @@ import (
 const (
 	DefaultDeviceHubServer = "device.app.qbee.io"
 	DefaultDeviceHubPort   = "443"
-	DefaultVPNServer       = "99.80.24.171"
+	DefaultVPNServer       = "vpn.app.qbee.io"
 )
 
 const (
@@ -42,7 +42,7 @@ type Config struct {
 	AutoUpdate bool `json:"auto_update,omitempty"`
 
 	// VPNServer is the IP address of the VPN server to connect to.
-	VPNServer string
+	VPNServer string `json:"vpn_server,omitempty"`
 }
 
 // LoadConfig loads config from a provided config file path.
