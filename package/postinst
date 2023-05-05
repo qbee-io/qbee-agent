@@ -1,5 +1,15 @@
 #!/usr/bin/env bash
 
+set -e
+
+if [[ -d /etc/qbee/ppkeys ]]; then
+  mkdir -p /etc/qbee/ppkeys
+fi
+
+cp -a /opt/qbee/share/ssl/ca.cert /etc/qbee/ppkeys
+chmod 700 /etc/qbee /etc/qbee/ppkeys
+chmod 600 /etc/qbee/ppkeys/ca.cert
+
 systemctl daemon-reload
 systemctl enable qbee-agent
 
