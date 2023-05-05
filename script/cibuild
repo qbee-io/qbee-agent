@@ -15,9 +15,9 @@ declare -a SUPPORTED_ARCHS
 
 SUPPORTED_ARCHS=(
   "amd64"
-#  "386"
-#  "arm64"
-#  "arm"
+  "386"
+  "arm64"
+  "arm"
 )
 
 SUPPORTED_PKG_FMTS=(
@@ -44,7 +44,7 @@ function build_agent() {
   arch=$1
   cd $BASEDIR
   make VERSION=$VERSION GOOS=$GOOS GOARCH=$arch
-  file ./bin/qbee-agent
+  mv ./bin/qbee-agent ./bin/qbee-agent-$arch
 }
 
 function build_package() {
@@ -69,7 +69,7 @@ function build_package() {
     --after-install $build_dir/postinst \
     --before-install $build_dir/preinst \
     --before-remove $build_dir/prerm \
-    usr lib etc opt
+    usr lib opt
 }
 
 cd $BASEDIR
@@ -81,13 +81,11 @@ for arch in "${SUPPORTED_ARCHS[@]}"; do
 
   build_dir=$(mktemp -d /tmp/qbee-agent.$arch.XXXXXXXX)
   mkdir -p $build_dir/usr/bin
-  mv ./bin/qbee-agent $build_dir/usr/bin
+  cp ./bin/qbee-agent-$arch $build_dir/usr/bin/qbee-agent
   cp -a package/* $build_dir
 
   chmod 755 $build_dir/usr/bin/*
   chmod 644 $build_dir/lib/systemd/system/*
-  chmod 700 $build_dir/etc/qbee $build_dir/etc/qbee/ppkeys
-  chmod 600 $build_dir/etc/qbee/ppkeys/qbee-ca-cert.pem
 
   for pkg_type in "${SUPPORTED_PKG_FMTS[@]}"; do
     set -x
