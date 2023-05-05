@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	caCertFilename      = "qbee-ca-cert.pem"
+	caCertFilename      = "ca.cert"
 	privateKeyFilename  = "qbee.key"
 	certificateFilename = "qbee.cert"
 	credentialsFileMode = 0600
