@@ -9,7 +9,7 @@ import (
 var versionCommand = Command{
 	Description: "Agent version.",
 	Target: func(opts Options) error {
-		fmt.Println(app.Version)
+		fmt.Printf("%s (commit: %s)\n", app.Version, app.Commit)
 		return nil
 	},
 }
