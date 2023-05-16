@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+
+set -e
+
+SCRIPT_DIR=$(cd $(dirname $0) && pwd)
+BASEDIR=$(dirname $SCRIPT_DIR)
+source $SCRIPT_DIR/config.env
+
+VERSION=${VERSION:-0000.00}
+
+GOOS=${GOOS:-linux}
+
+rm $PKG_OUTPUT/* -f
+mkdir -p "$PKG_OUTPUT"
+
+SIGNING_KEY_PATH=$1
+
+if [[ -z $SIGNING_KEY_PATH ]] || [[ ! -f $SIGNING_KEY_PATH ]]; then
+  echo "ERROR: Need to provide path to private signing key"
+  exit 1
+fi
+
+PUBLIC_SIGNING_KEY=$(cd $BASEDIR && go run cmd/get-public-signing-key/main.go -signingKey $SIGNING_KEY_PATH | awk '{print $NF}')
+
+function build_agent() {
+  local arch
+  arch=$1
+  cd $BASEDIR
+  make VERSION=$VERSION GOOS=$GOOS GOARCH=$arch PUBLIC_SIGNING_KEY=$PUBLIC_SIGNING_KEY
+  mv ./bin/qbee-agent ./bin/qbee-agent-$arch
+}
+
+function build_package() {
+  local arch
+  local build_dir
+  local pkg_type
+
+  arch=$1
+  build_dir=$2
+  pkg_type=$3
+
+  temp_expr="arch_$pkg_type[$arch]"
+  pkg_arch=${!temp_expr}
+
+  fpm -a ${pkg_arch} \
+    -s dir \
+    -t $pkg_type \
+    -n qbee-agent \
+    --version "$VERSION" \
+    -p $PKG_OUTPUT \
+    -C $build_dir \
+    --after-install $build_dir/postinst \
+    --before-install $build_dir/preinst \
+    --before-remove $build_dir/prerm \
+    usr lib opt
+}
+
+function build_multiarch_tarball(){
+  build_dir=$(mktemp -d /tmp/qbee-agent.tarball.XXXXXXXX)
+  mkdir -p $build_dir/qbee-agent-${VERSION}
+  rm ${TAR_OUTPUT}/* -f 
+  mkdir -p ${TAR_OUTPUT}
+
+  cp -a $BASEDIR/bin/* $build_dir/qbee-agent-${VERSION} 
+  fpm -t tar -n qbee-agent-${VERSION} -s dir -C ${build_dir} -p ${TAR_OUTPUT}
+  gzip ${TAR_OUTPUT}/qbee-agent-${VERSION}.tar
+}
+
+cd $BASEDIR
+
+
+for arch in "${SUPPORTED_ARCHS[@]}"; do
+  echo $arch
+  
+  build_agent $arch
+
+  build_dir=$(mktemp -d /tmp/qbee-agent.$arch.XXXXXXXX)
+  mkdir -p $build_dir/usr/bin
+  cp $BASEDIR/bin/qbee-agent-$arch $build_dir/usr/bin/qbee-agent
+  cp -a package/* $build_dir
+
+  chmod 755 $build_dir/usr/bin/*
+  chmod 644 $build_dir/lib/systemd/system/*
+
+  for pkg_type in "${SUPPORTED_PKG_FMTS[@]}"; do
+    set -x
+    build_package $arch $build_dir $pkg_type
+  done
+  
+  find $build_dir -ls
+  rm $build_dir -rf
+done
+
+build_multiarch_tarball
