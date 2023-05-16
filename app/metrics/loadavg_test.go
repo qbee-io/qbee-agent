@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"qbee.io/platform/shared/test/assert"
+	"qbee.io/platform/test/assert"
 )
 
 func TestCollectLoadAverage(t *testing.T) {

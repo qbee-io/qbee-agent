@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"testing"
 
+	"qbee.io/platform/test/assert"
+	"qbee.io/platform/test/device"
+
 	"github.com/qbee-io/qbee-agent/app/configuration"
-	"qbee.io/platform/shared/test/assert"
-	"qbee.io/platform/shared/test/device"
 )
 
 func Test_PackageManagement_PreCondition(t *testing.T) {

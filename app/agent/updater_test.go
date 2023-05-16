@@ -3,8 +3,8 @@ package agent
 import (
 	"testing"
 
-	"qbee.io/platform/shared/test/assert"
-	"qbee.io/platform/shared/test/device"
+	"qbee.io/platform/test/assert"
+	"qbee.io/platform/test/device"
 )
 
 func Test_Update_Manual(t *testing.T) {

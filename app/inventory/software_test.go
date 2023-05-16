@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"qbee.io/platform/shared/test/device"
+	"qbee.io/platform/test/device"
 )
 
 func TestCollectSoftwareInventory_Deb(t *testing.T) {

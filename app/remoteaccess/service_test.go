@@ -13,8 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"qbee.io/platform/test/assert"
+
 	"github.com/qbee-io/qbee-agent/app/api"
-	"qbee.io/platform/shared/test/assert"
 )
 
 func TestService_downloadOpenVPN(t *testing.T) {

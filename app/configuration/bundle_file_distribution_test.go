@@ -5,10 +5,11 @@ import (
 	"testing"
 	"time"
 
+	"qbee.io/platform/test/api"
+	"qbee.io/platform/test/assert"
+	"qbee.io/platform/test/device"
+
 	"github.com/qbee-io/qbee-agent/app/configuration"
-	"qbee.io/platform/shared/test/api"
-	"qbee.io/platform/shared/test/assert"
-	"qbee.io/platform/shared/test/device"
 )
 
 func Test_FileDistributionBundle(t *testing.T) {

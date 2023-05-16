@@ -3,7 +3,7 @@ package configuration
 import (
 	"strings"
 
-	"qbee.io/platform/shared/test/device"
+	"qbee.io/platform/test/device"
 )
 
 // ResetRebootAfterRun allows to reset internal rebootAfterRun flag from tests.
