@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+SCRIPT_DIR=$(cd $(dirname $0) && pwd)
+BASEDIR=$(dirname $SCRIPT_DIR)
+source $SCRIPT_DIR/config.env
+
+declare -A paths
+
+PACKAGE_BUCKET="qbee-static-eu-west-1-pro"
+
+function upload_packages() {
+
+  PACKAGE_S3_BASE="s3://$PACKAGE_BUCKET/software/qbee-agent/$VERSION/packages"
+
+  for file in $PKG_OUTPUT/*; do
+    pkg=$(basename $file)
+    aws s3 cp "$file" "$PACKAGE_S3_BASE/$pkg"
+  done
+}
+
+function upload_binaries(){
+  PACKAGE_S3_BASE="s3://$PACKAGE_BUCKET/software/qbee-agent/$VERSION/binaries"
+
+  for file in $TAR_OUTPUT/*; do 
+    bin=$(basename $file)
+    aws s3 cp "$file" "$PACKAGE_S3_BASE/$bin"
+    sha256sum "$file"
+  done
+}
+
+upload_packages
+# upload binaries to cdn (Yocto) and devicehub
+upload_binaries
