@@ -1,5 +1,7 @@
 VERSION=0000.00
 VERSION_VAR=github.com/qbee-io/qbee-agent/app.Version
+COMMIT_VAR=github.com/qbee-io/qbee-agent/app.Commit
+COMMIT=$(shell git describe --always --dirty --abbrev=0)
 GOOS=linux
 GOARCH=amd64
 
@@ -11,7 +13,7 @@ PUBLIC_SINGING_KEY_VAR=github.com/qbee-io/qbee-agent/app/binary.PublicSigningKey
 
 build:
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
-		-ldflags "-s -w -X $(VERSION_VAR)=$(VERSION) -X $(PUBLIC_SINGING_KEY_VAR)=$(PUBLIC_SIGNING_KEY)" \
+		-ldflags "-s -w -X $(VERSION_VAR)=$(VERSION) -X $(PUBLIC_SINGING_KEY_VAR)=$(PUBLIC_SIGNING_KEY) -X $(COMMIT_VAR)=$(COMMIT)" \
 		-o bin/qbee-agent cmd/agent/main.go
 
 auto-build:
