@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+
+set -e
+
+SCRIPT_DIR=$(cd $(dirname $0) && pwd)
+BASEDIR=$(dirname $SCRIPT_DIR)
+source $SCRIPT_DIR/config.env
+
+DEVICEHUB_DIR="$BASEDIR/../../services/devicehub"
+
+SIGNING_KEY_PATH=$1
+UPLOAD_AWS_REGION="${AWS_REGION:-eu-west-1}"
+
+if [[ -z $SIGNING_KEY_PATH ]] || [[ ! -f $SIGNING_KEY_PATH ]]; then
+  echo "ERROR: Need to provide path to private signing key"
+  exit 1
+fi
+
+declare -A arch_openvpn
+
+arch_openvpn["amd64"]="amd64"
+arch_openvpn["386"]="i386"
+arch_openvpn["arm64"]="aarch64"
+arch_openvpn["arm"]="armhf"
+
+#export QBEEWS_AWS_API_ACCESS_KEY=${QBEEWS_AWS_API_ACCESS_KEY:-$AWS_ACCESS_KEY_ID}
+#export QBEEWS_AWS_SECRET_ACCESS_KEY=${QBEEWS_AWS_SECRET_ACCESS_KEY:-$AWS_SECRET_ACCESS_KEY}
+
+function upload_update() {
+  local name
+  local account
+  local file
+  local arch
+
+  name=$1
+  arch=$2
+  file=$3
+  account=$4
+
+  cd $DEVICEHUB_DIR
+
+  go run cmd/binary-upload/main.go -arch $arch -name $name -version $VERSION -key $SIGNING_KEY_PATH -file $file -aws-account $account -aws-region $UPLOAD_AWS_REGION
+
+  cd $SCRIPT_DIR
+}
+
+function upload_agent_update() {
+  AGENT_BASE="$BASEDIR/bin"
+  for arch in "${SUPPORTED_ARCHS[@]}"; do 
+    echo "Uploading agent $VERSION $arch (file: $AGENT_BASE/qbee-agent-$arch)"
+    upload_update "agent" "$arch" "$AGENT_BASE/qbee-agent-$arch" "pro"
+  done
+}
+
+
+function upload_openvpn_update() {
+  
+  OPENVPN_BASE="$BASEDIR/../agent-v1/static/targets"
+
+  for arch in "${SUPPORTED_ARCHS[@]}"; do 
+    echo "Uploading openvpn $VERSION $arch (file: $OPENVPN_BASE/${arch_openvpn[$arch]}/openvpn"
+    upload_update "openvpn" "$arch" "$OPENVPN_BASE/${arch_openvpn[$arch]}/openvpn" "pro"
+  done
+
+}
+
+upload_openvpn_update
+upload_agent_update
