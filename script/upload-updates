@@ -23,8 +23,10 @@ arch_openvpn["386"]="i386"
 arch_openvpn["arm64"]="aarch64"
 arch_openvpn["arm"]="armhf"
 
-#export QBEEWS_AWS_API_ACCESS_KEY=${QBEEWS_AWS_API_ACCESS_KEY:-$AWS_ACCESS_KEY_ID}
-#export QBEEWS_AWS_SECRET_ACCESS_KEY=${QBEEWS_AWS_SECRET_ACCESS_KEY:-$AWS_SECRET_ACCESS_KEY}
+AWS_ACCOUNT_NAME="${AWS_PROFILE}"
+if [[ "${AWS_PROFILE}" == "qbee-pro" ]]; then
+  AWS_ACCOUNT_NAME="pro"
+fi
 
 function upload_update() {
   local name
@@ -39,7 +41,7 @@ function upload_update() {
 
   cd $DEVICEHUB_DIR
 
-  go run cmd/binary-upload/main.go -arch $arch -name $name -version $VERSION -key $SIGNING_KEY_PATH -file $file -aws-account $account -aws-region $UPLOAD_AWS_REGION
+  go run cmd/binary-upload/main.go -arch $arch -name $name -version $VERSION -key $SIGNING_KEY_PATH -file $file -aws-account $AWS_ACCOUNT_NAME -aws-region $UPLOAD_AWS_REGION
 
   cd $SCRIPT_DIR
 }
@@ -48,7 +50,7 @@ function upload_agent_update() {
   AGENT_BASE="$BASEDIR/bin"
   for arch in "${SUPPORTED_ARCHS[@]}"; do 
     echo "Uploading agent $VERSION $arch (file: $AGENT_BASE/qbee-agent-$arch)"
-    upload_update "agent" "$arch" "$AGENT_BASE/qbee-agent-$arch" "pro"
+    upload_update "agent" "$arch" "$AGENT_BASE/qbee-agent-$arch"
   done
 }
 
@@ -59,7 +61,7 @@ function upload_openvpn_update() {
 
   for arch in "${SUPPORTED_ARCHS[@]}"; do 
     echo "Uploading openvpn $VERSION $arch (file: $OPENVPN_BASE/${arch_openvpn[$arch]}/openvpn"
-    upload_update "openvpn" "$arch" "$OPENVPN_BASE/${arch_openvpn[$arch]}/openvpn" "pro"
+    upload_update "openvpn" "$arch" "$OPENVPN_BASE/${arch_openvpn[$arch]}/openvpn"
   done
 
 }
