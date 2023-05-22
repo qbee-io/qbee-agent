@@ -66,6 +66,11 @@ func LoadConfig(configDir, stateDir string) (*Config, error) {
 		return nil, fmt.Errorf("cannot determine state directory path: %w", err)
 	}
 
+	// vpn_server is not a legacy configuration option, if it is not set, use the default
+	if config.VPNServer == "" {
+		config.VPNServer = DefaultVPNServer
+	}
+
 	return config, nil
 }
 
