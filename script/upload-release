@@ -4,8 +4,6 @@ SCRIPT_DIR=$(cd $(dirname $0) && pwd)
 BASEDIR=$(dirname $SCRIPT_DIR)
 source $SCRIPT_DIR/config.env
 
-declare -A paths
-
 PACKAGE_BUCKET="qbee-static-eu-west-1-pro"
 
 function upload_packages() {
@@ -29,5 +27,5 @@ function upload_binaries(){
 }
 
 upload_packages
-# upload binaries to cdn (Yocto) and devicehub
+# upload binaries to cdn (Yocto)
 upload_binaries
