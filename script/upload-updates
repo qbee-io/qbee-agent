@@ -6,7 +6,7 @@ SCRIPT_DIR=$(cd $(dirname $0) && pwd)
 BASEDIR=$(dirname $SCRIPT_DIR)
 source $SCRIPT_DIR/config.env
 
-DEVICEHUB_DIR="$BASEDIR/../../services/devicehub"
+COMMON_SRC_DIR="$BASEDIR/../../src"
 
 SIGNING_KEY_PATH=$1
 UPLOAD_AWS_REGION="${AWS_REGION:-eu-west-1}"
@@ -39,7 +39,7 @@ function upload_update() {
   file=$3
   account=$4
 
-  cd $DEVICEHUB_DIR
+  cd $COMMON_SRC_DIR
 
   go run cmd/binary-upload/main.go -arch $arch -name $name -version $VERSION -key $SIGNING_KEY_PATH -file $file -aws-account $AWS_ACCOUNT_NAME -aws-region $UPLOAD_AWS_REGION
 
