@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"qbee.io/platform/shared/test/assert"
+	"qbee.io/platform/test/assert"
 
 	"github.com/qbee-io/qbee-agent/app/api"
 )
