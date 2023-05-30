@@ -17,7 +17,7 @@ import (
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
-const networkInterfaceName = "qbee0"
+const NetworkInterfaceName = "qbee0"
 
 // New creates a new instance of the remote access service.
 func New(apiClient *api.Client, server, certDir, binDir string, proxy *api.Proxy) *Service {
@@ -166,7 +166,7 @@ func (s *Service) start() error {
 		"--client",
 		"--remote", s.server,
 		"--comp-lzo",
-		"--dev", networkInterfaceName,
+		"--dev", NetworkInterfaceName,
 		"--dev-type", "tun",
 		"--proto", "tcp",
 		"--port", "443",
@@ -241,7 +241,7 @@ func (s *Service) notifyWhenInterfaceReady() {
 		}
 
 		for _, networkInterface := range interfaces {
-			if networkInterface.Name == networkInterfaceName {
+			if networkInterface.Name == NetworkInterfaceName {
 				s.notification <- true
 			}
 		}
