@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/qbee-io/qbee-agent/app/api"
+	"github.com/qbee-io/qbee-agent/app/log"
 )
 
 // Service provides methods for collecting and delivering inventory data.
@@ -28,6 +29,11 @@ func New(apiClient *api.Client) *Service {
 
 // Send delivers inventory to device hub if it has changes since last delivery.
 func (srv *Service) Send(ctx context.Context, inventoryType Type, inventoryData any) error {
+	if inventoryData == nil {
+		log.Debugf("no %s inventory data to send", inventoryType)
+		return nil
+	}
+
 	buf := new(bytes.Buffer)
 	if err := json.NewEncoder(buf).Encode(inventoryData); err != nil {
 		return fmt.Errorf("error marshaling %s inventory data: %w", inventoryType, err)
