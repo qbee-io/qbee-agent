@@ -40,6 +40,8 @@ type Agent struct {
 	Configuration *configuration.Service
 	Metrics       *metrics.Service
 	remoteAccess  *remoteaccess.Service
+	// disableRemoteAccess is used to disable remote access for RunOnce
+	disableRemoteAccess bool
 }
 
 // Run the main control loop of the agent.
@@ -114,7 +116,6 @@ type RunOnceMode int
 
 const (
 	FullRun RunOnceMode = iota
-	FullRunNoRemoteAccess
 	QuickRun
 )
 
@@ -136,15 +137,12 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 
 	agent.Configuration.UpdateSettings(configData)
 
-	if mode == FullRun || mode == FullRunNoRemoteAccess {
+	if mode == FullRun {
 		agent.do(ctx, "inventories", agent.doInventories)
 		agent.do(ctx, "check-in", agent.doCheckIn)
 		agent.do(ctx, "metrics", agent.doMetrics)
 		agent.do(ctx, "config", agent.doConfig(configData))
-
-		if mode == FullRun {
-			agent.do(ctx, "remote-access", agent.doRemoteAccess)
-		}
+		agent.do(ctx, "remote-access", agent.doRemoteAccess)
 	} else {
 		agent.do(ctx, "system-inventory", agent.doSystemInventory)
 	}
@@ -218,6 +216,10 @@ func (agent *Agent) doConfig(configData *configuration.CommittedConfig) func(ctx
 
 // doRemoteAccess maintains remote access for the agent - if enabled.
 func (agent *Agent) doRemoteAccess(ctx context.Context) error {
+	// remote access is disabled on RunOnce
+	if agent.disableRemoteAccess {
+		return nil
+	}
 	return agent.remoteAccess.UpdateState(ctx, agent.Configuration.RemoteAccessEnabled())
 }
 

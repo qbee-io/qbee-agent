@@ -22,7 +22,8 @@ func RunOnce(ctx context.Context, cfg *Config) error {
 		return fmt.Errorf("error initializing the agent: %w", err)
 	}
 
-	agent.RunOnce(ctx, FullRunNoRemoteAccess)
+	agent.disableRemoteAccess = true
+	agent.RunOnce(ctx, FullRun)
 
 	agent.inProgress.Wait()
 
