@@ -172,7 +172,7 @@ func (systemInfo *SystemInfo) parseOSRelease() error {
 	}
 
 	if err != nil {
-		log.Debugf("error parsing os-release file: %s", err.Error())
+		log.Debugf("error parsing os-release file: %v", err)
 		return nil
 	}
 
