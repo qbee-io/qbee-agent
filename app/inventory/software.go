@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/qbee-io/qbee-agent/app/log"
 	"github.com/qbee-io/qbee-agent/app/software"
 )
 
@@ -21,7 +22,8 @@ type Software struct {
 func CollectSoftwareInventory(ctx context.Context) (*Software, error) {
 	pkgManager := software.DefaultPackageManager
 	if pkgManager == nil {
-		return nil, fmt.Errorf("no supported package manager found")
+		log.Debugf("no supported package manager found")
+		return nil, nil
 	}
 
 	pkgList, err := pkgManager.ListPackages(ctx)
