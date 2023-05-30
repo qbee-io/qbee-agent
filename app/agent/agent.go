@@ -114,6 +114,7 @@ type RunOnceMode int
 
 const (
 	FullRun RunOnceMode = iota
+	FullRunNoRemoteAccess
 	QuickRun
 )
 
@@ -135,12 +136,15 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 
 	agent.Configuration.UpdateSettings(configData)
 
-	if mode == FullRun {
+	if mode == FullRun || mode == FullRunNoRemoteAccess {
 		agent.do(ctx, "inventories", agent.doInventories)
 		agent.do(ctx, "check-in", agent.doCheckIn)
 		agent.do(ctx, "metrics", agent.doMetrics)
 		agent.do(ctx, "config", agent.doConfig(configData))
-		agent.do(ctx, "remote-access", agent.doRemoteAccess)
+
+		if mode == FullRun {
+			agent.do(ctx, "remote-access", agent.doRemoteAccess)
+		}
 	} else {
 		agent.do(ctx, "system-inventory", agent.doSystemInventory)
 	}
