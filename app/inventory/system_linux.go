@@ -168,17 +168,16 @@ func (systemInfo *SystemInfo) parseOSRelease() error {
 		data, err = utils.ParseEnvFile("/usr/lib/os-release")
 	}
 
-	if err != nil {
-		return fmt.Errorf("error getting os-release inforamtion: %w", err)
+	// Set default to unknown
+	systemInfo.Flavor = "unknown"
+	if err == nil {
+		id := canonify(strings.ToLower(data["ID"]))
+		versionID := canonify(data["VERSION_ID"])
+
+		version := strings.Split(versionID, "_")
+
+		systemInfo.Flavor = fmt.Sprintf("%s_%s", id, version[0])
 	}
-
-	id := canonify(strings.ToLower(data["ID"]))
-	versionID := canonify(data["VERSION_ID"])
-
-	version := strings.Split(versionID, "_")
-
-	systemInfo.Flavor = fmt.Sprintf("%s_%s", id, version[0])
-
 	return nil
 }
 
