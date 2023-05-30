@@ -163,13 +163,13 @@ func (systemInfo *SystemInfo) gatherNetworkInfo() error {
 
 // parseOSRelease extracts flavor information from os-release file.
 func (systemInfo *SystemInfo) parseOSRelease() error {
+	// Set default to unknown
+	systemInfo.Flavor = "unknown"
 	data, err := utils.ParseEnvFile("/etc/os-release")
 	if err != nil {
 		data, err = utils.ParseEnvFile("/usr/lib/os-release")
 	}
 
-	// Set default to unknown
-	systemInfo.Flavor = "unknown"
 	if err == nil {
 		id := canonify(strings.ToLower(data["ID"]))
 		versionID := canonify(data["VERSION_ID"])
