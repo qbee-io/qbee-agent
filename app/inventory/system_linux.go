@@ -14,6 +14,7 @@ import (
 
 	"github.com/qbee-io/qbee-agent/app"
 	"github.com/qbee-io/qbee-agent/app/inventory/linux"
+	"github.com/qbee-io/qbee-agent/app/log"
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
@@ -170,14 +171,17 @@ func (systemInfo *SystemInfo) parseOSRelease() error {
 		data, err = utils.ParseEnvFile("/usr/lib/os-release")
 	}
 
-	if err == nil {
-		id := canonify(strings.ToLower(data["ID"]))
-		versionID := canonify(data["VERSION_ID"])
-
-		version := strings.Split(versionID, "_")
-
-		systemInfo.Flavor = fmt.Sprintf("%s_%s", id, version[0])
+	if err != nil {
+		log.Debugf("error parsing os-release file: %s", err.Error())
+		return nil
 	}
+
+	id := canonify(strings.ToLower(data["ID"]))
+	versionID := canonify(data["VERSION_ID"])
+
+	version := strings.Split(versionID, "_")
+
+	systemInfo.Flavor = fmt.Sprintf("%s_%s", id, version[0])
 	return nil
 }
 
