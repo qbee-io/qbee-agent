@@ -189,7 +189,7 @@ func (agent *Agent) doMetrics(ctx context.Context) error {
 		return nil
 	}
 
-	if err := agent.Metrics.Send(ctx, metrics.Collect()); err != nil {
+	if err := agent.Metrics.Send(ctx, agent.Metrics.Collect()); err != nil {
 		return fmt.Errorf("failed to send metrics: %w", err)
 	}
 

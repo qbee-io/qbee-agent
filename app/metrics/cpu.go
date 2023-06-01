@@ -15,14 +15,15 @@ import (
 // CPUValues
 //
 // Example payload:
-// {
-//  "user": 2.08,
-//  "nice": 0.00,
-//  "system": 0.76,
-//  "idle": 97.16,
-//  "iowait": 0.00,
-//  "irq": 0.00
-// }
+//
+//	{
+//	 "user": 2.08,
+//	 "nice": 0.00,
+//	 "system": 0.76,
+//	 "idle": 97.16,
+//	 "iowait": 0.00,
+//	 "irq": 0.00
+//	}
 type CPUValues struct {
 	User   float64 `json:"user"`
 	Nice   float64 `json:"nice"`
@@ -69,12 +70,12 @@ func CollectCPU() ([]Metric, error) {
 		Timestamp: time.Now().Unix(),
 		Values: Values{
 			CPUValues: &CPUValues{
-				User:   float64(fieldValues["user"]*10000/total) / 100,
-				Nice:   float64(fieldValues["nice"]*10000/total) / 100,
-				System: float64(fieldValues["system"]*10000/total) / 100,
-				Idle:   float64(fieldValues["idle"]*10000/total) / 100,
-				IOWait: float64(fieldValues["iowait"]*10000/total) / 100,
-				IRQ:    float64(fieldValues["irq"]*10000/total) / 100,
+				User:   float64(fieldValues["user"]),
+				Nice:   float64(fieldValues["nice"]),
+				System: float64(fieldValues["system"]),
+				Idle:   float64(fieldValues["idle"]),
+				IOWait: float64(fieldValues["iowait"]),
+				IRQ:    float64(fieldValues["irq"]),
 			},
 		},
 	}
