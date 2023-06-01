@@ -14,6 +14,7 @@ import (
 
 	"github.com/qbee-io/qbee-agent/app"
 	"github.com/qbee-io/qbee-agent/app/inventory/linux"
+	"github.com/qbee-io/qbee-agent/app/log"
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
@@ -163,13 +164,16 @@ func (systemInfo *SystemInfo) gatherNetworkInfo() error {
 
 // parseOSRelease extracts flavor information from os-release file.
 func (systemInfo *SystemInfo) parseOSRelease() error {
+	// Set default to unknown
+	systemInfo.Flavor = "unknown"
 	data, err := utils.ParseEnvFile("/etc/os-release")
 	if err != nil {
 		data, err = utils.ParseEnvFile("/usr/lib/os-release")
 	}
 
 	if err != nil {
-		return fmt.Errorf("error getting os-release inforamtion: %w", err)
+		log.Debugf("error parsing os-release file: %v", err)
+		return nil
 	}
 
 	id := canonify(strings.ToLower(data["ID"]))
@@ -178,7 +182,6 @@ func (systemInfo *SystemInfo) parseOSRelease() error {
 	version := strings.Split(versionID, "_")
 
 	systemInfo.Flavor = fmt.Sprintf("%s_%s", id, version[0])
-
 	return nil
 }
 

@@ -40,6 +40,8 @@ type Agent struct {
 	Configuration *configuration.Service
 	Metrics       *metrics.Service
 	remoteAccess  *remoteaccess.Service
+	// disableRemoteAccess is used to disable remote access for RunOnce
+	disableRemoteAccess bool
 }
 
 // Run the main control loop of the agent.
@@ -214,6 +216,10 @@ func (agent *Agent) doConfig(configData *configuration.CommittedConfig) func(ctx
 
 // doRemoteAccess maintains remote access for the agent - if enabled.
 func (agent *Agent) doRemoteAccess(ctx context.Context) error {
+	// remote access is disabled on RunOnce
+	if agent.disableRemoteAccess {
+		return nil
+	}
 	return agent.remoteAccess.UpdateState(ctx, agent.Configuration.RemoteAccessEnabled())
 }
 
