@@ -187,29 +187,17 @@ type FirewallRule struct {
 func (r FirewallRule) Render(chain FirewallChainName) string {
 	rule := []string{"-A", string(chain)}
 
-	if isNotFirewallAnyPortOrIPAddress(r.SourceIP) {
+	if r.SourceIP != "" && !strings.EqualFold(r.SourceIP, "any") {
 		rule = append(rule, "-s", r.SourceIP)
 	}
 
 	rule = append(rule, "-p", string(r.Protocol), "-m", string(r.Protocol))
 
-	if isNotFirewallAnyPortOrIPAddress(r.DestinationPort) {
+	if r.DestinationPort != "" && !strings.EqualFold(r.DestinationPort, "any") {
 		rule = append(rule, "--dport", r.DestinationPort)
 	}
 
 	rule = append(rule, "-j", string(r.Target))
 
 	return strings.Join(rule, " ")
-}
-
-func isNotFirewallAnyPortOrIPAddress(ipAddress string) bool {
-	if ipAddress == "" {
-		return false
-	}
-
-	if strings.EqualFold(ipAddress, "any") {
-		return false
-	}
-
-	return true
 }
