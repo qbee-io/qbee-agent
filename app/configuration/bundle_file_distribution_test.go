@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"qbee.io/platform/test/api"
+	"qbee.io/platform/api/frontend/client"
 	"qbee.io/platform/test/assert"
 	"qbee.io/platform/test/device"
 
@@ -29,7 +29,7 @@ func Test_FileDistributionBundle(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+	assert.NoError(t, r.API.AddConfigurationChange(client.Change{
 		NodeID:     r.DeviceID,
 		BundleName: configuration.BundleFileDistribution,
 		Config:     bundle}))
@@ -74,7 +74,7 @@ func Test_FileDistributionBundle_IsTemplate(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+	assert.NoError(t, r.API.AddConfigurationChange(client.Change{
 		NodeID:     r.DeviceID,
 		BundleName: configuration.BundleFileDistribution,
 		Config:     bundle}))
@@ -119,7 +119,7 @@ func Test_FileDistributionBundle_AfterCommand(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+	assert.NoError(t, r.API.AddConfigurationChange(client.Change{
 		NodeID:     r.DeviceID,
 		BundleName: configuration.BundleFileDistribution,
 		Config:     bundle}))
@@ -166,7 +166,7 @@ func Test_FileDistributionBundle_PreCondition_True(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+	assert.NoError(t, r.API.AddConfigurationChange(client.Change{
 		NodeID:     r.DeviceID,
 		BundleName: configuration.BundleFileDistribution,
 		Config:     bundle}))
@@ -209,7 +209,7 @@ func Test_FileDistributionBundle_PreCondition_False(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+	assert.NoError(t, r.API.AddConfigurationChange(client.Change{
 		NodeID:     r.DeviceID,
 		BundleName: configuration.BundleFileDistribution,
 		Config:     bundle}))
