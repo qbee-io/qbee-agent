@@ -415,3 +415,22 @@ func resolveSourcePath(path string) (string, error) {
 
 	return path, nil
 }
+
+// resolveDestinationPath check if the destination path is a directory and returns the path with the source basename
+func resolveDestinationPath(source, destination string) (string, error) {
+	fileInfo, err := os.Stat(destination)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Retrun path as is if it does not exist
+			return destination, nil
+		}
+		return "", err
+	}
+
+	if fileInfo.IsDir() {
+		// is a directory
+		baseName := filepath.Base(source)
+		return filepath.Join(destination, baseName), nil
+	}
+	return destination, nil
+}
