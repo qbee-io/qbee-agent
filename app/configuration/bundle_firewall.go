@@ -190,13 +190,13 @@ type FirewallRule struct {
 func (r FirewallRule) Render(chain FirewallChainName) string {
 	rule := []string{"-A", string(chain)}
 
-	if r.SourceIP != "" {
+	if r.SourceIP != "" && !strings.EqualFold(r.SourceIP, "any") {
 		rule = append(rule, "-s", r.SourceIP)
 	}
 
 	rule = append(rule, "-p", string(r.Protocol), "-m", string(r.Protocol))
 
-	if r.DestinationPort != "" {
+	if r.DestinationPort != "" && !strings.EqualFold(r.DestinationPort, "any") {
 		rule = append(rule, "--dport", r.DestinationPort)
 	}
 
