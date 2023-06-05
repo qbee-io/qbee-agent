@@ -127,3 +127,43 @@ func Test_renderTemplateLine(t *testing.T) {
 		})
 	}
 }
+
+func Test_resolveDestinationPath(t *testing.T) {
+	tests := []struct {
+		name        string
+		source      string
+		destination string
+		want        string
+	}{
+		{
+			name:        "regular path",
+			source:      "/test/source",
+			destination: "/tmp/destination",
+			want:        "/tmp/destination",
+		},
+		{
+			name:        "dir path with trailing slash",
+			source:      "/test/source",
+			destination: "/tmp/",
+			want:        "/tmp/source",
+		},
+		{
+			name:        "dir path without trailing slash",
+			source:      "/test/source",
+			destination: "/tmp",
+			want:        "/tmp/source",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveDestinationPath(tt.source, tt.destination)
+			if err != nil {
+				t.Fatalf("unexpected error = %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("got = `%s`, want `%s`", got, tt.want)
+			}
+		})
+	}
+}

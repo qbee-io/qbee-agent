@@ -224,3 +224,85 @@ func Test_FileDistributionBundle_PreCondition_False(t *testing.T) {
 	output := r.MustExec("ls", "/tmp/")
 	assert.Equal(t, string(output), "")
 }
+
+func Test_FileDistributionBundle_Destination_Dirname_Exists(t *testing.T) {
+	r := device.New(t)
+	r.Bootstrap()
+
+	// upload a known debian package to the file manager
+	pkgContents := r.ReadFile("/apt-repo/test_2.1.1.deb")
+	pkgFilename := fmt.Sprintf("%s_%d.deb", t.Name(), time.Now().UnixNano())
+	r.UploadTempFile(pkgFilename, pkgContents)
+
+	// commit config for the device
+	bundle := configuration.FileDistributionBundle{
+		Metadata: configuration.Metadata{Enabled: true},
+		FileSets: []configuration.FileSet{
+			{
+				Files: []configuration.File{
+					{Source: pkgFilename, Destination: "/tmp"},
+				},
+				PreCondition: "true",
+			},
+		},
+	}
+
+	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+		NodeID:     r.DeviceID,
+		BundleName: configuration.BundleFileDistribution,
+		Config:     bundle}))
+	assert.NoError(t, r.API.CommitConfiguration("test commit"))
+
+	// execute configuration bundles
+	reports, _ := configuration.ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r"))
+
+	// execute configuration bundles
+	expectedReports := []string{
+		fmt.Sprintf("[INFO] Successfully downloaded file %[1]s to /tmp/test_2.1.1.deb",
+			pkgFilename),
+	}
+	assert.Equal(t, reports, expectedReports)
+
+	// check if package was correctly installed
+	output := r.MustExec("md5sum", "/tmp/test_2.1.1.deb")
+	assert.Equal(t, string(output), "8562ee4d61fba99c1525e85215cc59f3  /tmp/test_2.1.1.deb")
+}
+
+func Test_FileDistributionBundle_Destination_Dirname_NotExists(t *testing.T) {
+
+	r := device.New(t)
+	r.Bootstrap()
+
+	// upload a known debian package to the file manager
+	pkgContents := r.ReadFile("/apt-repo/test_2.1.1.deb")
+	pkgFilename := fmt.Sprintf("%s_%d.deb", t.Name(), time.Now().UnixNano())
+	r.UploadTempFile(pkgFilename, pkgContents)
+
+	// commit config for the device
+	bundle := configuration.FileDistributionBundle{
+		Metadata: configuration.Metadata{Enabled: true},
+		FileSets: []configuration.FileSet{
+			{
+				Files: []configuration.File{
+					{Source: pkgFilename, Destination: "/tmp/doesnotexist/"},
+				},
+				PreCondition: "true",
+			},
+		},
+	}
+
+	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+		NodeID:     r.DeviceID,
+		BundleName: configuration.BundleFileDistribution,
+		Config:     bundle}))
+	assert.NoError(t, r.API.CommitConfiguration("test commit"))
+
+	// execute configuration bundles
+	reports, _ := configuration.ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r"))
+
+	assert.Empty(t, reports)
+
+	// check if file was created
+	output := r.MustExec("ls", "/tmp/")
+	assert.Equal(t, string(output), "")
+}
