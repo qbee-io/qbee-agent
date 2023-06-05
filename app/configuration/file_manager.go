@@ -421,7 +421,7 @@ func resolveDestinationPath(source, destination string) (string, error) {
 	fileInfo, err := os.Stat(destination)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Retrun path as is if it does not exist
+			// Return path as is if it does not exist
 			return destination, nil
 		}
 		return "", err
