@@ -3,11 +3,11 @@ package metrics
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/qbee-io/qbee-agent/app/inventory/linux"
 )
@@ -34,7 +34,7 @@ type CPUValues struct {
 }
 
 // CollectCPU returns CPU metrics.
-func CollectCPU() ([]Metric, error) {
+func CollectCPU() (*CPUValues, error) {
 	filePath := filepath.Join(linux.ProcFS, "stat")
 
 	file, err := os.Open(filePath)
@@ -53,7 +53,6 @@ func CollectCPU() ([]Metric, error) {
 	firstLine := string(buf[0:bytes.Index(buf, []byte("\n"))])
 	lineFields := strings.Fields(firstLine)
 
-	var total uint64
 	fields := []string{"user", "nice", "system", "idle", "iowait", "irq"}
 	fieldValues := make(map[string]uint64)
 
@@ -61,24 +60,41 @@ func CollectCPU() ([]Metric, error) {
 		if fieldValues[field], err = strconv.ParseUint(lineFields[i+1], 10, 64); err != nil {
 			return nil, fmt.Errorf("error parsing %s field in %s: %w", field, filePath, err)
 		}
-
-		total += fieldValues[field]
 	}
 
-	metric := Metric{
-		Label:     CPU,
-		Timestamp: time.Now().Unix(),
-		Values: Values{
-			CPUValues: &CPUValues{
-				User:   float64(fieldValues["user"]),
-				Nice:   float64(fieldValues["nice"]),
-				System: float64(fieldValues["system"]),
-				Idle:   float64(fieldValues["idle"]),
-				IOWait: float64(fieldValues["iowait"]),
-				IRQ:    float64(fieldValues["irq"]),
-			},
-		},
+	return &CPUValues{
+		User:   float64(fieldValues["user"]),
+		Nice:   float64(fieldValues["nice"]),
+		System: float64(fieldValues["system"]),
+		Idle:   float64(fieldValues["idle"]),
+		IOWait: float64(fieldValues["iowait"]),
+		IRQ:    float64(fieldValues["irq"]),
+	}, nil
+}
+
+func (c *CPUValues) Delta(previous *CPUValues) (*CPUValues, error) {
+	elapsed := c.totalTime() - previous.totalTime()
+	if elapsed <= 0 {
+		return nil, fmt.Errorf("elapsed time is <= 0: %f", elapsed)
 	}
 
-	return []Metric{metric}, nil
+	user := 100 * (c.User - previous.User) / elapsed
+	nice := 100 * (c.Nice - previous.Nice) / elapsed
+	system := 100 * (c.System - previous.System) / elapsed
+	idle := 100 * (c.Idle - previous.Idle) / elapsed
+	iowait := 100 * (c.IOWait - previous.IOWait) / elapsed
+	irq := 100 * (c.IRQ - previous.IRQ) / elapsed
+
+	return &CPUValues{
+		User:   math.Round(user*100) / 100,
+		Nice:   math.Round(nice*100) / 100,
+		System: math.Round(system*100) / 100,
+		Idle:   math.Round(idle*100) / 100,
+		IOWait: math.Round(iowait*100) / 100,
+		IRQ:    math.Round(irq*100) / 100,
+	}, nil
+}
+
+func (c *CPUValues) totalTime() float64 {
+	return c.User + c.Nice + c.System + c.Idle + c.IOWait + c.IRQ
 }
