@@ -2,7 +2,7 @@
 
 set -e
 
-if [[ -d /etc/qbee/ppkeys ]]; then
+if [[ ! -d /etc/qbee/ppkeys ]]; then
   mkdir -p /etc/qbee/ppkeys
 fi
 
