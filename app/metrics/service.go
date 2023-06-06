@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"sync"
 	"time"
 
 	"github.com/qbee-io/qbee-agent/app/api"
@@ -13,6 +14,7 @@ type Service struct {
 	api                   *api.Client
 	previousCPUValues     *CPUValues
 	previousNetworkValues map[string]*NetworkValues
+	lock                  sync.Mutex
 }
 
 // New returns a new instance of metrics Service.
@@ -46,6 +48,9 @@ var metricsCollectors = []metricsCollector{
 // Collect system metrics.
 // If any errors are encountered, they'll be logged, but won't interrupt the process.
 func (s *Service) Collect() []Metric {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	allMetrics := make([]Metric, 0)
 
 	// collect metrics which don't depend on state
