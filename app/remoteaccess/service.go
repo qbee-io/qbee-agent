@@ -250,14 +250,21 @@ func (s *Service) notifyWhenInterfaceReady() {
 	}
 }
 
-// disable remote access.
-func (s *Service) disable() error {
+func (s *Service) stop() error {
 	if s.cmd == nil || s.cmd.Process == nil || s.cmd.ProcessState != nil {
 		return fmt.Errorf("cannot stop remote access - already not running")
 	}
 
 	if err := syscall.Kill(-s.cmd.Process.Pid, syscall.SIGINT); err != nil {
 		return fmt.Errorf("failed to kill remote access process: %w", err)
+	}
+	return nil
+}
+
+// disable remote access.
+func (s *Service) disable() error {
+	if err := s.stop(); err != nil {
+		return err
 	}
 
 	s.stopLoop <- true
@@ -289,6 +296,16 @@ func (s *Service) refreshCredentials(ctx context.Context) error {
 	}
 
 	s.credentials = *credentials
+
+	// return nil if we do not have any process running
+	if !s.checkStatus() {
+		return nil
+	}
+
+	// restart process if we have one running
+	if err = s.stop(); err != nil {
+		return err
+	}
 
 	return nil
 }
