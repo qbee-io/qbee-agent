@@ -2,6 +2,8 @@ package configuration
 
 import (
 	"bytes"
+	"fmt"
+	"path/filepath"
 	"testing"
 )
 
@@ -129,6 +131,7 @@ func Test_renderTemplateLine(t *testing.T) {
 }
 
 func Test_resolveDestinationPath(t *testing.T) {
+	tempDir := t.TempDir()
 	tests := []struct {
 		name        string
 		source      string
@@ -138,20 +141,32 @@ func Test_resolveDestinationPath(t *testing.T) {
 		{
 			name:        "regular path",
 			source:      "/test/source",
-			destination: "/tmp/destination",
-			want:        "/tmp/destination",
+			destination: filepath.Join(tempDir, "destination"),
+			want:        filepath.Join(tempDir, "destination"),
 		},
 		{
 			name:        "dir path with trailing slash",
 			source:      "/test/source",
-			destination: "/tmp/",
-			want:        "/tmp/source",
+			destination: fmt.Sprint(tempDir, "/"),
+			want:        filepath.Join(tempDir, "source"),
 		},
 		{
 			name:        "dir path without trailing slash",
 			source:      "/test/source",
-			destination: "/tmp",
-			want:        "/tmp/source",
+			destination: tempDir,
+			want:        filepath.Join(tempDir, "source"),
+		},
+		{
+			name:        "regular path",
+			source:      "source",
+			destination: tempDir,
+			want:        filepath.Join(tempDir, "source"),
+		},
+		{
+			name:        "illegal path that shoould return empty string",
+			source:      "source",
+			destination: fmt.Sprintf("%s/notallowed/", tempDir),
+			want:        "",
 		},
 	}
 
@@ -159,7 +174,9 @@ func Test_resolveDestinationPath(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := resolveDestinationPath(tt.source, tt.destination)
 			if err != nil {
-				t.Fatalf("unexpected error = %v", err)
+				if got != tt.want {
+					t.Fatalf("unexpected error = %v", err)
+				}
 			}
 			if got != tt.want {
 				t.Errorf("got = `%s`, want `%s`", got, tt.want)
