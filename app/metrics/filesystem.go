@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"math"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -13,25 +14,26 @@ import (
 // FilesystemValues
 //
 // Example payload:
-// {
-//  "size": 486903968,
-//  "used": 62249152,
-//  "avail": 399848008,
-//  "use": 14,
-//  "inodes": 30990336,
-//  "iused": 844508,
-//  "ifree": 30145828,
-//  "iuse": 3
-// }
+//
+//	{
+//	 "size": 486903968,
+//	 "used": 62249152,
+//	 "avail": 399848008,
+//	 "use": 14,
+//	 "inodes": 30990336,
+//	 "iused": 844508,
+//	 "ifree": 30145828,
+//	 "iuse": 3
+//	}
 type FilesystemValues struct {
-	Size      int `json:"size"`
-	Used      int `json:"used"`
-	Available int `json:"avail"`
-	Use       int `json:"use"`
-	INodes    int `json:"inodes"`
-	IUsed     int `json:"iused"`
-	IFree     int `json:"ifree"`
-	IUse      int `json:"iuse"`
+	Size      uint64  `json:"size"`
+	Used      uint64  `json:"used"`
+	Available uint64  `json:"avail"`
+	Use       float64 `json:"use"`
+	INodes    uint64  `json:"inodes"`
+	IUsed     uint64  `json:"iused"`
+	IFree     uint64  `json:"ifree"`
+	IUse      uint64  `json:"iuse"`
 }
 
 const fsBlockSize = 1024
@@ -52,17 +54,18 @@ func CollectFilesystem() ([]Metric, error) {
 			return nil, err
 		}
 
-		size := int(st.Blocks) * int(st.Bsize) / fsBlockSize
-		free := int(st.Bfree) * int(st.Bsize) / fsBlockSize
+		size := uint64(st.Blocks) * uint64(st.Bsize) / fsBlockSize
+		free := uint64(st.Bavail) * uint64(st.Bsize) / fsBlockSize
 
-		var use, iuse int
+		var iuse uint64
+		var use float64
 
 		if size > 0 {
-			use = 100 - (free * 100 / size)
+			use = 100.0 - (float64(free)/float64(size))*100.0
 		}
 
 		if st.Files > 0 {
-			iuse = 100 - int(st.Ffree*100/st.Files)
+			iuse = 100 - uint64(st.Ffree*100/st.Files)
 		}
 
 		metrics[i] = Metric{
@@ -73,11 +76,11 @@ func CollectFilesystem() ([]Metric, error) {
 				FilesystemValues: &FilesystemValues{
 					Size:      size,
 					Used:      size - free,
-					Available: int(st.Bavail) * int(st.Bsize) / fsBlockSize,
-					Use:       use,
-					INodes:    int(st.Files),
-					IUsed:     int(st.Files - st.Ffree),
-					IFree:     int(st.Ffree),
+					Available: free,
+					Use:       math.Round(use*100) / 100.0,
+					INodes:    uint64(st.Files),
+					IUsed:     uint64(st.Files - st.Ffree),
+					IFree:     uint64(st.Ffree),
 					IUse:      iuse,
 				},
 			},
