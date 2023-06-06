@@ -419,9 +419,15 @@ func resolveSourcePath(path string) (string, error) {
 // resolveDestinationPath check if the destination path is a directory and returns the path with the source basename
 func resolveDestinationPath(source, destination string) (string, error) {
 	fileInfo, err := os.Stat(destination)
+
 	if err != nil {
+		// Check of the destination path is a directory
+		if destination[len(destination)-1:] == string(os.PathSeparator) {
+			return "", fmt.Errorf("destination path %s is a directory", destination)
+		}
+
 		if os.IsNotExist(err) {
-			// Return path as is if it does not exist
+			// destination doesn't exist, use it as is if it doesn't end with a path separator
 			return destination, nil
 		}
 		return "", err
