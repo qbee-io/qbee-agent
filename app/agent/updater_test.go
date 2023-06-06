@@ -13,13 +13,13 @@ func Test_Update_Manual(t *testing.T) {
 
 	version := r.MustExec("qbee-agent", "version")
 
-	assert.Equal(t, string(version), "0000.00")
+	assert.Equal(t, string(version), "0000.00 (commit: NA)")
 
 	r.MustExec("qbee-agent", "-l", "DEBUG", "update")
 
 	version = r.MustExec("qbee-agent", "version")
 
-	assert.Equal(t, string(version), "2023.01")
+	assert.Equal(t, string(version), "2023.01 (commit: NA)")
 }
 
 func Test_Update_Manual_UsingRelativePath(t *testing.T) {
@@ -32,11 +32,11 @@ func Test_Update_Manual_UsingRelativePath(t *testing.T) {
 
 	// make sure the original binary is not overwritten
 	version := r.MustExec("qbee-agent", "version")
-	assert.Equal(t, string(version), "0000.00")
+	assert.Equal(t, string(version), "0000.00 (commit: NA)")
 
 	// make sure the binary we used to update is updated
 	version = r.MustExec("/app/qbee-agent", "version")
-	assert.Equal(t, string(version), "2023.01")
+	assert.Equal(t, string(version), "2023.01 (commit: NA)")
 }
 
 func Test_Update_Automatic(t *testing.T) {
@@ -48,7 +48,7 @@ func Test_Update_Automatic(t *testing.T) {
 
 	version := r.MustExec("qbee-agent", "version")
 
-	assert.Equal(t, string(version), "0000.00")
+	assert.Equal(t, string(version), "0000.00 (commit: NA)")
 
 	// Agent always starts with initial run and that will trigger the update.
 	// When th update is successful, the agent will terminate itself.
@@ -56,5 +56,5 @@ func Test_Update_Automatic(t *testing.T) {
 
 	version = r.MustExec("qbee-agent", "version")
 
-	assert.Equal(t, string(version), "2023.01")
+	assert.Equal(t, string(version), "2023.01 (commit: NA)")
 }
