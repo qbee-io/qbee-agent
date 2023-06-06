@@ -28,14 +28,15 @@ func TestCollectNetwork(t *testing.T) {
 	for _, metric := range v2 {
 		for _, previous := range v1 {
 
-			if metric.ID == previous.ID {
-				v3, err := metric.Values.NetworkValues.Delta(previous.Values.NetworkValues)
-
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				t.Logf("%s -> %#v\n", metric.ID, v3)
+			if metric.ID != previous.ID {
+				continue
 			}
+			v3, err := metric.Values.NetworkValues.Delta(previous.Values.NetworkValues)
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			t.Logf("%s -> %#v\n", metric.ID, v3)
 
 			assert.Equal(t, metric.Label, Network)
 		}
