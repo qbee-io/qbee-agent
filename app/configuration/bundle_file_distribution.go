@@ -101,7 +101,7 @@ func (fd FileDistributionBundle) Execute(ctx context.Context, service *Service) 
 				return fmt.Errorf("cannot resolve file path: %w", err)
 			}
 
-			if fileDestination, err = resolveDestinationPath(file.Destination, fileSource); err != nil {
+			if fileDestination, err = resolveDestinationPath(fileSource, file.Destination); err != nil {
 				return fmt.Errorf("cannot resolve file path: %w", err)
 			}
 
