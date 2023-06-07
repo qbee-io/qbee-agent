@@ -187,7 +187,12 @@ func (s Software) installFromFile(ctx context.Context, srv *Service, pkgManager 
 		if pkg.Name != pkgInfo.Name {
 			continue
 		}
-		if pkg.Version == pkgInfo.Version {
+
+		if pkg.Version != pkgInfo.Version {
+			continue
+		}
+
+		if pkg.Architecture == pkgInfo.Architecture {
 			return false, nil
 		}
 	}
