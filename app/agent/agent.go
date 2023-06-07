@@ -72,14 +72,17 @@ func (agent *Agent) Run(ctx context.Context) error {
 			// let all the processing finish
 			agent.inProgress.Wait()
 
+			// stop the remote access service
+			if err := agent.remoteAccess.Stop(); err != nil {
+				log.Errorf("failed to stop remote access: %s", err)
+			}
+
 			// and return
 			return nil
 
 		case <-stopSignalCh:
 			log.Debugf("received interrupt signal")
-			if err := agent.remoteAccess.Stop(); err != nil {
-				log.Errorf("failed to stop remote access: %s", err)
-			}
+
 			agent.stop <- true
 
 		case newInterval := <-intervalChange:
@@ -241,9 +244,7 @@ func (agent *Agent) RebootSystem(ctx context.Context) {
 	} else {
 		log.Infof("scheduling system reboot completed: %s", output)
 	}
-	if err := agent.remoteAccess.Stop(); err != nil {
-		log.Errorf("failed to stop remote access: %v", err)
-	}
+
 	agent.stop <- true
 }
 

@@ -57,6 +57,7 @@ func (s *Service) GetNotificationChannel() <-chan bool {
 	return s.notification
 }
 
+// Stop disables remote access.
 func (s *Service) Stop() error {
 	return s.disable()
 }
