@@ -72,6 +72,11 @@ func (agent *Agent) Run(ctx context.Context) error {
 			// let all the processing finish
 			agent.inProgress.Wait()
 
+			// stop the remote access service
+			if err := agent.remoteAccess.Stop(); err != nil {
+				log.Errorf("failed to stop remote access: %s", err)
+			}
+
 			// and return
 			return nil
 

@@ -57,6 +57,11 @@ func (s *Service) GetNotificationChannel() <-chan bool {
 	return s.notification
 }
 
+// Stop disables remote access.
+func (s *Service) Stop() error {
+	return s.disable()
+}
+
 // binPath returns the path to the openvpn binary.
 func (s *Service) binPath() string {
 	return filepath.Join(s.binDir, binary.OpenVPN)
