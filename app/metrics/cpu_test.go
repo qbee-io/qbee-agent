@@ -3,31 +3,28 @@ package metrics
 import (
 	"testing"
 	"time"
-
-	"qbee.io/platform/test/assert"
 )
 
 func TestCollectCPU(t *testing.T) {
-	got, err := CollectCPU()
+	v, err := CollectCPU()
 	if err != nil {
 		t.Fatalf("unexpected error = %v", err)
 	}
 
-	assert.Length(t, got, 1)
+	time.Sleep(1 * time.Second)
 
-	metric := got[0]
-
-	assert.Equal(t, metric.Label, CPU)
-	assert.Empty(t, metric.ID)
-
-	if time.Since(time.Unix(metric.Timestamp, 0)) > time.Second {
-		t.Fatalf("invalid timestamp, got: %v", metric.Timestamp)
+	v2, err := CollectCPU()
+	if err != nil {
+		t.Fatalf("unexpected error = %v", err)
 	}
 
+	v3, err := v2.Delta(v)
+	if err != nil {
+		t.Fatalf("unexpected error = %v", err)
+	}
 	// verify that sum of values is about 100% (accounted for rounding errors)
-	v := metric.Values.CPUValues
 
-	total := v.User + v.Nice + v.System + v.Idle + v.IOWait + v.IRQ
+	total := v3.User + v3.Nice + v3.System + v3.Idle + v3.IOWait + v3.IRQ
 	d := 100 - total
 	if d > 1 || d < -1 {
 		t.Fatalf("expected total of 100%%, got %f%%", total)

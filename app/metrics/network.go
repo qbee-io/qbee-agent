@@ -13,15 +13,16 @@ import (
 // NetworkValues
 //
 // Example payload:
-// {
-//  "label": "network",
-//  "ts": 1669988326,
-//  "id": "eth0",
-//  "values": {
-//    "tx_bytes": 7126,
-//    "rx_bytes": 17423
-//  }
-// }
+//
+//	{
+//	 "label": "network",
+//	 "ts": 1669988326,
+//	 "id": "eth0",
+//	 "values": {
+//	   "tx_bytes": 7126,
+//	   "rx_bytes": 17423
+//	 }
+//	}
 type NetworkValues struct {
 	// Received bytes on a network interface
 	RXBytes int `json:"rx_bytes"`
@@ -77,4 +78,15 @@ func CollectNetwork() ([]Metric, error) {
 	}
 
 	return metrics, nil
+}
+
+func (v *NetworkValues) Delta(old *NetworkValues) (*NetworkValues, error) {
+	if old == nil {
+		return v, nil
+	}
+
+	return &NetworkValues{
+		RXBytes: v.RXBytes - old.RXBytes,
+		TXBytes: v.TXBytes - old.TXBytes,
+	}, nil
 }
