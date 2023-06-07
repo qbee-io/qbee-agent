@@ -1,7 +1,6 @@
 package metrics
 
 import (
-	"math"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -26,14 +25,14 @@ import (
 //	 "iuse": 3
 //	}
 type FilesystemValues struct {
-	Size      uint64  `json:"size"`
-	Used      uint64  `json:"used"`
-	Available uint64  `json:"avail"`
-	Use       float64 `json:"use"`
-	INodes    uint64  `json:"inodes"`
-	IUsed     uint64  `json:"iused"`
-	IFree     uint64  `json:"ifree"`
-	IUse      uint64  `json:"iuse"`
+	Size      uint64 `json:"size"`
+	Used      uint64 `json:"used"`
+	Available uint64 `json:"avail"`
+	Use       uint64 `json:"use"`
+	INodes    uint64 `json:"inodes"`
+	IUsed     uint64 `json:"iused"`
+	IFree     uint64 `json:"ifree"`
+	IUse      uint64 `json:"iuse"`
 }
 
 const fsBlockSize = 1024
@@ -57,11 +56,10 @@ func CollectFilesystem() ([]Metric, error) {
 		size := uint64(st.Blocks) * uint64(st.Bsize) / fsBlockSize
 		free := uint64(st.Bavail) * uint64(st.Bsize) / fsBlockSize
 
-		var iuse uint64
-		var use float64
+		var iuse, use uint64
 
 		if size > 0 {
-			use = 100.0 - (float64(free)/float64(size))*100.0
+			use = 100 - (100*free)/size
 		}
 
 		if st.Files > 0 {
@@ -77,7 +75,7 @@ func CollectFilesystem() ([]Metric, error) {
 					Size:      size,
 					Used:      size - free,
 					Available: free,
-					Use:       math.Round(use*100) / 100.0,
+					Use:       use,
 					INodes:    uint64(st.Files),
 					IUsed:     uint64(st.Files - st.Ffree),
 					IFree:     uint64(st.Ffree),
