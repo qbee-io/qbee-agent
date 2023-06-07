@@ -184,14 +184,15 @@ func (s Software) installFromFile(ctx context.Context, srv *Service, pkgManager 
 	}
 
 	for _, pkg := range installedPackages {
+		// continue if name do not match
 		if pkg.Name != pkgInfo.Name {
 			continue
 		}
-
+		// name matches, continue of versions do not match
 		if pkg.Version != pkgInfo.Version {
 			continue
 		}
-
+		// name and version match, return if architecture is the same
 		if pkg.Architecture == pkgInfo.Architecture {
 			return false, nil
 		}
