@@ -34,7 +34,7 @@ func (agent *Agent) doInventories(ctx context.Context) error {
 	return nil
 }
 
-// doInventoriesSimple collects all inventories and delivers them to the device hub API.
+// doInventoriesSimple collects lightweight inventories and delivers them to the device hub API.
 func (agent *Agent) doInventoriesSimple(ctx context.Context) error {
 	agent.inventoryLock.Lock()
 	defer agent.inventoryLock.Unlock()
