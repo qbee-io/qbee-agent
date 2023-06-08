@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+set -e
+
+SCRIPT_DIR=$(cd $(dirname $0) && pwd)
+BASEDIR=$(dirname $SCRIPT_DIR)
+source $SCRIPT_DIR/config.env
+
+CONTAINER_NAME="qbee-package-verify"
+BS_KEY=$1
+OLD_VERSION="1.2.1"
+
+if [[ -z $BS_KEY ]]; then
+  echo "ERROR: Test require a bootstrap key"
+  exit 1
+fi
+
+# kill init container if exists
+kill_ifexists_init() {
+  if podman container exists ${CONTAINER_NAME}; then
+    podman kill ${CONTAINER_NAME}
+  fi
+}
+
+# Bootstrap
+bootstrap_init() {
+  kill_ifexists_init
+
+  sleep 2
+
+  podman run -d --privileged --rm -h "${CONTAINER_NAME}" --name "${CONTAINER_NAME}" \
+  -v "$BASEDIR/release/packages:/pkg" \
+  docker.io/qbeeio/qbee-agent-init:1.2.1
+
+  podman exec "${CONTAINER_NAME}" /opt/qbee/bin/qbee-bootstrap -k $BS_KEY
+}
+
+# upgrade 
+upgrade_init(){
+  podman exec "${CONTAINER_NAME}" dpkg -i /pkg/qbee-agent_${VERSION}_amd64.deb
+  podman exec "${CONTAINER_NAME}" bash -c "ps -ef"
+}
+
+# downgrade
+downgrade_init() {
+  podman exec "${CONTAINER_NAME}" bash -c "wget --quiet https://cdn.qbee.io/software/qbee-agent/qbee-agent_1.2.1_amd64.deb && dpkg -i qbee-agent_1.2.1_amd64.deb"
+  podman exec "${CONTAINER_NAME}" bash -c "ps -ef"
+
+}
+
+# Test current deb package
+install_non_init() {
+  podman run --rm -v "$BASEDIR/release/packages:/pkg" debian:latest bash -c "dpkg -i /pkg/qbee-agent_${VERSION}_amd64.deb"
+}
+
+# Test re-install
+reinstall_non_init() {
+  podman run --rm -v "$BASEDIR/release/packages:/pkg" debian:latest bash -c "dpkg -i /pkg/qbee-agent_${VERSION}_amd64.deb && dpkg -i /pkg/qbee-agent_${VERSION}_amd64.deb"
+}
+
+# Test install over old
+upgrade_non_init() {
+  podman run --rm -v "$BASEDIR/release/packages:/pkg" debian:latest bash -c "apt-get update && apt-get install -y wget && \
+  wget --quiet https://cdn.qbee.io/software/qbee-agent/qbee-agent_${OLD_VERSION}_amd64.deb && \
+    dpkg -i qbee-agent_${OLD_VERSION}_amd64.deb && \
+    dpkg -i /pkg/qbee-agent_${VERSION}_amd64.deb"
+}
+
+install_non_init
+reinstall_non_init
+upgrade_non_init
+
+bootstrap_init
+upgrade_init
+downgrade_init
+kill_ifexists_init
