@@ -94,7 +94,7 @@ func (agent *Agent) Run(ctx context.Context) error {
 
 		case <-remoteAccessStateChange:
 			log.Debugf("remote access state changed, sending system inventory")
-			agent.do(ctx, "system-inventory", agent.doSystemInventory)
+			agent.do(ctx, "inventories-on-remote-access", agent.doInventoriesSimple)
 
 		case <-updateSignalCh:
 			log.Debugf("received update signal")
@@ -212,7 +212,7 @@ func (agent *Agent) doConfig(configData *configuration.CommittedConfig) func(ctx
 
 		// when new config has a different commitID then applied to the system, let's push new inventories out
 		if currentCommitID != configData.CommitID {
-			agent.do(ctx, "inventories", agent.doInventories)
+			agent.do(ctx, "inventories-on-change", agent.doInventories)
 		}
 
 		return nil
