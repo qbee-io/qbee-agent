@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 
-# Remove resources from agent v1
+# resources from agent v1
+# We want to keep certain directories for downgrade purposes:
+# - /var/lib/qbee/inputs
+# - /var/lib/qbee/qbee
 
 SYSTEMD_UNIT_FILES_V1=(
   "qbee-agent.service"
@@ -11,9 +14,6 @@ SYSTEMD_UNIT_FILES_V1=(
 
 VAR_LIB_QBEE_DIRS_V1=(
   "bin"
-# Removing these will make downgrade fail
-# "inputs"
-# "qbee"
   "lastseen"
   "log"
   "masterfiles"
@@ -22,10 +22,6 @@ VAR_LIB_QBEE_DIRS_V1=(
   "ppkeys"
   "reports"
   "run"
-)
-
-VAR_LIB_QBEE_FILES=(
-  "randseed"
 )
 
 SYSTEMD_DIR_V1="/etc/systemd/system"
@@ -40,9 +36,11 @@ fi
 
 if [[ $UPGRADE_FROM_V1 -gt 0 ]]; then
 
-  # Stop old v1 vpn if running
-  if systemctl -q is-active qbee-vpn; then
-    systemctl stop qbee-vpn
+  # Stop old v1 vpn if active
+  if [[ -d /run/systemd/system ]]; then
+    if systemctl -q is-active qbee-vpn; then
+      systemctl stop qbee-vpn
+    fi
   fi
 
   # Remove old v1 qbee-agent unit files
@@ -55,7 +53,7 @@ if [[ $UPGRADE_FROM_V1 -gt 0 ]]; then
   # Remove old v1 qbee-agent workdirs
   for var_dir in "${VAR_LIB_QBEE_DIRS_V1[@]}"; do
     if [[ -d "$VAR_LIB_DIR/$var_dir" ]]; then
-      rm "$VAR_LIB_DIR/$var_dir" -rf
+      rm "${VAR_LIB_DIR:?}/${var_dir:?}" -rf
     fi
   done
 
@@ -63,13 +61,4 @@ if [[ $UPGRADE_FROM_V1 -gt 0 ]]; then
   if [[ -f /var/lib/qbee/randseed ]]; then
     rm /var/lib/qbee/randseed -f
   fi
-
-  # What about scripts that point to /opt/qbee/bin/qbee-agent
-  # Should we do this? should be handled by dpkg if no files where added
-#  if [[ -d /opt/qbee ]]; then
-#    rm /opt/qbee -rf
-#  fi
 fi
-#if [[ $DAEMON_RELOAD -eq 1 ]]; then
-#  systemctl daemon-reload
-#fi
