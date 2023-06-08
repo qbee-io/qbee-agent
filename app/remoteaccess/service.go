@@ -221,6 +221,7 @@ func (s *Service) start() error {
 	s.activeProcesses.Add(1)
 
 	go func() {
+		s.loopRunning = true
 		go s.notifyWhenInterfaceReady()
 
 		if err := s.cmd.Wait(); err != nil {
@@ -248,6 +249,7 @@ func (s *Service) notifyWhenInterfaceReady() {
 		for _, networkInterface := range interfaces {
 			if networkInterface.Name == NetworkInterfaceName {
 				s.notification <- true
+				return
 			}
 		}
 
