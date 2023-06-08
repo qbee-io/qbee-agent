@@ -188,7 +188,7 @@ func (s Software) installFromFile(ctx context.Context, srv *Service, pkgManager 
 		if pkg.Name != pkgInfo.Name {
 			continue
 		}
-		// name matches, continue of versions do not match
+		// name matches, continue if versions do not match
 		if pkg.Version != pkgInfo.Version {
 			continue
 		}
