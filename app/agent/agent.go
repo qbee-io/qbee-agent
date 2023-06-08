@@ -151,10 +151,6 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 	} else {
 		agent.do(ctx, "system-inventory", agent.doSystemInventory)
 	}
-
-	if agent.Configuration.ShouldReboot() {
-		agent.RebootSystem(ctx)
-	}
 }
 
 // do execute a function in a background goroutine.
@@ -213,6 +209,11 @@ func (agent *Agent) doConfig(configData *configuration.CommittedConfig) func(ctx
 		// when new config has a different commitID then applied to the system, let's push new inventories out
 		if currentCommitID != configData.CommitID {
 			agent.do(ctx, "inventories", agent.doInventories)
+		}
+
+		// Send reboot command if it is scheduled
+		if agent.Configuration.ShouldReboot() {
+			agent.RebootSystem(ctx)
 		}
 
 		return nil
