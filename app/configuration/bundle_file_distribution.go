@@ -8,26 +8,27 @@ import (
 // FileDistributionBundle controls files in the system.
 //
 // Example payload:
-// {
-//  "files": [
-//    {
-//      "templates": [
-//        {
-//          "source": "demo_file.json",
-//          "destination": "/tmp/demo_file.json",
-//          "is_template": true
-//        }
-//      ],
-//      "parameters": [
-//        {
-//          "key": "VAR1",
-//          "value": "VAL1"
-//        }
-//      ],
-//      "command": "echo \"it worked!\""
-//    }
-//  ]
-// }
+//
+//	{
+//	 "files": [
+//	   {
+//	     "templates": [
+//	       {
+//	         "source": "demo_file.json",
+//	         "destination": "/tmp/demo_file.json",
+//	         "is_template": true
+//	       }
+//	     ],
+//	     "parameters": [
+//	       {
+//	         "key": "VAR1",
+//	         "value": "VAL1"
+//	       }
+//	     ],
+//	     "command": "echo \"it worked!\""
+//	   }
+//	 ]
+//	}
 type FileDistributionBundle struct {
 	Metadata
 
@@ -94,17 +95,22 @@ func (fd FileDistributionBundle) Execute(ctx context.Context, service *Service) 
 		for _, file := range fileSet.Files {
 			var err error
 			var fileSource string
+			var fileDestination string
 
 			if fileSource, err = resolveSourcePath(file.Source); err != nil {
+				return fmt.Errorf("cannot resolve file path: %w", err)
+			}
+
+			if fileDestination, err = resolveDestinationPath(fileSource, file.Destination); err != nil {
 				return fmt.Errorf("cannot resolve file path: %w", err)
 			}
 
 			var created bool
 
 			if file.IsTemplate {
-				created, err = service.downloadTemplateFile(ctx, fileSource, file.Destination, parameters)
+				created, err = service.downloadTemplateFile(ctx, fileSource, fileDestination, parameters)
 			} else {
-				created, err = service.downloadFile(ctx, fileSource, file.Destination)
+				created, err = service.downloadFile(ctx, fileSource, fileDestination)
 			}
 
 			if err != nil {

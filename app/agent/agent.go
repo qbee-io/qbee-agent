@@ -72,6 +72,11 @@ func (agent *Agent) Run(ctx context.Context) error {
 			// let all the processing finish
 			agent.inProgress.Wait()
 
+			// stop the remote access service
+			if err := agent.remoteAccess.Stop(); err != nil {
+				log.Errorf("failed to stop remote access: %s", err)
+			}
+
 			// and return
 			return nil
 
@@ -89,7 +94,7 @@ func (agent *Agent) Run(ctx context.Context) error {
 
 		case <-remoteAccessStateChange:
 			log.Debugf("remote access state changed, sending system inventory")
-			agent.do(ctx, "system-inventory", agent.doSystemInventory)
+			agent.do(ctx, "inventories-on-remote-access", agent.doInventoriesSimple)
 
 		case <-updateSignalCh:
 			log.Debugf("received update signal")
@@ -146,10 +151,6 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 	} else {
 		agent.do(ctx, "system-inventory", agent.doSystemInventory)
 	}
-
-	if agent.Configuration.ShouldReboot() {
-		agent.RebootSystem(ctx)
-	}
 }
 
 // do execute a function in a background goroutine.
@@ -189,7 +190,7 @@ func (agent *Agent) doMetrics(ctx context.Context) error {
 		return nil
 	}
 
-	if err := agent.Metrics.Send(ctx, metrics.Collect()); err != nil {
+	if err := agent.Metrics.Send(ctx, agent.Metrics.Collect()); err != nil {
 		return fmt.Errorf("failed to send metrics: %w", err)
 	}
 
@@ -207,7 +208,12 @@ func (agent *Agent) doConfig(configData *configuration.CommittedConfig) func(ctx
 
 		// when new config has a different commitID then applied to the system, let's push new inventories out
 		if currentCommitID != configData.CommitID {
-			agent.do(ctx, "inventories", agent.doInventories)
+			agent.do(ctx, "inventories-on-change", agent.doInventories)
+		}
+
+		// Send reboot command if it is scheduled
+		if agent.Configuration.ShouldReboot() {
+			agent.RebootSystem(ctx)
 		}
 
 		return nil

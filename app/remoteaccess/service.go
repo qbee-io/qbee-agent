@@ -57,6 +57,11 @@ func (s *Service) GetNotificationChannel() <-chan bool {
 	return s.notification
 }
 
+// Stop disables remote access.
+func (s *Service) Stop() error {
+	return s.disable()
+}
+
 // binPath returns the path to the openvpn binary.
 func (s *Service) binPath() string {
 	return filepath.Join(s.binDir, binary.OpenVPN)
@@ -216,6 +221,7 @@ func (s *Service) start() error {
 	s.activeProcesses.Add(1)
 
 	go func() {
+		s.loopRunning = true
 		go s.notifyWhenInterfaceReady()
 
 		if err := s.cmd.Wait(); err != nil {
@@ -241,8 +247,19 @@ func (s *Service) notifyWhenInterfaceReady() {
 		}
 
 		for _, networkInterface := range interfaces {
-			if networkInterface.Name == NetworkInterfaceName {
+			if networkInterface.Name != NetworkInterfaceName {
+				continue
+			}
+
+			addrs, err := networkInterface.Addrs()
+			if err != nil {
+				log.Errorf("failed to list addresses for network interface: %v", err)
+				continue
+			}
+
+			if len(addrs) > 0 {
 				s.notification <- true
+				return
 			}
 		}
 
@@ -250,14 +267,21 @@ func (s *Service) notifyWhenInterfaceReady() {
 	}
 }
 
-// disable remote access.
-func (s *Service) disable() error {
+func (s *Service) stop() error {
 	if s.cmd == nil || s.cmd.Process == nil || s.cmd.ProcessState != nil {
 		return fmt.Errorf("cannot stop remote access - already not running")
 	}
 
 	if err := syscall.Kill(-s.cmd.Process.Pid, syscall.SIGINT); err != nil {
 		return fmt.Errorf("failed to kill remote access process: %w", err)
+	}
+	return nil
+}
+
+// disable remote access.
+func (s *Service) disable() error {
+	if err := s.stop(); err != nil {
+		return err
 	}
 
 	s.stopLoop <- true
@@ -289,6 +313,16 @@ func (s *Service) refreshCredentials(ctx context.Context) error {
 	}
 
 	s.credentials = *credentials
+
+	// return nil if we do not have any process running
+	if !s.checkStatus() {
+		return nil
+	}
+
+	// restart process if we have one running
+	if err = s.stop(); err != nil {
+		return err
+	}
 
 	return nil
 }

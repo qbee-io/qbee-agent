@@ -15,26 +15,27 @@ import (
 // SoftwareManagementBundle controls software in the system.
 //
 // Example payload:
-// {
-//  "items": [
-//    {
-//      "package": "pkg1",
-//      "service_name": "serviceName",
-//      "config_files": [
-//        {
-//          "config_template": "configFileTemplate",
-//          "config_location": "configFileLocation"
-//        }
-//      ],
-//      "parameters": [
-//        {
-//          "key": "configKey",
-//          "value": "configValue"
-//        }
-//      ]
-//    }
-//  ]
-// }
+//
+//	{
+//	 "items": [
+//	   {
+//	     "package": "pkg1",
+//	     "service_name": "serviceName",
+//	     "config_files": [
+//	       {
+//	         "config_template": "configFileTemplate",
+//	         "config_location": "configFileLocation"
+//	       }
+//	     ],
+//	     "parameters": [
+//	       {
+//	         "key": "configKey",
+//	         "value": "configValue"
+//	       }
+//	     ]
+//	   }
+//	 ]
+//	}
 type SoftwareManagementBundle struct {
 	Metadata
 
@@ -183,7 +184,16 @@ func (s Software) installFromFile(ctx context.Context, srv *Service, pkgManager 
 	}
 
 	for _, pkg := range installedPackages {
-		if pkg.Name == pkgInfo.Name {
+		// continue if name do not match
+		if pkg.Name != pkgInfo.Name {
+			continue
+		}
+		// name matches, continue if versions do not match
+		if pkg.Version != pkgInfo.Version {
+			continue
+		}
+		// name and version match, return if architecture is the same
+		if pkg.Architecture == pkgInfo.Architecture {
 			return false, nil
 		}
 	}

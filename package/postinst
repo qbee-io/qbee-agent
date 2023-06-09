@@ -1,20 +1,32 @@
 #!/usr/bin/env bash
 
-set -e
+SYSTEMCTL=$(command -v systemctl)
 
-if [[ ! -d /etc/qbee/ppkeys ]]; then
-  mkdir -p /etc/qbee/ppkeys
-fi
+# create config dirs, no-op if exists
+mkdir -p /etc/qbee/ppkeys
 
+# copy ca cert in place
 cp -a /opt/qbee/share/ssl/ca.cert /etc/qbee/ppkeys
+
+# set permissions
 chmod 700 /etc/qbee /etc/qbee/ppkeys
 chmod 600 /etc/qbee/ppkeys/ca.cert
 
-systemctl daemon-reload
-systemctl enable qbee-agent
+# do systemctl operations if applicable
+if [[ -n $SYSTEMCTL ]]; then
+  if [[ -d /run/systemd/system ]]; then
+    systemctl daemon-reload
+  fi
+  systemctl enable qbee-agent
+fi
 
+# start the agent if config file is in place
 if [[ -f /etc/qbee/qbee-agent.json ]]; then
-  systemctl start qbee-agent
+  if [[ -n $SYSTEMCTL ]]; then
+    if [[ -d /run/systemd/system ]]; then
+      systemctl start qbee-agent
+    fi
+  fi
 else 
   echo "Device seems to not have been bootstrapped. Please run 'qbee-agent bootstrap -k <bootstrap-key>' as root to bootstrap."
 fi
