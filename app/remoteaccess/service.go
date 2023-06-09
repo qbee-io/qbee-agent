@@ -247,7 +247,17 @@ func (s *Service) notifyWhenInterfaceReady() {
 		}
 
 		for _, networkInterface := range interfaces {
-			if networkInterface.Name == NetworkInterfaceName {
+			if networkInterface.Name != NetworkInterfaceName {
+				continue
+			}
+
+			addrs, err := networkInterface.Addrs()
+			if err != nil {
+				log.Errorf("failed to list addresses for network interface: %v", err)
+				continue
+			}
+
+			if len(addrs) > 0 {
 				s.notification <- true
 				return
 			}
