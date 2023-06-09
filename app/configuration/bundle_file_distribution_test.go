@@ -250,7 +250,7 @@ func Test_FileDistributionBundle_Destination_Dirname_Exists(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+	assert.NoError(t, r.API.AddConfigurationChange(client.Change{
 		NodeID:     r.DeviceID,
 		BundleName: configuration.BundleFileDistribution,
 		Config:     bundle}))
@@ -298,7 +298,7 @@ func Test_FileDistributionBundle_Destination_Regular_Path(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+	assert.NoError(t, r.API.AddConfigurationChange(client.Change{
 		NodeID:     r.DeviceID,
 		BundleName: configuration.BundleFileDistribution,
 		Config:     bundle}))
@@ -347,7 +347,7 @@ func Test_FileDistributionBundle_Destination_Dirname_NotExists(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+	assert.NoError(t, r.API.AddConfigurationChange(client.Change{
 		NodeID:     r.DeviceID,
 		BundleName: configuration.BundleFileDistribution,
 		Config:     bundle}))
