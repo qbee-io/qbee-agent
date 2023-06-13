@@ -42,6 +42,9 @@ func RunCommand(ctx context.Context, command string) ([]byte, error) {
 		Pdeathsig: syscall.SIGINT,
 	}
 
+	// explicitly set working directory to root
+	cmd.Dir = "/"
+
 	// append tail buffer to Stdout to collect only most recent lines
 	tailBuffer := utils.NewTailBuffer(commandOutputLinesLimit)
 
