@@ -138,6 +138,7 @@ func (s *Service) doCollectNetwork() ([]Metric, error) {
 
 		metrics = append(metrics, Metric{
 			Label:     Network,
+			ID:        networkValue.ID,
 			Timestamp: time.Now().Unix(),
 			Values: Values{
 				NetworkValues: networkMetric,
