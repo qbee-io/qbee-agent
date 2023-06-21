@@ -25,9 +25,9 @@ import (
 //	}
 type NetworkValues struct {
 	// Received bytes on a network interface
-	RXBytes int `json:"rx_bytes"`
+	RXBytes uint64 `json:"rx_bytes"`
 	// Transferred bytes on a network interface
-	TXBytes int `json:"tx_bytes"`
+	TXBytes uint64 `json:"tx_bytes"`
 }
 
 // CollectNetwork metrics.
@@ -47,13 +47,13 @@ func CollectNetwork() ([]Metric, error) {
 
 		ifaceName := strings.TrimSuffix(fields[0], ":")
 
-		rxBytes, err := strconv.Atoi(fields[1])
+		rxBytes, err := strconv.ParseUint(fields[1], 10, 64)
 		if err != nil {
 			return err
 		}
 
-		var txBytes int
-		if txBytes, err = strconv.Atoi(fields[9]); err != nil {
+		var txBytes uint64
+		if txBytes, err = strconv.ParseUint(fields[9], 10, 64); err != nil {
 			return err
 		}
 
@@ -85,8 +85,18 @@ func (v *NetworkValues) Delta(old *NetworkValues) (*NetworkValues, error) {
 		return v, nil
 	}
 
+	rxBytes := uint64(0)
+	if v.RXBytes > old.RXBytes {
+		rxBytes = v.RXBytes - old.RXBytes
+	}
+
+	txBytes := uint64(0)
+	if v.TXBytes > old.TXBytes {
+		txBytes = v.TXBytes - old.TXBytes
+	}
+
 	return &NetworkValues{
-		RXBytes: v.RXBytes - old.RXBytes,
-		TXBytes: v.TXBytes - old.TXBytes,
+		RXBytes: rxBytes,
+		TXBytes: txBytes,
 	}, nil
 }
