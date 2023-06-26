@@ -214,6 +214,8 @@ func (s *Service) start() error {
 		Pdeathsig: syscall.SIGKILL,
 	}
 
+	s.cmd.Dir = "/"
+
 	if err := s.cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start remote access process: %w", err)
 	}
