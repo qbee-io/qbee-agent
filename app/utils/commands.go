@@ -17,6 +17,8 @@ func RunCommand(ctx context.Context, cmd []string) ([]byte, error) {
 		Pdeathsig: syscall.SIGINT,
 	}
 
+	command.Dir = "/"
+
 	output, err := command.Output()
 	if err != nil {
 		exitError := new(exec.ExitError)
