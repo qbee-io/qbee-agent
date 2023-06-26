@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"qbee.io/platform/test/api"
+	"qbee.io/platform/api/frontend/client"
 	"qbee.io/platform/test/assert"
 	"qbee.io/platform/test/device"
 
@@ -34,7 +34,7 @@ func Test_SoftwareManagementBundle_InstallPackageFromFile(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+	assert.NoError(t, r.API.AddConfigurationChange(client.Change{
 		NodeID:     r.DeviceID,
 		BundleName: configuration.BundleSoftwareManagement,
 		Config:     bundle}))
@@ -76,7 +76,7 @@ func Test_SoftwareManagementBundle_InstallPackageFromFile_WithDependencies(t *te
 		},
 	}
 
-	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+	assert.NoError(t, r.API.AddConfigurationChange(client.Change{
 		NodeID:     r.DeviceID,
 		BundleName: configuration.BundleSoftwareManagement,
 		Config:     bundle}))
@@ -128,7 +128,7 @@ func Test_SoftwareManagementBundle_InstallPackage_WithConfigFileTemplate(t *test
 		},
 	}
 
-	assert.NoError(t, r.API.AddConfigurationChange(api.Change{
+	assert.NoError(t, r.API.AddConfigurationChange(client.Change{
 		NodeID:     r.DeviceID,
 		BundleName: configuration.BundleSoftwareManagement,
 		Config:     bundle}))
