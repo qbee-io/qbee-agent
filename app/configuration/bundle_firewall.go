@@ -118,7 +118,7 @@ func (c FirewallChain) execute(ctx context.Context, table FirewallTableName, cha
 	}
 
 	// make expected rules-set
-	expectedRules := c.Render(table, chain)
+	expectedRules := c.Render(table, chain, false)
 
 	// current state is correct, nothing to do
 	if bytes.Equal(bytes.TrimSpace(currentRules), []byte(strings.Join(expectedRules, "\n"))) {
@@ -134,8 +134,10 @@ func (c FirewallChain) execute(ctx context.Context, table FirewallTableName, cha
 		return err
 	}
 
+	applyRules := c.Render(table, chain, true)
+
 	// apply correct rules
-	for _, rule := range expectedRules {
+	for _, rule := range applyRules {
 		cmd := append([]string{iptablesBin, "-t", string(table)}, strings.Fields(rule)...)
 		if _, err = utils.RunCommand(ctx, cmd); err != nil {
 			ReportError(ctx, err, "Firewall configuration failed.")
@@ -148,13 +150,9 @@ func (c FirewallChain) execute(ctx context.Context, table FirewallTableName, cha
 	return nil
 }
 
-// Render rules based on provided firewall chain and table information.
-func (c FirewallChain) Render(table FirewallTableName, chain FirewallChainName) []string {
-	rules := []string{
-		fmt.Sprintf("-P %s %s", chain, c.Policy),
-	}
-
+func (c FirewallChain) renderRules(table FirewallTableName, chain FirewallChainName) []string {
 	// for INPUT chain in the filter table we want to add some special rules
+	rules := make([]string, 0)
 	if table == Filter && chain == Input {
 		rules = append(rules,
 			"-A INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT",
@@ -167,8 +165,17 @@ func (c FirewallChain) Render(table FirewallTableName, chain FirewallChainName) 
 	for _, rule := range c.Rules {
 		rules = append(rules, rule.Render(chain))
 	}
-
 	return rules
+}
+
+// Render rules based on provided firewall chain and table information.
+func (c FirewallChain) Render(table FirewallTableName, chain FirewallChainName, policyLast bool) []string {
+	policy := fmt.Sprintf("-P %s %s", chain, c.Policy)
+
+	if policyLast {
+		return append(c.renderRules(table, chain), policy)
+	}
+	return append([]string{policy}, c.renderRules(table, chain)...)
 }
 
 // FirewallRule defines a single firewall rule.

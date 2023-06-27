@@ -197,7 +197,7 @@ func TestFirewallChain_Render(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.chain.Render(tt.tableName, tt.chainName); !reflect.DeepEqual(got, tt.want) {
+			if got := tt.chain.Render(tt.tableName, tt.chainName, false); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Render() = %v, want %v", got, tt.want)
 			}
 		})
