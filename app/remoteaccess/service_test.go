@@ -223,7 +223,6 @@ func TestService_ensureRunning(t *testing.T) {
 	expectedArguments := []string{
 		"--client",
 		"--remote", "127.0.0.1",
-		"--comp-lzo",
 		"--dev", "qbee0",
 		"--dev-type", "tun",
 		"--proto", "tcp",
