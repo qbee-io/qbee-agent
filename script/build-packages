@@ -61,7 +61,8 @@ function build_multiarch_tarball(){
   rm ${TAR_OUTPUT}/* -f 
   mkdir -p ${TAR_OUTPUT}
 
-  cp -a $BASEDIR/bin/* $build_dir/qbee-agent-${VERSION} 
+  cp -a $BASEDIR/bin/* $BASEDIR/package/share $BASEDIR/package/bin \
+    $BASEDIR/package/init-scripts $build_dir/qbee-agent-${VERSION} 
   fpm -t tar -n qbee-agent-${VERSION} -s dir -C ${build_dir} -p ${TAR_OUTPUT}
   gzip ${TAR_OUTPUT}/qbee-agent-${VERSION}.tar
 }
@@ -75,10 +76,24 @@ for arch in "${SUPPORTED_ARCHS[@]}"; do
   build_agent $arch
 
   build_dir=$(mktemp -d /tmp/qbee-agent.$arch.XXXXXXXX)
+
+  # Copy binary for arch in package build dir
   mkdir -p $build_dir/usr/bin
   cp $BASEDIR/bin/qbee-agent-$arch $build_dir/usr/bin/qbee-agent
-  cp -a package/* $build_dir
 
+  # Copy opt files
+  mkdir -p $build_dir/opt/qbee
+  cp -a $BASEDIR/package/bin $BASEDIR/package/share $build_dir/opt/qbee
+ 
+  # Copy service description
+  mkdir -p $build_dir/lib/systemd/system
+  cp -a $BASEDIR/package/init-scripts/systemd/* $build_dir/lib/systemd/system
+
+  # Copy install scripts
+
+  cp -a $BASEDIR/package/install-scripts/* $build_dir
+
+  # Set perms
   chmod 755 $build_dir/usr/bin/*
   chmod 644 $build_dir/lib/systemd/system/*
 

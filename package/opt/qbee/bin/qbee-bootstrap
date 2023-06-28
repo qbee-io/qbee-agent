@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-
-echo "WARNING: This is deprecated as of qbee-agent 2xxx.x, this file will be removed in the future"
-
-qbee-agent bootstrap $*
