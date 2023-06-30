@@ -1,6 +1,6 @@
 #!/bin/sh
 
-echo "WARNING: This is deprecated as of qbee-agent 2023.XX, this command will be removed in the future"
+echo "WARNING: This command is deprecated as of qbee-agent 2023.XX and will be removed in the future"
 echo "It has been replaced with:"
 echo "$ qbee-agent start --run-once"
 
