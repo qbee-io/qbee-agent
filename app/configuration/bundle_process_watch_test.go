@@ -118,8 +118,8 @@ func Test_BundleProcessWatch_CommandError(t *testing.T) {
 	assert.Equal(t, reports, expectedReports)
 
 	expectedLogs := []string{
-		"error running command [/bin/bash -c invalidCommand]: exit status 127",
-		"/bin/bash: line 1: invalidCommand: command not found",
+		"error running command [/usr/bin/bash -c invalidCommand]: exit status 127",
+		"/usr/bin/bash: line 1: invalidCommand: command not found",
 	}
 
 	assert.Equal(t, logs, expectedLogs)
