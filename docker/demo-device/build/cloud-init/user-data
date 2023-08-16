@@ -1,0 +1,24 @@
+#cloud-config
+package_update: true
+packages:
+  - docker.io
+
+runcmd:
+  - |
+    wget -O /tmp/qbee-agent-installer.sh -q https://raw.githubusercontent.com/qbee-io/qbee-agent-installers/main/qbee-agent-installer.sh
+
+    bash -x /tmp/qbee-agent-installer.sh
+
+    # Disable unattended upgrades
+    systemctl --quiet is-active unattended-upgrades && sudo systemctl stop unattended-upgrades
+    systemctl --quiet is-active apt-daily && sudo systemctl stop apt-daily
+    systemctl --quiet is-active apt-daily-upgrade && sudo systemctl stop apt-daily-upgrade
+
+    systemctl disable unattended-upgrades apt-daily-upgrade.timer apt-daily.timer
+    systemctl mask apt-daily apt-daily-upgrade unattended-upgrades apt-daily-upgrade.timer apt-daily.timer
+    rm -f /etc/cron.daily/apt-compat
+
+    apt-get clean
+    apt-get autoremove -y
+
+    shutdown -h now
