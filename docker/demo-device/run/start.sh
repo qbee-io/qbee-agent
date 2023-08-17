@@ -15,7 +15,7 @@ generate_user_password() {
 }
 
 export QBEE_DEMO_USER="qbee"
-export QBEE_DEMO_PASSWORD=$(generate_user_password)
+export QBEE_DEMO_PASSWORD="qbee"
 export QBEE_DEMO_BOOTSTRAP_KEY="${BOOTSTRAP_KEY}"
 export QBEE_DEMO_PASSWORD_HASH=$(echo $QBEE_DEMO_PASSWORD | mkpasswd --method=SHA-512 --stdin)
 export QBEE_DEMO_DEVICE_HUB_HOST=${QBEE_DEMO_DEVICE_HUB_HOST:-device.app.qbee.io}
