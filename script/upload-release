@@ -6,6 +6,20 @@ source $SCRIPT_DIR/config.env
 
 PACKAGE_BUCKET="qbee-static-eu-west-1-pro"
 
+function generate_shasums() {
+  local old_pwd
+
+  old_pwd=$(pwd)
+
+  cd $PKG_OUTPUT
+  sha512sum * > SHA512SUMS
+
+  cd $TAR_OUTPUT
+  osha512sum * > SHA512SUMS
+
+  cd $old_pwd
+}
+
 function upload_packages() {
 
   PACKAGE_S3_BASE="s3://$PACKAGE_BUCKET/software/qbee-agent/$VERSION/packages"
@@ -26,6 +40,19 @@ function upload_binaries(){
   done
 }
 
+function set_latest_release() {
+  LATEST_URL="s3://$PACKAGE_BUCKET/software/qbee-agent/latest.txt"
+
+  if [[ $VERSION =~ ^20[0-9]+\.[0-9]+$ ]]; then
+    LATEST_FILE=$(mktemp /tmp/latest.txt.XXXXXXXX)
+    echo "$VERSION" > $LATEST_FILE
+    aws s3 cp "$LATEST_FILE" "$LATEST_URL"
+    rm "$LATEST_FILE" -f
+  fi
+}
+
+generate_shasums
 upload_packages
 # upload binaries to cdn (Yocto)
 upload_binaries
+set_latest_release
