@@ -15,7 +15,7 @@ function generate_shasums() {
   sha512sum * > SHA512SUMS
 
   cd $TAR_OUTPUT
-  osha512sum * > SHA512SUMS
+  sha512sum * > SHA512SUMS
 
   cd $old_pwd
 }
