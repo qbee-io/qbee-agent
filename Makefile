@@ -14,6 +14,7 @@ PUBLIC_SINGING_KEY_VAR=github.com/qbee-io/qbee-agent/app/binary.PublicSigningKey
 build:
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
 		-ldflags "-s -w -X $(VERSION_VAR)=$(VERSION) -X $(PUBLIC_SINGING_KEY_VAR)=$(PUBLIC_SIGNING_KEY) -X $(COMMIT_VAR)=$(COMMIT)" \
+		-trimpath \
 		-o bin/qbee-agent cmd/agent/main.go
 
 auto-build:
