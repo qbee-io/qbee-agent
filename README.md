@@ -4,7 +4,30 @@
 
 Obtain the signing key from a secure location.
 
-## Build procedure
+## Prerequisites
+
+Go version 1.20 or higher (use the go version manager: https://github.com/moovweb/gvm)
+
+```bash
+$ go version
+go version go1.20.3 linux/amd64
+
+```
+
+fpm (https://github.com/jordansissel/fpm)
+
+```bash
+sudo apt install ruby
+sudo gem install fpm
+```
+
+Other dependencies (some usually installed on Linux systems already):
+
+```bash
+sudo apt install awscli gzip coreutils make
+```
+
+## Build packages
 
 Build the packages pointing to our signing key. Package versions will by default be 0000.00. Set the VERSION environment
 variable to override. We're currently building deb and rpm packages in addition to a tarball to be used in YOCTO or any custom
