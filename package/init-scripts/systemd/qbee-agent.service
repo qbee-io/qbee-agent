@@ -2,7 +2,6 @@
 Description=The Qbee fleet management agent
 After=syslog.target
 ConditionPathExists=/etc/qbee/qbee-agent.json
-ConditionPathExists=/etc/qbee/ppkeys/qbee.cert
 
 [Service]
 ExecStart=/usr/bin/qbee-agent start
