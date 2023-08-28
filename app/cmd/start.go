@@ -4,10 +4,11 @@ import (
 	"context"
 
 	"github.com/qbee-io/qbee-agent/app/agent"
+	"github.com/qbee-io/qbee-agent/app/log"
 )
 
 const (
-	startOnceOption              = "run-once"
+	startOnceOption = "run-once"
 )
 
 var startCommand = Command{
@@ -30,6 +31,20 @@ var startCommand = Command{
 		cfg, err := loadConfig(opts)
 		if err != nil {
 			return err
+		}
+
+		if cfg.BootstrapKey != "" {
+			log.Infof("Found bootstrap key, bootstrapping device.")
+			if cfg.DeviceHubServer == "" {
+				cfg.DeviceHubServer = agent.DefaultDeviceHubServer
+			}
+
+			if cfg.DeviceHubPort == "" {
+				cfg.DeviceHubPort = agent.DefaultDeviceHubPort
+			}
+			if err := agent.Bootstrap(ctx, cfg, cfg.BootstrapKey); err != nil {
+				return err
+			}
 		}
 
 		if runOnce {
