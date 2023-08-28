@@ -19,6 +19,10 @@ const (
 )
 
 type Config struct {
+
+	// BootstrapKey is the bootstrap key used to bootstrap the device.
+	BootstrapKey string `json:"bootstrap_key,omitempty"`
+
 	// Directory where the configuration files of the agent are located.
 	Directory string `json:"-"`
 
@@ -75,6 +79,11 @@ func LoadConfig(configDir, stateDir string) (*Config, error) {
 }
 
 func (agent *Agent) saveConfig() error {
+
+	if agent.cfg.BootstrapKey != "" {
+		agent.cfg.BootstrapKey = ""
+	}
+
 	config, err := json.Marshal(agent.cfg)
 	if err != nil {
 		return fmt.Errorf("error marshaling configuration file: %w", err)
