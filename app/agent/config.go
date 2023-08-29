@@ -75,6 +75,15 @@ func LoadConfig(configDir, stateDir string) (*Config, error) {
 		config.VPNServer = DefaultVPNServer
 	}
 
+	// Set default device hub port and server if not set
+	if config.DeviceHubServer == "" {
+		config.DeviceHubServer = DefaultDeviceHubServer
+	}
+
+	if config.DeviceHubPort == "" {
+		config.DeviceHubPort = DefaultDeviceHubPort
+	}
+
 	return config, nil
 }
 
