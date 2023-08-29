@@ -14,10 +14,10 @@ import (
 	"github.com/qbee-io/qbee-agent/app/log"
 )
 
-const boostrapWaitTime = 5 * time.Second
+const bootstrapWaitTime = 5 * time.Second
 
 // Bootstrap device using agent's config and provided bootstrap key.
-func Bootstrap(ctx context.Context, cfg *Config, bootstrapKey string) error {
+func Bootstrap(ctx context.Context, cfg *Config) error {
 	agent, err := NewWithoutCredentials(cfg)
 	if err != nil {
 		return err
@@ -39,7 +39,7 @@ func Bootstrap(ctx context.Context, cfg *Config, bootstrapKey string) error {
 
 	for {
 
-		if response, err = agent.sendBootstrapRequest(ctx, bootstrapKey, bootstrapRequest); err != nil {
+		if response, err = agent.sendBootstrapRequest(ctx, cfg.BootstrapKey, bootstrapRequest); err != nil {
 			return fmt.Errorf("error sending bootstrap request: %w", err)
 		}
 
@@ -48,7 +48,7 @@ func Bootstrap(ctx context.Context, cfg *Config, bootstrapKey string) error {
 		}
 
 		log.Infof("Awaiting to be approved.")
-		time.Sleep(boostrapWaitTime)
+		time.Sleep(bootstrapWaitTime)
 	}
 
 	pemCert := []byte(strings.Join(response.Certificate, "\n"))
@@ -56,6 +56,9 @@ func Bootstrap(ctx context.Context, cfg *Config, bootstrapKey string) error {
 	if err = agent.saveCertificate(pemCert); err != nil {
 		return err
 	}
+
+	// Do not record the bootstrap key in the config file
+	cfg.BootstrapKey = ""
 
 	if err = agent.saveConfig(); err != nil {
 		return err
