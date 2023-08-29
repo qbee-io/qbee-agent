@@ -57,9 +57,6 @@ func Bootstrap(ctx context.Context, cfg *Config) error {
 		return err
 	}
 
-	// Do not record the bootstrap key in the config file
-	cfg.BootstrapKey = ""
-
 	if err = agent.saveConfig(); err != nil {
 		return err
 	}
