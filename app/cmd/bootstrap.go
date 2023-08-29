@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"qbee.io/platform/utils/flags"
+	"qbee.io/platform/utils/cmd"
 
 	"github.com/qbee-io/qbee-agent/app/agent"
 )
@@ -22,9 +22,9 @@ const (
 	bootstrapProxyPasswordOption = "proxy-password"
 )
 
-var bootstrapCommand = flags.Command{
+var bootstrapCommand = cmd.Command{
 	Description: "Bootstrap device.",
-	Options: []flags.Option{
+	Options: []cmd.Option{
 		{
 			Name:     boostrapKeyOption,
 			Short:    "k",
@@ -80,7 +80,7 @@ var bootstrapCommand = flags.Command{
 		},
 	},
 
-	Target: func(opts flags.Options) error {
+	Target: func(opts cmd.Options) error {
 		cfg := &agent.Config{
 			Directory:       opts[mainConfigDirOption],
 			StateDirectory:  opts[mainStateDirOption],

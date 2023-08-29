@@ -3,14 +3,14 @@ package cmd
 import (
 	"context"
 
-	"qbee.io/platform/utils/flags"
+	"qbee.io/platform/utils/cmd"
 
 	"github.com/qbee-io/qbee-agent/app/agent"
 )
 
-var updateCommand = flags.Command{
+var updateCommand = cmd.Command{
 	Description: "Update the agent.",
-	Target: func(opts flags.Options) error {
+	Target: func(opts cmd.Options) error {
 		ctx := context.Background()
 
 		cfg, err := loadConfig(opts)
