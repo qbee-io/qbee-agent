@@ -35,14 +35,7 @@ var startCommand = Command{
 
 		if cfg.BootstrapKey != "" {
 			log.Infof("Found bootstrap key, bootstrapping device.")
-			if cfg.DeviceHubServer == "" {
-				cfg.DeviceHubServer = agent.DefaultDeviceHubServer
-			}
-
-			if cfg.DeviceHubPort == "" {
-				cfg.DeviceHubPort = agent.DefaultDeviceHubPort
-			}
-			if err := agent.Bootstrap(ctx, cfg, cfg.BootstrapKey); err != nil {
+			if err := agent.Bootstrap(ctx, cfg); err != nil {
 				return err
 			}
 		}
