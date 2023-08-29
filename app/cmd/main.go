@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"qbee.io/platform/utils/flags"
+
 	"github.com/qbee-io/qbee-agent/app/agent"
 	"github.com/qbee-io/qbee-agent/app/log"
 )
@@ -16,9 +18,9 @@ const (
 	DefaultStateDir  = "/var/lib/qbee"
 )
 
-var Main = Command{
+var Main = flags.Command{
 	Description: "Qbee Agent Command-Line Tool",
-	Options: []Option{
+	Options: []flags.Option{
 		{
 			Name:    mainConfigDirOption,
 			Short:   "c",
@@ -38,7 +40,7 @@ var Main = Command{
 			Default: "INFO",
 		},
 	},
-	SubCommands: map[string]Command{
+	SubCommands: map[string]flags.Command{
 		"bootstrap": bootstrapCommand,
 		"config":    configCommand,
 		"inventory": inventoryCommand,
@@ -49,7 +51,7 @@ var Main = Command{
 }
 
 // loadConfig is a helper method to load agent's config based on provided command-line options.
-func loadConfig(opts Options) (*agent.Config, error) {
+func loadConfig(opts flags.Options) (*agent.Config, error) {
 	switch opts[mainLogLevel] {
 	case "DEBUG":
 		log.SetLevel(log.DEBUG)

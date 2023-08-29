@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 
+	"qbee.io/platform/utils/flags"
+
 	"github.com/qbee-io/qbee-agent/app/agent"
 	"github.com/qbee-io/qbee-agent/app/inventory"
 )
@@ -15,9 +17,9 @@ const (
 	inventoryDryRunOption = "dry-run"
 )
 
-var inventoryCommand = Command{
+var inventoryCommand = flags.Command{
 	Description: "Send inventory data to the Device Hub API.",
-	Options: []Option{
+	Options: []flags.Option{
 		{
 			Name:     inventoryTypeOption,
 			Short:    "t",
@@ -32,7 +34,7 @@ var inventoryCommand = Command{
 			Flag:  "true",
 		},
 	},
-	Target: func(opts Options) error {
+	Target: func(opts flags.Options) error {
 		inventoryType := inventory.Type(opts[inventoryTypeOption])
 		dryRun := opts[inventoryDryRunOption] == "true"
 
