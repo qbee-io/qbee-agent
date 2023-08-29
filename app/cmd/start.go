@@ -3,6 +3,8 @@ package cmd
 import (
 	"context"
 
+	"qbee.io/platform/utils/cmd"
+
 	"github.com/qbee-io/qbee-agent/app/agent"
 	"github.com/qbee-io/qbee-agent/app/log"
 )
@@ -11,10 +13,10 @@ const (
 	startOnceOption = "run-once"
 )
 
-var startCommand = Command{
+var startCommand = cmd.Command{
 	Description: "Start the agent process.",
 
-	Options: []Option{
+	Options: []cmd.Option{
 		{
 			Name:  startOnceOption,
 			Short: "1",
@@ -23,7 +25,7 @@ var startCommand = Command{
 		},
 	},
 
-	Target: func(opts Options) error {
+	Target: func(opts cmd.Options) error {
 		runOnce := opts[startOnceOption] == "true"
 
 		ctx := context.Background()

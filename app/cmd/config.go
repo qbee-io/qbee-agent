@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 
+	"qbee.io/platform/utils/cmd"
+
 	"github.com/qbee-io/qbee-agent/app/agent"
 	"github.com/qbee-io/qbee-agent/app/configuration"
 )
@@ -16,9 +18,9 @@ const (
 	configReportToConsoleOption = "report-to-console"
 )
 
-var configCommand = Command{
+var configCommand = cmd.Command{
 	Description: "Execute device configuration.",
-	Options: []Option{
+	Options: []cmd.Option{
 		{
 			Name:  configFromFileOption,
 			Short: "f",
@@ -37,7 +39,7 @@ var configCommand = Command{
 			Flag:  "true",
 		},
 	},
-	Target: func(opts Options) error {
+	Target: func(opts cmd.Options) error {
 		dryRun := opts[configDryRunOption] == "true"
 		fromFile := opts[configFromFileOption]
 		reportToConsole := opts[configReportToConsoleOption] == "true"
