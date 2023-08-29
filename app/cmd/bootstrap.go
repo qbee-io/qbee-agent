@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	boostrapKeyOption            = "bootstrap-key"
+	bootstrapKeyOption           = "bootstrap-key"
 	bootstrapAutoUpdateOption    = "enable-auto-update"
 	bootstrapDeviceHubHostOption = "device-hub-host"
 	bootstrapDeviceHubPortOption = "device-hub-port"
@@ -24,7 +24,7 @@ var bootstrapCommand = Command{
 	Description: "Bootstrap device.",
 	Options: []Option{
 		{
-			Name:     boostrapKeyOption,
+			Name:     bootstrapKeyOption,
 			Short:    "k",
 			Help:     "Set the bootstrap key found in the user profile.",
 			Required: true,
@@ -80,6 +80,7 @@ var bootstrapCommand = Command{
 
 	Target: func(opts Options) error {
 		cfg := &agent.Config{
+			BootstrapKey:    opts[bootstrapKeyOption],
 			Directory:       opts[mainConfigDirOption],
 			StateDirectory:  opts[mainStateDirOption],
 			AutoUpdate:      opts[bootstrapAutoUpdateOption] == "true",
@@ -93,14 +94,13 @@ var bootstrapCommand = Command{
 			ProxyPassword:   opts[bootstrapProxyPasswordOption],
 		}
 
-		bootstrapKey, ok := opts[boostrapKeyOption]
-		if !ok {
+		if cfg.BootstrapKey == "" {
 			return fmt.Errorf("bootstrap key (-k) is required")
 		}
 
 		ctx := context.Background()
 
-		if err := agent.Bootstrap(ctx, cfg, bootstrapKey); err != nil {
+		if err := agent.Bootstrap(ctx, cfg); err != nil {
 			return fmt.Errorf("bootstrap error: %w", err)
 		}
 
