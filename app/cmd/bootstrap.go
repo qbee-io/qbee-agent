@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"qbee.io/platform/utils/cmd"
+
 	"github.com/qbee-io/qbee-agent/app/agent"
 )
 
@@ -21,9 +23,9 @@ const (
 	bootstrapDeviceName          = "device-name"
 )
 
-var bootstrapCommand = Command{
+var bootstrapCommand = cmd.Command{
 	Description: "Bootstrap device.",
-	Options: []Option{
+	Options: []cmd.Option{
 		{
 			Name:     boostrapKeyOption,
 			Short:    "k",
@@ -83,7 +85,7 @@ var bootstrapCommand = Command{
 		},
 	},
 
-	Target: func(opts Options) error {
+	Target: func(opts cmd.Options) error {
 		cfg := &agent.Config{
 			Directory:       opts[mainConfigDirOption],
 			StateDirectory:  opts[mainStateDirOption],
