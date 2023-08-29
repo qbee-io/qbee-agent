@@ -58,6 +58,9 @@ type BootstrapRequest struct {
 	//    "-----END PUBLIC KEY-----"
 	// }
 	RawPublicKey []string `json:"pub_key"`
+
+	// DeviceName is the name of the device to use. Only in use during bootstrap
+	DeviceName string `json:"device_name,omitempty"`
 }
 
 type BootstrapResponse struct {

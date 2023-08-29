@@ -47,6 +47,9 @@ type Config struct {
 
 	// VPNServer is the IP address of the VPN server to connect to.
 	VPNServer string `json:"vpn_server,omitempty"`
+
+	// DeviceName is the name of the device - only to be used during bootstrap
+	DeviceName string `json:"-"`
 }
 
 // LoadConfig loads config from a provided config file path.

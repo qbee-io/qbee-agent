@@ -18,6 +18,7 @@ const (
 	bootstrapProxyPortOption     = "proxy-port"
 	bootstrapProxyUserOption     = "proxy-user"
 	bootstrapProxyPasswordOption = "proxy-password"
+	bootstrapDeviceName          = "device-name"
 )
 
 var bootstrapCommand = Command{
@@ -45,6 +46,10 @@ var bootstrapCommand = Command{
 			Help:    "Device Hub API port.",
 			Hidden:  true,
 			Default: agent.DefaultDeviceHubPort,
+		},
+		{
+			Name: bootstrapDeviceName,
+			Help: "Custom device name to use.",
 		},
 		{
 			Name:    bootstrapVPNServerOption,
@@ -92,6 +97,7 @@ var bootstrapCommand = Command{
 			ProxyPort:       opts[bootstrapProxyPortOption],
 			ProxyUser:       opts[bootstrapProxyUserOption],
 			ProxyPassword:   opts[bootstrapProxyPasswordOption],
+			DeviceName:      opts[bootstrapDeviceName],
 		}
 
 		if cfg.BootstrapKey == "" {

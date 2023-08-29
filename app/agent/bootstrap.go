@@ -171,5 +171,9 @@ func (agent *Agent) newBootstrapRequest() (*BootstrapRequest, error) {
 		RawPublicKey: rawPublicKey,
 	}
 
+	if agent.cfg.DeviceName != "" {
+		bootstrapRequest.DeviceName = agent.cfg.DeviceName
+	}
+
 	return bootstrapRequest, nil
 }
