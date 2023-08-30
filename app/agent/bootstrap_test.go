@@ -39,4 +39,13 @@ func Test_Bootstrap_Automatic(t *testing.T) {
 	r.CreateFile("/etc/qbee/qbee-agent.json", configBytes)
 
 	r.MustExec("qbee-agent", "start", "-1")
+
+	configBytes = r.ReadFile("/etc/qbee/qbee-agent.json")
+
+	config := new(Config)
+	err = json.Unmarshal(configBytes, config)
+	assert.NoError(t, err)
+
+	// Check that bootstrap key is not saved
+	assert.Equal(t, config.BootstrapKey, "")
 }
