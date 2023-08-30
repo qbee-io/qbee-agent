@@ -2,6 +2,7 @@ package software
 
 import (
 	"context"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -70,6 +71,10 @@ func TestDebPackageManager_parseUpdateAvailableLine(t *testing.T) {
 }
 
 func TestParseDebianPackage(t *testing.T) {
+	if gotPath, _ := exec.LookPath(dpkgPath); gotPath == "" {
+		t.Skip("dpkg not found")
+	}
+
 	ctx := context.Background()
 
 	_, currentFile, _, _ := runtime.Caller(0)
