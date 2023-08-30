@@ -46,6 +46,9 @@ type Config struct {
 
 	// DeviceName is the name of the device - only to be used during bootstrap
 	DeviceName string `json:"-"`
+
+	// EnableVPN enables the VPN connection.
+	DisableVPN bool `json:"disable_vpn,omitempty"`
 }
 
 // LoadConfig loads config from a provided config file path.
