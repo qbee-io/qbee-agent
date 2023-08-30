@@ -20,7 +20,8 @@ const (
 	bootstrapProxyPortOption     = "proxy-port"
 	bootstrapProxyUserOption     = "proxy-user"
 	bootstrapProxyPasswordOption = "proxy-password"
-	bootstrapDeviceName          = "device-name"
+	bootstrapDeviceNameOption    = "device-name"
+	bootstrapDisableVPNOption    = "disable-vpn"
 )
 
 var bootstrapCommand = cmd.Command{
@@ -38,6 +39,11 @@ var bootstrapCommand = cmd.Command{
 			Help: "Enable auto-update.",
 		},
 		{
+			Name: bootstrapDisableVPNOption,
+			Flag: "true",
+			Help: "Disable VPN.",
+		},
+		{
 			Name:    bootstrapDeviceHubHostOption,
 			Help:    "Device Hub API host.",
 			Hidden:  true,
@@ -50,7 +56,7 @@ var bootstrapCommand = cmd.Command{
 			Default: agent.DefaultDeviceHubPort,
 		},
 		{
-			Name: bootstrapDeviceName,
+			Name: bootstrapDeviceNameOption,
 			Help: "Custom device name to use.",
 		},
 		{
@@ -98,7 +104,8 @@ var bootstrapCommand = cmd.Command{
 			ProxyPort:       opts[bootstrapProxyPortOption],
 			ProxyUser:       opts[bootstrapProxyUserOption],
 			ProxyPassword:   opts[bootstrapProxyPasswordOption],
-			DeviceName:      opts[bootstrapDeviceName],
+			DeviceName:      opts[bootstrapDeviceNameOption],
+			DisableVPN:      opts[bootstrapDisableVPNOption] == "true",
 		}
 
 		bootstrapKey, ok := opts[boostrapKeyOption]
