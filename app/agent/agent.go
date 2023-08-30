@@ -72,6 +72,10 @@ func (agent *Agent) Run(ctx context.Context) error {
 			// let all the processing finish
 			agent.inProgress.Wait()
 
+			if agent.disableRemoteAccess {
+				return nil
+			}
+
 			// stop the remote access service
 			if err := agent.remoteAccess.Stop(); err != nil {
 				log.Errorf("failed to stop remote access: %s", err)
@@ -222,7 +226,7 @@ func (agent *Agent) doConfig(configData *configuration.CommittedConfig) func(ctx
 
 // doRemoteAccess maintains remote access for the agent - if enabled.
 func (agent *Agent) doRemoteAccess(ctx context.Context) error {
-	// remote access is disabled on RunOnce
+	// do not run remote access if it is disabled
 	if agent.disableRemoteAccess {
 		return nil
 	}
@@ -292,6 +296,7 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 	agent.Metrics = metrics.New(agent.api)
 	agent.remoteAccess = remoteaccess.New(agent.api, cfg.VPNServer, certDir, binDir, proxy)
 	agent.loopTicker = time.NewTicker(agent.Configuration.RunInterval())
+	agent.disableRemoteAccess = cfg.DisableVPN
 
 	return agent, nil
 }
