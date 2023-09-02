@@ -10,18 +10,18 @@ import (
 )
 
 const (
-	boostrapKeyOption            = "bootstrap-key"
-	bootstrapAutoUpdateOption    = "enable-auto-update"
-	bootstrapDeviceHubHostOption = "device-hub-host"
-	bootstrapDeviceHubPortOption = "device-hub-port"
-	bootstrapVPNServerOption     = "vpn-server"
-	bootstrapTPMDeviceOption     = "tpm-device"
-	bootstrapProxyHostOption     = "proxy-host"
-	bootstrapProxyPortOption     = "proxy-port"
-	bootstrapProxyUserOption     = "proxy-user"
-	bootstrapProxyPasswordOption = "proxy-password"
-	bootstrapDeviceNameOption    = "device-name"
-	bootstrapDisableVPNOption    = "disable-vpn"
+	boostrapKeyOption                  = "bootstrap-key"
+	bootstrapAutoUpdateOption          = "enable-auto-update"
+	bootstrapDeviceHubHostOption       = "device-hub-host"
+	bootstrapDeviceHubPortOption       = "device-hub-port"
+	bootstrapVPNServerOption           = "vpn-server"
+	bootstrapTPMDeviceOption           = "tpm-device"
+	bootstrapProxyHostOption           = "proxy-host"
+	bootstrapProxyPortOption           = "proxy-port"
+	bootstrapProxyUserOption           = "proxy-user"
+	bootstrapProxyPasswordOption       = "proxy-password"
+	bootstrapDeviceNameOption          = "device-name"
+	bootstrapDisableRemoteAccessOption = "disable-remote-access"
 )
 
 var bootstrapCommand = cmd.Command{
@@ -39,9 +39,9 @@ var bootstrapCommand = cmd.Command{
 			Help: "Enable auto-update.",
 		},
 		{
-			Name: bootstrapDisableVPNOption,
+			Name: bootstrapDisableRemoteAccessOption,
 			Flag: "true",
-			Help: "Disable VPN.",
+			Help: "Disable remote access.",
 		},
 		{
 			Name:    bootstrapDeviceHubHostOption,
@@ -93,19 +93,19 @@ var bootstrapCommand = cmd.Command{
 
 	Target: func(opts cmd.Options) error {
 		cfg := &agent.Config{
-			Directory:       opts[mainConfigDirOption],
-			StateDirectory:  opts[mainStateDirOption],
-			AutoUpdate:      opts[bootstrapAutoUpdateOption] == "true",
-			DeviceHubServer: opts[bootstrapDeviceHubHostOption],
-			DeviceHubPort:   opts[bootstrapDeviceHubPortOption],
-			VPNServer:       opts[bootstrapVPNServerOption],
-			TPMDevice:       opts[bootstrapTPMDeviceOption],
-			ProxyServer:     opts[bootstrapProxyHostOption],
-			ProxyPort:       opts[bootstrapProxyPortOption],
-			ProxyUser:       opts[bootstrapProxyUserOption],
-			ProxyPassword:   opts[bootstrapProxyPasswordOption],
-			DeviceName:      opts[bootstrapDeviceNameOption],
-			DisableVPN:      opts[bootstrapDisableVPNOption] == "true",
+			Directory:           opts[mainConfigDirOption],
+			StateDirectory:      opts[mainStateDirOption],
+			AutoUpdate:          opts[bootstrapAutoUpdateOption] == "true",
+			DeviceHubServer:     opts[bootstrapDeviceHubHostOption],
+			DeviceHubPort:       opts[bootstrapDeviceHubPortOption],
+			VPNServer:           opts[bootstrapVPNServerOption],
+			TPMDevice:           opts[bootstrapTPMDeviceOption],
+			ProxyServer:         opts[bootstrapProxyHostOption],
+			ProxyPort:           opts[bootstrapProxyPortOption],
+			ProxyUser:           opts[bootstrapProxyUserOption],
+			ProxyPassword:       opts[bootstrapProxyPasswordOption],
+			DeviceName:          opts[bootstrapDeviceNameOption],
+			DisableRemoteAccess: opts[bootstrapDisableRemoteAccessOption] == "true",
 		}
 
 		bootstrapKey, ok := opts[boostrapKeyOption]
