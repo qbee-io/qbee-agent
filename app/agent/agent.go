@@ -296,7 +296,7 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 	agent.Metrics = metrics.New(agent.api)
 	agent.remoteAccess = remoteaccess.New(agent.api, cfg.VPNServer, certDir, binDir, proxy)
 	agent.loopTicker = time.NewTicker(agent.Configuration.RunInterval())
-	agent.disableRemoteAccess = cfg.DisableVPN
+	agent.disableRemoteAccess = cfg.DisableRemoteAccess
 
 	return agent, nil
 }
