@@ -36,6 +36,8 @@ func Test_Bootstrap_Automatic(t *testing.T) {
 		DeviceHubPort:   "8443",
 	})
 
+	assert.NoError(t, err)
+
 	r.CreateFile("/etc/qbee/qbee-agent.json", configBytes)
 
 	r.MustExec("qbee-agent", "start", "-1")
@@ -48,4 +50,12 @@ func Test_Bootstrap_Automatic(t *testing.T) {
 
 	// Check that bootstrap key is not saved
 	assert.Equal(t, config.BootstrapKey, "")
+
+	// Runner is not bootstrapped  with Bootstrap(), so we need to set the device ID manually
+	deviceID := r.GetDeviceID()
+
+	// Check that device is indeed bootstrapped
+	device, err := r.API.GroupTreeGetNode(deviceID)
+	assert.NoError(t, err)
+	assert.Equal(t, device.NodeID, deviceID)
 }
