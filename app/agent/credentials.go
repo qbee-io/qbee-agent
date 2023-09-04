@@ -36,7 +36,7 @@ func (agent *Agent) loadCACertificatesPool() error {
 		defer cancel()
 
 		if err := agent.updateCACertificate(ctx, true); err != nil {
-			return nil
+			return err
 		}
 	}
 
