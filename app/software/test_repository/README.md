@@ -18,6 +18,7 @@ Building a package:
 
     dpkg-deb -Zgzip --build <package_dir>
 
-Rebuilding of Packages.gz (repository index) can be done with the following command:
+Rebuilding of Packages.gz and Packages.xz (repository index) can be done with the following command:
 
     dpkg-scanpackages --multiversion . /dev/null | gzip -9c > Packages.gz
+    dpkg-scanpackages --multiversion . /dev/null | xz > Packages.xz
