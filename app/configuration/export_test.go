@@ -13,6 +13,8 @@ func (srv *Service) ResetRebootAfterRun() {
 
 // ExecuteTestConfigInDocker executes provided config inside a docker container and returns reports and logs.
 func ExecuteTestConfigInDocker(r *device.Runner, config CommittedConfig) ([]string, []string) {
+	r.Bootstrap()
+
 	r.CreateJSON("/app/config.json", config)
 
 	return ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r", "-f", "/app/config.json"))
