@@ -59,6 +59,10 @@ var configCommand = cmd.Command{
 			deviceAgent, err = agent.New(cfg)
 		}
 
+		if err != nil {
+			return fmt.Errorf("error initializing the agent: %w", err)
+		}
+
 		if reportToConsole {
 			deviceAgent.Configuration.EnableConsoleReporting()
 		}
