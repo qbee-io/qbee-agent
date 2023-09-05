@@ -1,6 +1,7 @@
 package configuration
 
 import (
+	"fmt"
 	"strings"
 
 	"qbee.io/platform/test/device"
@@ -13,7 +14,9 @@ func (srv *Service) ResetRebootAfterRun() {
 
 // ExecuteTestConfigInDocker executes provided config inside a docker container and returns reports and logs.
 func ExecuteTestConfigInDocker(r *device.Runner, config CommittedConfig) ([]string, []string) {
-	r.Bootstrap()
+
+	r.MustExec("mkdir", "-p", "/etc/qbee/ppkeys")
+	r.MustExec("curl", "-k", "-s", "-o", "/etc/qbee/ppkeys/ca.cert", fmt.Sprintf("%s/ca.crt", r.GetDeviceHubUrl()))
 
 	r.CreateJSON("/app/config.json", config)
 
