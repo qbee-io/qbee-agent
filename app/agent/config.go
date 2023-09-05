@@ -50,6 +50,9 @@ type Config struct {
 
 	// DeviceName is the name of the device - only to be used during bootstrap
 	DeviceName string `json:"-"`
+
+	// DisableRemoteAccess disables remote access.
+	DisableRemoteAccess bool `json:"disable_remote_access,omitempty"`
 }
 
 // LoadConfig loads config from a provided config file path.

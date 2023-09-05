@@ -21,6 +21,7 @@ const (
 	bootstrapProxyUserOption     = "proxy-user"
 	bootstrapProxyPasswordOption = "proxy-password"
 	bootstrapDeviceName          = "device-name"
+	bootstrapDisableRemoteAccessOption = "disable-remote-access"
 )
 
 var bootstrapCommand = cmd.Command{
@@ -38,6 +39,11 @@ var bootstrapCommand = cmd.Command{
 			Help: "Enable auto-update.",
 		},
 		{
+			Name: bootstrapDisableRemoteAccessOption,
+			Flag: "true",
+			Help: "Disable remote access.",
+		},
+		{
 			Name:    bootstrapDeviceHubHostOption,
 			Help:    "Device Hub API host.",
 			Hidden:  true,
@@ -50,7 +56,7 @@ var bootstrapCommand = cmd.Command{
 			Default: agent.DefaultDeviceHubPort,
 		},
 		{
-			Name: bootstrapDeviceName,
+			Name: bootstrapDeviceNameOption,
 			Help: "Custom device name to use.",
 		},
 		{
@@ -87,19 +93,20 @@ var bootstrapCommand = cmd.Command{
 
 	Target: func(opts cmd.Options) error {
 		cfg := &agent.Config{
-			BootstrapKey:    opts[bootstrapKeyOption],
-			Directory:       opts[mainConfigDirOption],
-			StateDirectory:  opts[mainStateDirOption],
-			AutoUpdate:      opts[bootstrapAutoUpdateOption] == "true",
-			DeviceHubServer: opts[bootstrapDeviceHubHostOption],
-			DeviceHubPort:   opts[bootstrapDeviceHubPortOption],
-			VPNServer:       opts[bootstrapVPNServerOption],
-			TPMDevice:       opts[bootstrapTPMDeviceOption],
-			ProxyServer:     opts[bootstrapProxyHostOption],
-			ProxyPort:       opts[bootstrapProxyPortOption],
-			ProxyUser:       opts[bootstrapProxyUserOption],
-			ProxyPassword:   opts[bootstrapProxyPasswordOption],
-			DeviceName:      opts[bootstrapDeviceName],
+			BootstrapKey:        opts[bootstrapKeyOption],
+			Directory:           opts[mainConfigDirOption],
+			StateDirectory:      opts[mainStateDirOption],
+			AutoUpdate:          opts[bootstrapAutoUpdateOption] == "true",
+			DeviceHubServer:     opts[bootstrapDeviceHubHostOption],
+			DeviceHubPort:       opts[bootstrapDeviceHubPortOption],
+			VPNServer:           opts[bootstrapVPNServerOption],
+			TPMDevice:           opts[bootstrapTPMDeviceOption],
+			ProxyServer:         opts[bootstrapProxyHostOption],
+			ProxyPort:           opts[bootstrapProxyPortOption],
+			ProxyUser:           opts[bootstrapProxyUserOption],
+			ProxyPassword:       opts[bootstrapProxyPasswordOption],
+			DeviceName:          opts[bootstrapDeviceNameOption],
+			DisableRemoteAccess: opts[bootstrapDisableRemoteAccessOption] == "true",
 		}
 
 		if cfg.BootstrapKey == "" {
