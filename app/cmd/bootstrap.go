@@ -10,17 +10,17 @@ import (
 )
 
 const (
-	bootstrapKeyOption           = "bootstrap-key"
-	bootstrapAutoUpdateOption    = "enable-auto-update"
-	bootstrapDeviceHubHostOption = "device-hub-host"
-	bootstrapDeviceHubPortOption = "device-hub-port"
-	bootstrapVPNServerOption     = "vpn-server"
-	bootstrapTPMDeviceOption     = "tpm-device"
-	bootstrapProxyHostOption     = "proxy-host"
-	bootstrapProxyPortOption     = "proxy-port"
-	bootstrapProxyUserOption     = "proxy-user"
-	bootstrapProxyPasswordOption = "proxy-password"
-	bootstrapDeviceName          = "device-name"
+	bootstrapKeyOption                 = "bootstrap-key"
+	bootstrapAutoUpdateOption          = "enable-auto-update"
+	bootstrapDeviceHubHostOption       = "device-hub-host"
+	bootstrapDeviceHubPortOption       = "device-hub-port"
+	bootstrapVPNServerOption           = "vpn-server"
+	bootstrapTPMDeviceOption           = "tpm-device"
+	bootstrapProxyHostOption           = "proxy-host"
+	bootstrapProxyPortOption           = "proxy-port"
+	bootstrapProxyUserOption           = "proxy-user"
+	bootstrapProxyPasswordOption       = "proxy-password"
+	bootstrapDeviceNameOption          = "device-name"
 	bootstrapDisableRemoteAccessOption = "disable-remote-access"
 )
 
