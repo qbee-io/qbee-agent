@@ -1,9 +1,9 @@
 package inventory
 
 import (
-	"encoding/json"
-	"fmt"
 	"testing"
+
+	"qbee.io/platform/test/assert"
 )
 
 func TestCollectProcessesInventory(t *testing.T) {
@@ -12,7 +12,13 @@ func TestCollectProcessesInventory(t *testing.T) {
 		t.Fatalf("error collecting processes: %v", err)
 	}
 
-	data, _ := json.MarshalIndent(processes, " ", " ")
+	if len(processes.Processes) == 0 {
+		t.Fatalf("no processes collected")
+	}
 
-	fmt.Println(string(data))
+	for _, process := range processes.Processes {
+		assert.NotEmpty(t, process.PID)
+		assert.NotEmpty(t, process.User)
+		assert.NotEmpty(t, process.Command)
+	}
 }

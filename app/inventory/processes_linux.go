@@ -89,6 +89,11 @@ func CollectProcessesInventory() (*Processes, error) {
 
 		// get process status
 		if processStatus, err = linux.GetProcessStatus(pid); err != nil {
+			// if process is gone, skip it
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+
 			return nil, err
 		}
 
