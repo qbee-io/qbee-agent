@@ -47,6 +47,11 @@ function build_package() {
     -t $pkg_type \
     -n qbee-agent \
     --version "$VERSION" \
+    -m "The Qbee Team <support@qbee.io>" \
+    --url "https://qbee.io" \
+    --license "CLOSED" \
+    --description "Qbee agent
+Qbee is a lightweight system management platform for IoT devices" \
     -p $PKG_OUTPUT \
     -C $build_dir \
     --after-install $build_dir/postinst \
