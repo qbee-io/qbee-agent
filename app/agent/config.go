@@ -49,7 +49,7 @@ type Config struct {
 	VPNServer string `json:"vpn_server,omitempty"`
 
 	// DeviceName is the name of the device - only to be used during bootstrap
-	DeviceName string `json:"-"`
+	DeviceName string `json:"device_name,omitempty"`
 
 	// DisableRemoteAccess disables remote access.
 	DisableRemoteAccess bool `json:"disable_remote_access,omitempty"`
@@ -97,6 +97,10 @@ func (agent *Agent) saveConfig() error {
 
 	if agent.cfg.BootstrapKey != "" {
 		agent.cfg.BootstrapKey = ""
+	}
+
+	if agent.cfg.DeviceName != "" {
+		agent.cfg.DeviceName = ""
 	}
 
 	config, err := json.Marshal(agent.cfg)
