@@ -361,3 +361,40 @@ func Test_FileDistributionBundle_Destination_Dirname_NotExists(t *testing.T) {
 	output := r.MustExec("ls", "/tmp/")
 	assert.Equal(t, string(output), "")
 }
+
+func Test_FileDistributionBundle_Destination_Is_Empty(t *testing.T) {
+
+	r := device.New(t)
+	r.Bootstrap()
+
+	destDir := ""
+
+	// upload a known debian package to the file manager
+	pkgContents := r.ReadFile("/apt-repo/test_2.1.1.deb")
+	pkgFilename := fmt.Sprintf("%s_%d.deb", t.Name(), time.Now().UnixNano())
+	r.UploadTempFile(pkgFilename, pkgContents)
+
+	// commit config for the device
+	bundle := configuration.FileDistributionBundle{
+		Metadata: configuration.Metadata{Enabled: true},
+		FileSets: []configuration.FileSet{
+			{
+				Files: []configuration.File{
+					{Source: pkgFilename, Destination: destDir},
+				},
+				PreCondition: "true",
+			},
+		},
+	}
+
+	assert.NoError(t, r.API.AddConfigurationChange(client.Change{
+		NodeID:     r.DeviceID,
+		BundleName: configuration.BundleFileDistribution,
+		Config:     bundle}))
+	assert.NoError(t, r.API.CommitConfiguration("test commit"))
+
+	// execute configuration bundles
+	reports, _ := configuration.ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r"))
+
+	assert.Empty(t, reports)
+}

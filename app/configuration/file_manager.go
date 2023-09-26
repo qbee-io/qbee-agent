@@ -418,6 +418,10 @@ func resolveSourcePath(path string) (string, error) {
 
 // resolveDestinationPath check if the destination path is a directory and returns the path with the source basename
 func resolveDestinationPath(source, destination string) (string, error) {
+	if destination == "" {
+		return "", fmt.Errorf("destination path is empty")
+	}
+
 	fileInfo, err := os.Stat(destination)
 
 	if err != nil {
