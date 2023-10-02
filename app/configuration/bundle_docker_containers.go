@@ -17,35 +17,28 @@ import (
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
-// dockerBin contains a path to docker cli executable.
-// If empty, it means that docker is not installed on the system.
-var dockerBin string
-
-func init() {
-	dockerBin, _ = exec.LookPath("docker")
-}
-
 // DockerContainersBundle controls docker containers running in the system.
 //
 // Example payload:
-// {
-//	"items": [
-//	  {
-//      "name": "container-a",
-//      "image": "debian:stable",
-//      "docker_args": "-v /path/to/data-volume:/data --hostname my-hostname",
-//      "env_file": "/my-directory/my-envfile",
-//      "command": "echo 'hello world!'"
-//	  }
-//	],
-//  "registry_auths": [
-//    {
-//       "server": "gcr.io",
-//       "username": "user",
-//       "password": "seCre7"
-//    }
-//  ]
-// }
+//
+//	{
+//		"items": [
+//		  {
+//	     "name": "container-a",
+//	     "image": "debian:stable",
+//	     "docker_args": "-v /path/to/data-volume:/data --hostname my-hostname",
+//	     "env_file": "/my-directory/my-envfile",
+//	     "command": "echo 'hello world!'"
+//		  }
+//		],
+//	 "registry_auths": [
+//	   {
+//	      "server": "gcr.io",
+//	      "username": "user",
+//	      "password": "seCre7"
+//	   }
+//	 ]
+//	}
 type DockerContainersBundle struct {
 	Metadata
 
@@ -58,14 +51,15 @@ type DockerContainersBundle struct {
 
 // Execute docker containers configuration bundle on the system.
 func (d DockerContainersBundle) Execute(ctx context.Context, service *Service) error {
-	if dockerBin == "" {
+	dockerBin, err := exec.LookPath("docker")
+	if err != nil {
 		ReportError(ctx, nil, "Docker container configuration configured, but no docker executable found on system")
-		return fmt.Errorf("docker not supported")
+		return fmt.Errorf("docker not supported: %v", err)
 	}
 
 	// populate all registry credentials
 	for _, auth := range d.RegistryAuths {
-		if err := auth.execute(ctx); err != nil {
+		if err = auth.execute(ctx, dockerBin); err != nil {
 			ReportError(ctx, err, "Unable to authenticate with %s repository.", auth.URL())
 			return err
 		}
@@ -77,7 +71,7 @@ func (d DockerContainersBundle) Execute(ctx context.Context, service *Service) e
 			container.Name = fmt.Sprintf("%d", containerIndex)
 		}
 
-		if err := container.execute(ctx, service); err != nil {
+		if err = container.execute(ctx, service, dockerBin); err != nil {
 			return err
 		}
 	}
@@ -104,7 +98,7 @@ type DockerContainer struct {
 }
 
 // execute ensures that configured container is running
-func (c DockerContainer) execute(ctx context.Context, srv *Service) error {
+func (c DockerContainer) execute(ctx context.Context, srv *Service, dockerBin string) error {
 	var err error
 	var needRestart bool
 
@@ -116,14 +110,14 @@ func (c DockerContainer) execute(ctx context.Context, srv *Service) error {
 	}
 
 	var container *containerInfo
-	if container, err = c.getStatus(ctx); err != nil {
+	if container, err = c.getStatus(ctx, dockerBin); err != nil {
 		ReportError(ctx, err, "Cannot check status for image %s.", c.Image)
 		return err
 	}
 
 	// start a new container if it doesn't exist
 	if !container.exists() {
-		return c.run(ctx, srv)
+		return c.run(ctx, srv, dockerBin)
 	}
 
 	if !container.isRunning() {
@@ -138,7 +132,7 @@ func (c DockerContainer) execute(ctx context.Context, srv *Service) error {
 		return nil
 	}
 
-	return c.restart(ctx, srv, container.ID)
+	return c.restart(ctx, srv, dockerBin, container.ID)
 }
 
 // args returns docker cli command line arguments needed to launch the container.
@@ -172,8 +166,8 @@ func (c DockerContainer) localEnvFilePath(srv *Service) string {
 }
 
 // start a container
-func (c DockerContainer) run(ctx context.Context, srv *Service) error {
-	runCmd := c.getRunCommand(srv)
+func (c DockerContainer) run(ctx context.Context, srv *Service, dockerBin string) error {
+	runCmd := c.getRunCommand(srv, dockerBin)
 
 	cmd := []string{"sh", "-c", runCmd}
 
@@ -189,7 +183,7 @@ func (c DockerContainer) run(ctx context.Context, srv *Service) error {
 }
 
 // getRunCommand returns run command string for the container.
-func (c DockerContainer) getRunCommand(srv *Service) string {
+func (c DockerContainer) getRunCommand(srv *Service, dockerBin string) string {
 	args := c.args(srv)
 
 	runCmd := []string{
@@ -204,11 +198,11 @@ func (c DockerContainer) getRunCommand(srv *Service) string {
 }
 
 // restart an existing container
-func (c DockerContainer) restart(ctx context.Context, srv *Service, containerID string) error {
+func (c DockerContainer) restart(ctx context.Context, srv *Service, dockerBin, containerID string) error {
 	restartCmd := []string{
 		dockerBin, "kill", containerID, ";", // kill the container
 		dockerBin, "rm", containerID, ";", // remove the container
-		c.getRunCommand(srv), // start the container
+		c.getRunCommand(srv, dockerBin), // start the container
 	}
 
 	cmd := []string{"sh", "-c", strings.Join(restartCmd, " ")}
@@ -254,7 +248,7 @@ func (ci *containerInfo) argsMatch(args string) bool {
 }
 
 // getStatus returns a status for
-func (c DockerContainer) getStatus(ctx context.Context) (*containerInfo, error) {
+func (c DockerContainer) getStatus(ctx context.Context, dockerBin string) (*containerInfo, error) {
 	cmd := []string{
 		dockerBin,
 		"container", "ls",
@@ -296,25 +290,22 @@ type RegistryAuth struct {
 }
 
 const dockerHubURL = "https://index.docker.io/v1/"
-const (
-	dockerConfigFilename = "/root/.docker/config.json"
-	dockerConfigMode     = 0600
-)
+const dockerConfigFilename = "/root/.docker/config.json"
 
-// dockerConfig is used to read-only data about docker repository auths.
-type dockerConfig struct {
+// DockerConfig is used to read-only data about docker repository auths.
+type DockerConfig struct {
 	Auths map[string]struct {
 		Auth string `json:"auth"`
 	} `json:"auths"`
 }
 
-func (a RegistryAuth) execute(ctx context.Context) error {
-	dockerConfig := new(dockerConfig)
+func (a RegistryAuth) execute(ctx context.Context, dockerBin string) error {
+	dockerConfig := new(DockerConfig)
 
 	// read and parse existing config file
 	dockerConfigData, err := os.ReadFile(dockerConfigFilename)
 	if err != nil {
-		// if files doesn't exist, we can continue with empty dockerConfig, otherwise we need to error out
+		// if files doesn't exist, we can continue with empty DockerConfig, otherwise we need to error out
 		if !errors.Is(err, fs.ErrNotExist) {
 			return err
 		}
@@ -331,7 +322,7 @@ func (a RegistryAuth) execute(ctx context.Context) error {
 	}
 
 	// otherwise we need to add those credentials with `docker login` command
-	cmd := []string{"docker", "login", "--username", a.Username, "--password", a.Password, a.URL()}
+	cmd := []string{dockerBin, "login", "--username", a.Username, "--password", a.Password, a.URL()}
 
 	var output []byte
 	if output, err = utils.RunCommand(ctx, cmd); err != nil {
