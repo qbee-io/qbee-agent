@@ -268,14 +268,35 @@ func (s *Service) notifyWhenInterfaceReady() {
 	}
 }
 
+const stopTimeout = 2 * time.Second
+
 func (s *Service) stop() error {
-	if s.cmd == nil || s.cmd.Process == nil || s.cmd.ProcessState != nil {
+	// since s.cmd can change as we process this function, we need to make a copy
+	cmd := s.cmd
+	if cmd == nil {
+		return fmt.Errorf("cannot stop remote access - invalid command state")
+	}
+
+	process := cmd.Process
+	if process == nil || cmd.ProcessState != nil {
 		return fmt.Errorf("cannot stop remote access - already not running")
 	}
 
-	if err := syscall.Kill(-s.cmd.Process.Pid, syscall.SIGINT); err != nil {
-		return fmt.Errorf("failed to kill remote access process: %w", err)
+	// schedule a kill if the process does not exit in time
+	time.AfterFunc(stopTimeout, func() {
+		// don't do anything if the process state is already set, that means it exited
+		if processState := cmd.ProcessState; processState != nil {
+			return
+		}
+
+		log.Debugf("remote access did not exit after %s - killing", stopTimeout)
+		_ = syscall.Kill(-process.Pid, syscall.SIGKILL)
+	})
+
+	if err := syscall.Kill(-process.Pid, syscall.SIGINT); err != nil {
+		return fmt.Errorf("failed to shutdown remote access process: %w", err)
 	}
+
 	return nil
 }
 

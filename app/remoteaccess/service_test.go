@@ -284,7 +284,7 @@ func TestService_start_checkStatus_stop(t *testing.T) {
 
 	service.activeProcesses.Wait()
 
-	if time.Since(stopTime) > time.Second {
+	if time.Since(stopTime) > stopTimeout+time.Second {
 		t.Errorf("UpdateState(false) expected to stop the test process immediately")
 	}
 
