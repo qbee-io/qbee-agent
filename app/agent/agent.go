@@ -37,6 +37,9 @@ type Agent struct {
 
 	Inventory     *inventory.Service
 	inventoryLock sync.Mutex
+	checkinLock   sync.Mutex
+	metricsLock   sync.Mutex
+	configLock    sync.Mutex
 	Configuration *configuration.Service
 	Metrics       *metrics.Service
 	remoteAccess  *remoteaccess.Service
@@ -176,6 +179,11 @@ func (agent *Agent) do(ctx context.Context, name string, fn func(ctx context.Con
 
 // doCheckIn sends a heartbeat to the device hub and checks for updates.
 func (agent *Agent) doCheckIn(ctx context.Context) error {
+	if !agent.checkinLock.TryLock() {
+		return nil
+	}
+	defer agent.checkinLock.Unlock()
+
 	response, err := agent.checkIn(ctx, agent.cfg.AutoUpdate)
 	if err != nil {
 		return fmt.Errorf("failed to check-in: %w", err)
@@ -190,6 +198,11 @@ func (agent *Agent) doCheckIn(ctx context.Context) error {
 
 // doMetrics collects system metrics - if enabled - and delivers them to the device hub API.
 func (agent *Agent) doMetrics(ctx context.Context) error {
+	if !agent.metricsLock.TryLock() {
+		return nil
+	}
+	defer agent.metricsLock.Unlock()
+
 	if !agent.Configuration.MetricsEnabled() {
 		return nil
 	}
@@ -204,6 +217,11 @@ func (agent *Agent) doMetrics(ctx context.Context) error {
 // doConfig returns a function which executes the committed configuration.
 func (agent *Agent) doConfig(configData *configuration.CommittedConfig) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
+		if !agent.configLock.TryLock() {
+			return nil
+		}
+		defer agent.configLock.Unlock()
+
 		currentCommitID := agent.Configuration.CurrentCommitID()
 
 		if err := agent.Configuration.Execute(ctx, configData); err != nil {

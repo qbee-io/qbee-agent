@@ -10,7 +10,9 @@ import (
 
 // doInventories collects all inventories and delivers them to the device hub API.
 func (agent *Agent) doInventories(ctx context.Context) error {
-	agent.inventoryLock.Lock()
+	if !agent.inventoryLock.TryLock() {
+		return nil
+	}
 	defer agent.inventoryLock.Unlock()
 
 	inventories := map[string]func(ctx context.Context) error{
