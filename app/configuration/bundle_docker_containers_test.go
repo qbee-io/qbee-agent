@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"qbee.io/platform/test/assert"
-	"qbee.io/platform/test/device"
+	"qbee.io/platform/test/runner"
 
 	"github.com/qbee-io/qbee-agent/app/configuration"
 )
 
 func Test_DockerContainers_Auths(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 
 	r.MustExec("apt-get", "install", "-y", "docker-ce-cli")
 
@@ -58,7 +58,7 @@ func Test_DockerContainers_Auths(t *testing.T) {
 }
 
 func Test_DockerContainers_Container_Start(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 
 	r.MustExec("apt-get", "install", "-y", "docker-ce-cli")
 
@@ -68,7 +68,7 @@ func Test_DockerContainers_Container_Start(t *testing.T) {
 		Containers: []configuration.DockerContainer{
 			{
 				Name:       containerName,
-				Image:      device.Debian,
+				Image:      runner.Debian,
 				DockerArgs: "--rm",
 				Command:    "sleep 5",
 			},
@@ -93,7 +93,7 @@ func Test_DockerContainers_Container_Start(t *testing.T) {
 }
 
 func Test_DockerContainers_Container_StartExited(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 
 	r.MustExec("apt-get", "install", "-y", "docker-ce-cli")
 
@@ -103,7 +103,7 @@ func Test_DockerContainers_Container_StartExited(t *testing.T) {
 		Containers: []configuration.DockerContainer{
 			{
 				Name:    containerName,
-				Image:   device.Debian,
+				Image:   runner.Debian,
 				Command: "echo 1",
 			},
 		},
@@ -123,7 +123,7 @@ func Test_DockerContainers_Container_StartExited(t *testing.T) {
 		Containers: []configuration.DockerContainer{
 			{
 				Name:       containerName,
-				Image:      device.Debian,
+				Image:      runner.Debian,
 				DockerArgs: "--rm",
 				Command:    "sleep 5",
 			},
@@ -142,7 +142,7 @@ func Test_DockerContainers_Container_StartExited(t *testing.T) {
 }
 
 func Test_DockerContainers_Container_RestartOnConfigChange(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 
 	r.MustExec("apt-get", "install", "-y", "docker-ce-cli")
 
@@ -152,7 +152,7 @@ func Test_DockerContainers_Container_RestartOnConfigChange(t *testing.T) {
 		Containers: []configuration.DockerContainer{
 			{
 				Name:    containerName,
-				Image:   device.Debian,
+				Image:   runner.Debian,
 				Command: "sleep 5",
 			},
 		},
@@ -170,7 +170,7 @@ func Test_DockerContainers_Container_RestartOnConfigChange(t *testing.T) {
 		Containers: []configuration.DockerContainer{
 			{
 				Name:       containerName,
-				Image:      device.Debian,
+				Image:      runner.Debian,
 				DockerArgs: "--rm",
 				Command:    "sleep 5",
 			},
@@ -190,7 +190,7 @@ func Test_DockerContainers_Container_RestartOnConfigChange(t *testing.T) {
 
 // executeDockerContainersBundle is a helper method to quickly execute docker containers bundle.
 // On success, it returns a slice of produced reports.
-func executeDockerContainersBundle(r *device.Runner, bundle configuration.DockerContainersBundle) []string {
+func executeDockerContainersBundle(r *runner.Runner, bundle configuration.DockerContainersBundle) []string {
 	config := configuration.CommittedConfig{
 		Bundles: []string{configuration.BundleDockerContainers},
 		BundleData: configuration.BundleData{

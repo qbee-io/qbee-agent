@@ -8,13 +8,13 @@ import (
 
 	"qbee.io/platform/api/frontend/client"
 	"qbee.io/platform/test/assert"
-	"qbee.io/platform/test/device"
+	"qbee.io/platform/test/runner"
 
 	"github.com/qbee-io/qbee-agent/app/configuration"
 )
 
 func Test_FileDistributionBundle(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 	r.Bootstrap()
 
 	// upload a known debian package to the file manager
@@ -52,7 +52,7 @@ func Test_FileDistributionBundle(t *testing.T) {
 }
 
 func Test_FileDistributionBundle_IsTemplate(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 	r.Bootstrap()
 
 	// upload a known debian package to the file manager
@@ -99,7 +99,7 @@ func Test_FileDistributionBundle_IsTemplate(t *testing.T) {
 }
 
 func Test_FileDistributionBundle_AfterCommand(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 	r.Bootstrap()
 
 	// upload a known debian package to the file manager
@@ -146,7 +146,7 @@ func Test_FileDistributionBundle_AfterCommand(t *testing.T) {
 }
 
 func Test_FileDistributionBundle_PreCondition_True(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 	r.Bootstrap()
 
 	// upload a known debian package to the file manager
@@ -189,7 +189,7 @@ func Test_FileDistributionBundle_PreCondition_True(t *testing.T) {
 }
 
 func Test_FileDistributionBundle_PreCondition_False(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 	r.Bootstrap()
 
 	// upload a known debian package to the file manager
@@ -227,7 +227,7 @@ func Test_FileDistributionBundle_PreCondition_False(t *testing.T) {
 }
 
 func Test_FileDistributionBundle_Destination_Dirname_Exists(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 	r.Bootstrap()
 
 	destDir := "/tmp/"
@@ -275,7 +275,7 @@ func Test_FileDistributionBundle_Destination_Dirname_Exists(t *testing.T) {
 }
 
 func Test_FileDistributionBundle_Destination_Regular_Path(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 	r.Bootstrap()
 
 	destFile := "/tmp/test_2.1.1.deb"
@@ -324,7 +324,7 @@ func Test_FileDistributionBundle_Destination_Regular_Path(t *testing.T) {
 
 func Test_FileDistributionBundle_Destination_Dirname_NotExists(t *testing.T) {
 
-	r := device.New(t)
+	r := runner.New(t)
 	r.Bootstrap()
 
 	destDir := "/tmp/doesnotexist/"
@@ -364,7 +364,7 @@ func Test_FileDistributionBundle_Destination_Dirname_NotExists(t *testing.T) {
 
 func Test_FileDistributionBundle_Destination_Is_Empty(t *testing.T) {
 
-	r := device.New(t)
+	r := runner.New(t)
 	r.Bootstrap()
 
 	destDir := ""

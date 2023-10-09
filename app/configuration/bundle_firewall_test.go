@@ -6,13 +6,13 @@ import (
 	"testing"
 
 	"qbee.io/platform/test/assert"
-	"qbee.io/platform/test/device"
+	"qbee.io/platform/test/runner"
 
 	"github.com/qbee-io/qbee-agent/app/configuration"
 )
 
 func Test_Firewall_NoIPTablesInstalled(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 
 	reports := executeFirewallBundle(r, configuration.FirewallBundle{
 		Tables: map[configuration.FirewallTableName]configuration.FirewallTable{
@@ -32,7 +32,7 @@ func Test_Firewall_NoIPTablesInstalled(t *testing.T) {
 }
 
 func Test_Firewall(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 
 	r.MustExec("apt-get", "install", "-y", "iptables")
 
@@ -99,7 +99,7 @@ func Test_Firewall(t *testing.T) {
 
 // executeFirewallBundle is a helper method to quickly execute firewall bundle.
 // On success, it returns a slice of produced reports.
-func executeFirewallBundle(r *device.Runner, bundle configuration.FirewallBundle) []string {
+func executeFirewallBundle(r *runner.Runner, bundle configuration.FirewallBundle) []string {
 	config := configuration.CommittedConfig{
 		Bundles: []string{configuration.BundleFirewall},
 		BundleData: configuration.BundleData{

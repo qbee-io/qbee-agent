@@ -6,12 +6,12 @@ import (
 
 	"qbee.io/platform/api/frontend/client"
 	"qbee.io/platform/test/assert"
-	"qbee.io/platform/test/device"
+	"qbee.io/platform/test/runner"
 )
 
 // Test_Bootstrap_Device_Name tests the device name bootstrap parameter.
 func Test_Bootstrap_Device_Name(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 	r.Bootstrap("--device-name", "test-device-name")
 
 	attributes, err := r.API.GetDeviceAttributes(r.DeviceID)
@@ -22,7 +22,7 @@ func Test_Bootstrap_Device_Name(t *testing.T) {
 }
 
 func Test_Bootstrap_Automatic(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 	r.API = client.NewAuthenticated()
 
 	bootstrapKeys, err := r.API.ListBootstrapKeys()
@@ -61,7 +61,7 @@ func Test_Bootstrap_Automatic(t *testing.T) {
 }
 
 func Test_Bootstrap_Automatic_DeviceName(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 	r.API = client.NewAuthenticated()
 
 	bootstrapKeys, err := r.API.ListBootstrapKeys()

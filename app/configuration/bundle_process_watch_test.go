@@ -4,13 +4,13 @@ import (
 	"testing"
 
 	"qbee.io/platform/test/assert"
-	"qbee.io/platform/test/device"
+	"qbee.io/platform/test/runner"
 
 	"github.com/qbee-io/qbee-agent/app/configuration"
 )
 
 func Test_BundleProcessWatch_ProcessPresent_NotRunning(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 
 	// create a test process script
 	script := []byte("#!/bin/sh\nsleep 10")
@@ -38,7 +38,7 @@ func Test_BundleProcessWatch_ProcessPresent_NotRunning(t *testing.T) {
 }
 
 func Test_BundleProcessWatch_ProcessPresent_AlreadyRunning(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 
 	// create a test process script
 	script := []byte("#!/bin/sh\nsleep 10")
@@ -59,7 +59,7 @@ func Test_BundleProcessWatch_ProcessPresent_AlreadyRunning(t *testing.T) {
 }
 
 func Test_BundleProcessWatch_ProcessAbsent_NotRunning(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 
 	reports, logs := executeProcessWatchBundle(r, []configuration.ProcessWatcher{{
 		Name:    "testProcess",
@@ -72,7 +72,7 @@ func Test_BundleProcessWatch_ProcessAbsent_NotRunning(t *testing.T) {
 }
 
 func Test_BundleProcessWatch_ProcessAbsent_Running(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 
 	// create a test process script
 	script := []byte("#!/bin/sh\nsleep 10")
@@ -101,7 +101,7 @@ func Test_BundleProcessWatch_ProcessAbsent_Running(t *testing.T) {
 }
 
 func Test_BundleProcessWatch_CommandError(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 
 	// running the bundle should cause an error
 	reports, logs := executeProcessWatchBundle(r, []configuration.ProcessWatcher{{
@@ -127,7 +127,7 @@ func Test_BundleProcessWatch_CommandError(t *testing.T) {
 
 // executePackageManagementBundle is a helper method to quickly execute process watch bundle.
 // On success, it returns a slice of produced reports.
-func executeProcessWatchBundle(r *device.Runner, processes []configuration.ProcessWatcher) ([]string, []string) {
+func executeProcessWatchBundle(r *runner.Runner, processes []configuration.ProcessWatcher) ([]string, []string) {
 	config := configuration.CommittedConfig{
 		Bundles: []string{configuration.BundleProcessWatch},
 		BundleData: configuration.BundleData{

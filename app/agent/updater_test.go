@@ -4,11 +4,11 @@ import (
 	"testing"
 
 	"qbee.io/platform/test/assert"
-	"qbee.io/platform/test/device"
+	"qbee.io/platform/test/runner"
 )
 
 func Test_Update_Manual(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 	r.Bootstrap()
 
 	version := r.MustExec("qbee-agent", "version")
@@ -23,7 +23,7 @@ func Test_Update_Manual(t *testing.T) {
 }
 
 func Test_Update_Manual_UsingRelativePath(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 	r.Bootstrap()
 
 	assert.Equal(t, string(r.MustExec("pwd")), "/app")
@@ -40,7 +40,7 @@ func Test_Update_Manual_UsingRelativePath(t *testing.T) {
 }
 
 func Test_Update_Automatic(t *testing.T) {
-	r := device.New(t)
+	r := runner.New(t)
 
 	// since auto-update is disabled by default,
 	// we need to enable it during bootstrap with --enable-auto-update flag
