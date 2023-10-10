@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"qbee.io/platform/api/frontend/client"
+	"qbee.io/platform/services/device"
 	"qbee.io/platform/test/assert"
 	"qbee.io/platform/test/runner"
 
@@ -34,11 +34,14 @@ func Test_SoftwareManagementBundle_InstallPackageFromFile(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, r.API.AddConfigurationChange(client.Change{
+	_, err := r.API.CreateConfigurationChange(device.Change{
 		NodeID:     r.DeviceID,
 		BundleName: configuration.BundleSoftwareManagement,
-		Config:     bundle}))
-	assert.NoError(t, r.API.CommitConfiguration("test commit"))
+		Config:     bundle})
+	assert.NoError(t, err)
+
+	_, err = r.API.CommitConfiguration("test commit")
+	assert.NoError(t, err)
 
 	// execute configuration bundles
 	reports, _ := configuration.ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r"))
@@ -76,11 +79,14 @@ func Test_SoftwareManagementBundle_InstallPackageFromFile_WithDependencies(t *te
 		},
 	}
 
-	assert.NoError(t, r.API.AddConfigurationChange(client.Change{
+	_, err := r.API.CreateConfigurationChange(device.Change{
 		NodeID:     r.DeviceID,
 		BundleName: configuration.BundleSoftwareManagement,
-		Config:     bundle}))
-	assert.NoError(t, r.API.CommitConfiguration("test commit"))
+		Config:     bundle})
+	assert.NoError(t, err)
+
+	_, err = r.API.CommitConfiguration("test commit")
+	assert.NoError(t, err)
 
 	// execute configuration bundles
 	reports, _ := configuration.ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r"))
@@ -128,11 +134,14 @@ func Test_SoftwareManagementBundle_InstallPackage_WithConfigFileTemplate(t *test
 		},
 	}
 
-	assert.NoError(t, r.API.AddConfigurationChange(client.Change{
+	_, err := r.API.CreateConfigurationChange(device.Change{
 		NodeID:     r.DeviceID,
 		BundleName: configuration.BundleSoftwareManagement,
-		Config:     bundle}))
-	assert.NoError(t, r.API.CommitConfiguration("test commit"))
+		Config:     bundle})
+	assert.NoError(t, err)
+
+	_, err = r.API.CommitConfiguration("test commit")
+	assert.NoError(t, err)
 
 	// execute configuration bundles
 	reports, _ := configuration.ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r"))
