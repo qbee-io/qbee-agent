@@ -59,6 +59,10 @@ func (d DockerContainersBundle) Execute(ctx context.Context, service *Service) e
 
 	// populate all registry credentials
 	for _, auth := range d.RegistryAuths {
+		auth.Server = resolveParameters(ctx, auth.Server)
+		auth.Username = resolveParameters(ctx, auth.Username)
+		auth.Password = resolveParameters(ctx, auth.Password)
+
 		if err = auth.execute(ctx, dockerBin); err != nil {
 			ReportError(ctx, err, "Unable to authenticate with %s repository.", auth.URL())
 			return err
@@ -66,6 +70,12 @@ func (d DockerContainersBundle) Execute(ctx context.Context, service *Service) e
 	}
 
 	for containerIndex, container := range d.Containers {
+		container.Name = resolveParameters(ctx, container.Name)
+		container.Image = resolveParameters(ctx, container.Image)
+		container.DockerArgs = resolveParameters(ctx, container.DockerArgs)
+		container.EnvFile = resolveParameters(ctx, container.EnvFile)
+		container.Command = resolveParameters(ctx, container.Command)
+
 		// for containers with empty name, use its index
 		if container.Name == "" {
 			container.Name = fmt.Sprintf("%d", containerIndex)

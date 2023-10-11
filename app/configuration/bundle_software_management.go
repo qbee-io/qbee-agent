@@ -130,6 +130,9 @@ func (s Software) Execute(ctx context.Context, srv *Service, pkgManager software
 		return nil
 	}
 
+	s.Package = resolveParameters(ctx, s.Package)
+	s.ServiceName = resolveParameters(ctx, s.ServiceName)
+
 	var err error
 	var shouldRestart bool
 
@@ -145,7 +148,9 @@ func (s Software) Execute(ctx context.Context, srv *Service, pkgManager software
 
 	// download config files
 	for _, cfgFile := range s.ConfigFiles {
-		created, err := srv.downloadTemplateFile(ctx, cfgFile.ConfigTemplate, cfgFile.ConfigLocation, s.parametersMap())
+		var created bool
+
+		created, err = srv.downloadTemplateFile(ctx, cfgFile.ConfigTemplate, cfgFile.ConfigLocation, s.parametersMap())
 		if err != nil {
 			return err
 		}

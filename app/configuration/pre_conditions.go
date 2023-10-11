@@ -9,6 +9,8 @@ import (
 
 // CheckPreCondition checks if the provided pre-condition is met.
 func CheckPreCondition(ctx context.Context, preCondition string) bool {
+	preCondition = resolveParameters(ctx, preCondition)
+
 	preCondition = strings.TrimSpace(preCondition)
 
 	if preCondition == "" {

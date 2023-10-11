@@ -10,17 +10,18 @@ import (
 // PackageManagementBundle controls system packages.
 //
 // Example payload:
-// {
-//  "pre_condition": "test command",
-//  "items": [
-//    {
-//      "name": "httpd2",
-//      "version": "1.2.3"
-//    }
-//  ],
-//  "reboot_mode": "always",
-//  "full_upgrade": false
-// }
+//
+//	{
+//	 "pre_condition": "test command",
+//	 "items": [
+//	   {
+//	     "name": "httpd2",
+//	     "version": "1.2.3"
+//	   }
+//	 ],
+//	 "reboot_mode": "always",
+//	 "full_upgrade": false
+//	}
 type PackageManagementBundle struct {
 	Metadata
 
@@ -116,6 +117,9 @@ func (p PackageManagementBundle) partialUpgrade(ctx context.Context, pkgManager 
 	packagesInstalled := false
 
 	for _, pkg := range p.Packages {
+		pkg.Name = resolveParameters(ctx, pkg.Name)
+		pkg.Version = resolveParameters(ctx, pkg.Version)
+
 		if pkg.Version == "latest" {
 			pkg.Version = ""
 		}

@@ -11,14 +11,15 @@ import (
 // UsersBundle adds or removes users.
 //
 // Example payload:
-// {
-//  "items": [
-//    {
-//      "username": "test",
-//      "action": "remove"
-//    }
-//  ]
-// }
+//
+//	{
+//	 "items": [
+//	   {
+//	     "username": "test",
+//	     "action": "remove"
+//	   }
+//	 ]
+//	}
 type UsersBundle struct {
 	Metadata
 
@@ -47,6 +48,8 @@ func (u UsersBundle) Execute(ctx context.Context, _ *Service) error {
 	}
 
 	for _, user := range u.Users {
+		user.Username = resolveParameters(ctx, user.Username)
+
 		userExists := usersInventory.GetUser(user.Username) != nil
 
 		if user.Action == UserAdd && !userExists {

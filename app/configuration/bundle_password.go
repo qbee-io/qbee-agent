@@ -13,14 +13,15 @@ import (
 // PasswordBundle bundle sets passwords for existing users.
 //
 // Example payload:
-// {
-//  "users": [
-//    {
-//      "username": "piotr",
-//      "passwordhash": "$6$EMNbdq1ZkOAZSpFt$t6Ei4J11Ybip1A51sbBPTtQEVcFPPPUs.Q9nle4FenvrId4fLr8douwE3lbgWZGK.LIPeVmmFrTxYJ0QoYkFT."
-//    }
-//  ]
-// }
+//
+//	{
+//	 "users": [
+//	   {
+//	     "username": "piotr",
+//	     "passwordhash": "$6$EMNbdq1ZkOAZSpFt$t6Ei4J11Ybip1A51sbBPTtQEVcFPPPUs.Q9nle4FenvrId4fLr8douwE3lbgWZGK.LIPeVmmFrTxYJ0QoYkFT."
+//	   }
+//	 ]
+//	}
 type PasswordBundle struct {
 	Metadata
 
@@ -39,7 +40,8 @@ func (p PasswordBundle) Execute(ctx context.Context, service *Service) error {
 	// convert user passwords to a map for quick lookup
 	passwordMap := make(map[string]string)
 	for _, user := range p.Users {
-		passwordMap[user.Username] = user.PasswordHash
+		username := resolveParameters(ctx, user.Username)
+		passwordMap[username] = user.PasswordHash
 	}
 
 	// get current shadow file

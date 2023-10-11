@@ -29,6 +29,8 @@ const commandOutputLinesLimit = 100
 
 // RunCommand runs a command and returns its output.
 func RunCommand(ctx context.Context, command string) ([]byte, error) {
+	command = resolveParameters(ctx, command)
+
 	shell := getShell()
 	if shell == "" {
 		return nil, fmt.Errorf("cannot execute command '%s', no supported shell found", command)

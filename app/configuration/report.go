@@ -1,10 +1,10 @@
 package configuration
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -36,6 +36,7 @@ type Reporter struct {
 	commitID        string
 	reports         []Report
 	reportToConsole bool
+	secrets         []string
 }
 
 const (
@@ -56,12 +57,24 @@ func (reporter *Reporter) Reports() []Report {
 	return reporter.reports
 }
 
+const redactedValue = "********"
+
+// Redact replaces all secrets in the value with redactedValue.
+func (reporter *Reporter) Redact(value string) string {
+	for _, secret := range reporter.secrets {
+		value = strings.ReplaceAll(value, secret, redactedValue)
+	}
+
+	return value
+}
+
 // NewReporter returns a new instance of Reporter.
-func NewReporter(commitID string, reportToConsole bool) *Reporter {
+func NewReporter(commitID string, reportToConsole bool, secrets []string) *Reporter {
 	return &Reporter{
 		commitID:        commitID,
 		reports:         make([]Report, 0),
 		reportToConsole: reportToConsole,
+		secrets:         secrets,
 	}
 }
 
@@ -97,16 +110,19 @@ func addReport(ctx context.Context, severity string, extraLog any, msgFmt string
 		return
 	}
 
-	var extraLogBytes []byte
+	var extraLogBytes string
 
 	switch extraLogValue := extraLog.(type) {
 	case string:
-		extraLogBytes = []byte(extraLogValue)
-	case []byte:
 		extraLogBytes = extraLogValue
+	case []byte:
+		extraLogBytes = string(extraLogValue)
 	case error:
-		extraLogBytes = []byte(extraLogValue.Error())
+		extraLogBytes = extraLogValue.Error()
 	}
+
+	extraLogBytes = reporter.Redact(extraLogBytes)
+	text := reporter.Redact(fmt.Sprintf(msgFmt, args...))
 
 	report := Report{
 		Bundle:         ctx.Value(ctxReporterBundleName).(string),
@@ -114,15 +130,15 @@ func addReport(ctx context.Context, severity string, extraLog any, msgFmt string
 		CommitID:       reporter.commitID,
 		Labels:         ctx.Value(ctxReporterBundleName).(string),
 		Severity:       severity,
-		Text:           fmt.Sprintf(msgFmt, args...),
-		Log:            base64.StdEncoding.EncodeToString(extraLogBytes),
+		Text:           text,
+		Log:            base64.StdEncoding.EncodeToString([]byte(extraLogBytes)),
 		Timestamp:      time.Now().Unix(),
 	}
 
 	if reporter.reportToConsole {
 		if len(extraLogBytes) > 0 {
-			for _, line := range bytes.Split(bytes.TrimSpace(extraLogBytes), []byte("\n")) {
-				fmt.Println(consolePrefixLog, string(line))
+			for _, line := range strings.Split(strings.TrimSpace(extraLogBytes), "\n") {
+				fmt.Println(consolePrefixLog, line)
 			}
 		}
 

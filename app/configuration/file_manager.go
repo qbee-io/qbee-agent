@@ -53,6 +53,9 @@ func (md *FileMetadata) SHA256() string {
 func (srv *Service) downloadFile(ctx context.Context, src, dst string) (bool, error) {
 	var err error
 
+	src = resolveParameters(ctx, src)
+	dst = resolveParameters(ctx, dst)
+
 	defer func() {
 		if err != nil {
 			ReportError(ctx, err, "Unable to download file %s to %s", src, dst)
@@ -100,6 +103,13 @@ func (srv *Service) downloadFile(ctx context.Context, src, dst string) (bool, er
 // downloadTemplateFile and execute - returns true if file template was executed and resulted in a new dst file.
 func (srv *Service) downloadTemplateFile(ctx context.Context, src, dst string, params map[string]string) (bool, error) {
 	var err error
+
+	src = resolveParameters(ctx, src)
+	dst = resolveParameters(ctx, dst)
+
+	for key := range params {
+		params[key] = resolveParameters(ctx, params[key])
+	}
 
 	defer func() {
 		if err != nil {

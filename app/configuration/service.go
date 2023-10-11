@@ -130,7 +130,13 @@ const executeTimeout = time.Hour
 func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) error {
 	log.Debugf("trying to acquire execution lock")
 
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, executeTimeout)
+	parametersBundle := configData.BundleData.Parameters
+	if parametersBundle == nil {
+		parametersBundle = new(ParametersBundle)
+	}
+	ctxWithParameters := parametersBundle.Context(ctx)
+
+	ctxWithTimeout, cancel := context.WithTimeout(ctxWithParameters, executeTimeout)
 	defer cancel()
 
 	if err := srv.acquireLock(executeTimeout); err != nil {
@@ -145,7 +151,7 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 		srv.connectivityWatchdogThreshold = 0
 	}
 
-	reporter := NewReporter(configData.CommitID, srv.reportToConsole)
+	reporter := NewReporter(configData.CommitID, srv.reportToConsole, parametersBundle.SecretsList())
 
 	for _, bundleName := range configData.Bundles {
 		log.Debugf("starting processing of bundle %s", bundleName)
@@ -156,9 +162,13 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 		}
 
 		// we use srv.UpdateSettings method to execute the settings bundle
-		if bundleName == BundleSettings {
+		switch bundleName {
+		case BundleSettings:
 			// we use srv.UpdateSettings method to execute the settings bundle
 			log.Debugf("skipping settings bundle execution, as it's processed separately")
+			continue
+		case BundleParameters:
+			log.Debugf("skipping parameters bundle execution, as it's processed separately")
 			continue
 		}
 
@@ -245,7 +255,7 @@ func (srv *Service) reportAPIError(ctx context.Context, err error) {
 
 	if srv.failedConnectionsCount >= srv.connectivityWatchdogThreshold {
 		// since we don't have a reporter defined on this context, we need to create a new one
-		reporter := NewReporter(srv.currentCommitID, srv.reportToConsole)
+		reporter := NewReporter(srv.currentCommitID, srv.reportToConsole, nil)
 		bundleCtx := reporter.BundleContext(ctx, BundleConnectivityWatchdog, "")
 
 		srv.RebootAfterRun(bundleCtx)

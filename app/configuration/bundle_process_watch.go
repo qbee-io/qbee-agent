@@ -12,20 +12,21 @@ import (
 // ProcessWatchBundle ensures running process are running (or not).
 //
 // Example payload:
-// {
-//   "processes": [
-//    {
-//      "name": "presentProcess",
-//      "policy": "Present",
-//      "command": "start.sh"
-//    },
-//    {
-//      "name": "absentProcess",
-//      "policy": "Absent",
-//      "command": "stop.sh"
-//    }
-//  ]
-// }
+//
+//	{
+//	  "processes": [
+//	   {
+//	     "name": "presentProcess",
+//	     "policy": "Present",
+//	     "command": "start.sh"
+//	   },
+//	   {
+//	     "name": "absentProcess",
+//	     "policy": "Absent",
+//	     "command": "stop.sh"
+//	   }
+//	 ]
+//	}
 type ProcessWatchBundle struct {
 	Metadata
 
@@ -72,6 +73,8 @@ type ProcessWatcher struct {
 
 // execute the watcher policy on the defined process.
 func (w ProcessWatcher) execute(ctx context.Context, runningProcesses map[string]string) error {
+	w.Name = resolveParameters(ctx, w.Name)
+
 	processIsRunning := false
 
 	for _, processName := range runningProcesses {
@@ -95,7 +98,7 @@ func (w ProcessWatcher) execute(ctx context.Context, runningProcesses map[string
 		ReportInfo(ctx, nil, "Stopping process %s using defined command as it was found running", w.Name)
 	}
 
-	cmd := []string{getShell(), "-c", w.Command}
+	cmd := []string{getShell(), "-c", resolveParameters(ctx, w.Command)}
 
 	output, err := utils.RunCommand(ctx, cmd)
 	if err != nil {

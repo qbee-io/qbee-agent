@@ -2,6 +2,7 @@ package configuration
 
 const (
 	BundleSettings             = "settings"
+	BundleParameters           = "parameters"
 	BundleFileDistribution     = "file_distribution"
 	BundleUsers                = "users"
 	BundleSSHKeys              = "sshkeys"
@@ -80,6 +81,7 @@ type BundleData struct {
 	ConnectivityWatchdog *ConnectivityWatchdogBundle `json:"connectivity_watchdog,omitempty"`
 	ProcessWatch         *ProcessWatchBundle         `json:"proc_watch,omitempty"`
 	NTP                  *NTPBundle                  `json:"ntp,omitempty"`
+	Parameters           *ParametersBundle           `json:"parameters,omitempty"`
 
 	// Software
 	SoftwareManagement *SoftwareManagementBundle `json:"software_management,omitempty"`

@@ -16,17 +16,18 @@ import (
 // SSHKeysBundle adds or removes authorized SSH keys for users.
 //
 // Example payload:
-// {
-//  "users": [
-//    {
-//      "username": "test",
-//      "userkeys": [
-//        "key1",
-//        "key2"
-//      ]
-//    }
-//  ]
-// }
+//
+//	{
+//	 "users": [
+//	   {
+//	     "username": "test",
+//	     "userkeys": [
+//	       "key1",
+//	       "key2"
+//	     ]
+//	   }
+//	 ]
+//	}
 type SSHKeysBundle struct {
 	Metadata
 
@@ -55,6 +56,8 @@ func (s SSHKeysBundle) Execute(ctx context.Context, _ *Service) error {
 	}
 
 	for _, user := range s.Users {
+		user.Username = resolveParameters(ctx, user.Username)
+
 		existingUser := usersInventory.GetUser(user.Username)
 
 		// skip non-existing users
