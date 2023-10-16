@@ -34,6 +34,7 @@ type Agent struct {
 	loopTicker *time.Ticker
 	stop       chan bool
 	update     chan bool
+	reboot     chan bool
 
 	Inventory     *inventory.Service
 	inventoryLock sync.Mutex
@@ -120,6 +121,9 @@ func (agent *Agent) Run(ctx context.Context) error {
 			if err := agent.updateAgent(ctx); err != nil {
 				log.Errorf("failed to update the agent: %v", err)
 			}
+
+		case <-agent.reboot:
+			agent.RebootSystem(ctx)
 		}
 	}
 }
@@ -235,7 +239,8 @@ func (agent *Agent) doConfig(configData *configuration.CommittedConfig) func(ctx
 
 		// Send reboot command if it is scheduled
 		if agent.Configuration.ShouldReboot() {
-			agent.RebootSystem(ctx)
+			log.Warnf("reboot condition detected, scheduling system reboot")
+			agent.reboot <- true
 		}
 
 		return nil
@@ -259,7 +264,7 @@ func (agent *Agent) RebootSystem(ctx context.Context) {
 		log.Errorf("cannot reboot: %s - %v", shutdownBinPath, err)
 		return
 	}
-
+	log.Debugf("waiting for agent routines to finish")
 	agent.inProgress.Wait()
 
 	if output, err := utils.RunCommand(ctx, []string{"/sbin/shutdown", "-r", "+1"}); err != nil {
@@ -282,6 +287,7 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 		inProgress: new(sync.WaitGroup),
 		stop:       make(chan bool, 1),
 		update:     make(chan bool, 1),
+		reboot:     make(chan bool, 1),
 	}
 
 	var proxy *api.Proxy
