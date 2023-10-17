@@ -1,5 +1,11 @@
 # qbee-agent v2
 
+
+## License
+
+The qbee-agent is licensed under the Apache License, Version 2.0. See
+[LICENSE](https://github.com/qbee-io/qbee-agent/blob/master/LICENSE) for the full license text.
+
 ## Obtain the signing key
 
 Obtain the signing key from a secure location.
