@@ -29,10 +29,11 @@ const (
 )
 
 const (
-	DefaultConfigDir = "/etc/qbee"
-	DefaultStateDir  = "/var/lib/qbee"
+	defaultConfigDir = "/etc/qbee"
+	defaultStateDir  = "/var/lib/qbee"
 )
 
+// Main is the main command of the agent.
 var Main = cmd.Command{
 	Description: "Qbee Agent Command-Line Tool",
 	Options: []cmd.Option{
@@ -40,13 +41,13 @@ var Main = cmd.Command{
 			Name:    mainConfigDirOption,
 			Short:   "c",
 			Help:    "Configuration directory.",
-			Default: DefaultConfigDir,
+			Default: defaultConfigDir,
 		},
 		{
 			Name:    mainStateDirOption,
 			Short:   "s",
 			Help:    "State directory.",
-			Default: DefaultStateDir,
+			Default: defaultStateDir,
 		},
 		{
 			Name:    mainLogLevel,

@@ -20,7 +20,7 @@ if [[ -z $SIGNING_KEY_PATH ]] || [[ ! -f $SIGNING_KEY_PATH ]]; then
   exit 1
 fi
 
-PUBLIC_SIGNING_KEY=$(cd $BASEDIR && go run cmd/get-public-signing-key/main.go -signingKey $SIGNING_KEY_PATH | awk '{print $NF}')
+PUBLIC_SIGNING_KEY=$(cd $BASEDIR && go run app/utils/get-public-signing-key/main.go -signingKey $SIGNING_KEY_PATH | awk '{print $NF}')
 
 function build_agent() {
   local arch

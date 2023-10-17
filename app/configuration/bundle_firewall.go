@@ -71,6 +71,7 @@ func (f FirewallBundle) Execute(ctx context.Context, service *Service) error {
 // FirewallTableName defines which firewall table name.
 type FirewallTableName string
 
+// Supported firewall table names.
 const (
 	Filter FirewallTableName = "filter"
 	NAT    FirewallTableName = "nat"
@@ -79,6 +80,7 @@ const (
 // FirewallChainName defines firewall table's chain name.
 type FirewallChainName string
 
+// Supported firewall chain names.
 const (
 	Input       FirewallChainName = "INPUT"
 	Forward     FirewallChainName = "FORWARD"
@@ -90,6 +92,7 @@ const (
 // Protocol defines network protocol in use.
 type Protocol string
 
+// Supported network protocols.
 const (
 	TCP  Protocol = "tcp"
 	UDP  Protocol = "udp"
@@ -99,6 +102,7 @@ const (
 // Target defines what to do with matching packets.
 type Target string
 
+// Supported iptables targets.
 const (
 	Accept Target = "ACCEPT"
 	Drop   Target = "DROP"

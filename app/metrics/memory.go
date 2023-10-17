@@ -26,19 +26,20 @@ import (
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
-// MemoryValues
+// MemoryValues contains memory metrics.
 //
 // Example payload:
-// {
-//  "memtot": 32521216,
-//  "memused": 5729248,
-//  "memfree": 26791968,
-//  "memutil": 17,
-//  "swaptot": 2002940,
-//  "swapused": 0,
-//  "swapfree": 2002940,
-//  "swaputil": 0
-// }
+//
+//	{
+//	 "memtot": 32521216,
+//	 "memused": 5729248,
+//	 "memfree": 26791968,
+//	 "memutil": 17,
+//	 "swaptot": 2002940,
+//	 "swapused": 0,
+//	 "swapfree": 2002940,
+//	 "swaputil": 0
+//	}
 type MemoryValues struct {
 	MemoryTotal       int `json:"memtot"`
 	MemoryUsed        int `json:"memused"`
@@ -50,6 +51,7 @@ type MemoryValues struct {
 	SwapUtilization   int `json:"swaputil"`
 }
 
+// CollectMemory metrics.
 func CollectMemory() ([]Metric, error) {
 	path := filepath.Join(linux.ProcFS, "meminfo")
 

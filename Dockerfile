@@ -18,11 +18,11 @@ RUN --mount=type=cache,target=/go \
     go build \
     -ldflags "-s -w -X ${VERSION_VAR}=$version -X ${PUBLIC_SINGING_KEY_VAR}=$public_signing_key" \
     -o /usr/sbin/qbee-agent.$version \
-    cmd/agent/main.go && \
+    main.go && \
     go build \
     -ldflags "-s -w -X ${PUBLIC_SINGING_KEY_VAR}=$public_signing_key" \
     -o /usr/sbin/qbee-agent \
-    cmd/agent/main.go
+    main.go
 
 FROM debian:stable
 

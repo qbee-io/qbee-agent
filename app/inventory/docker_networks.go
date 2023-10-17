@@ -24,12 +24,15 @@ import (
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
+// TypeDockerNetworks is the inventory type for Docker networks.
 const TypeDockerNetworks Type = "docker_networks"
 
+// DockerNetworks represents a list of Docker networks.
 type DockerNetworks struct {
 	Networks []DockerNetwork `json:"items"`
 }
 
+// DockerNetwork represents a single Docker network.
 type DockerNetwork struct {
 	// ID - network ID.
 	ID string `json:"id"`

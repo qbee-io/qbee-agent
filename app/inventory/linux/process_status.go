@@ -28,6 +28,7 @@ import (
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
+// ProcessStatus contains information about a process.
 type ProcessStatus struct {
 	Owner  string
 	Memory uint64

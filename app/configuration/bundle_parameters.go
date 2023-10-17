@@ -28,7 +28,7 @@ type Parameter struct {
 	Value string `json:"value"`
 }
 
-const ctxParameterStore = "configuration:parameter-store"
+const ctxParameterStore = contextKey("configuration:parameter-store")
 
 // ParametersBundle defines global system parameters.
 //
@@ -55,6 +55,7 @@ type ParametersBundle struct {
 	Secrets    []Parameter `json:"secrets"`
 }
 
+// ParameterStore defines a key->value map of parameters.
 type ParameterStore map[string]string
 
 const (

@@ -34,12 +34,15 @@ import (
 	"github.com/qbee-io/qbee-agent/app"
 )
 
+// UserAgent is the user agent string used for all API calls.
+// This is used to identify active versions of the agent.
 var UserAgent = "qbee-agent/" + app.Version
 
 // apiCallTimeout defines total request/response time we allow for any API call.
 // This timeout doesn't apply to file downloads.
 const apiCallTimeout = 10 * time.Second
 
+// Client is a device hub API client.
 type Client struct {
 	host       string
 	port       string

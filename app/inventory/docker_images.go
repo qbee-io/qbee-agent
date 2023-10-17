@@ -24,12 +24,15 @@ import (
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
+// TypeDockerImages is the inventory type for Docker images.
 const TypeDockerImages Type = "docker_images"
 
+// DockerImages represents a list of Docker images.
 type DockerImages struct {
 	Images []DockerImage `json:"items"`
 }
 
+// DockerImage represents a single Docker image.
 type DockerImage struct {
 	// ID - image ID.
 	ID string `json:"id"`

@@ -26,7 +26,7 @@ import (
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
-// FilesystemValues
+// FilesystemValues represents filesystem metric values.
 //
 // Example payload:
 //

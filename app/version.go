@@ -22,4 +22,6 @@ package app
 // MM is the 2-digit week of the year (e.g. 02, 12)
 // patch is the optional patch number (in case more than one release occurs during the same week)
 var Version = "0000.00"
+
+// Commit represents the HEAD of the git repository at the time of the build.
 var Commit = "NA"

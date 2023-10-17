@@ -16,11 +16,13 @@
 
 package log
 
+// Writer is a log writer.
 type Writer struct {
 	level  int
 	prefix string
 }
 
+// Write writes the log message at the specified level and prefix.
 func (w *Writer) Write(p []byte) (n int, err error) {
 	if level < w.level {
 		return len(p), nil

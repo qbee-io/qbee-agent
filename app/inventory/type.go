@@ -16,4 +16,5 @@
 
 package inventory
 
+// Type is the type of the inventory item.
 type Type string

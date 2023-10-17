@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 )
 
+// Default connectivity settings
 const (
 	DefaultDeviceHubServer = "device.app.qbee.io"
 	DefaultDeviceHubPort   = "443"
@@ -30,10 +31,11 @@ const (
 )
 
 const (
-	ConfigFileName = "qbee-agent.json"
-	ConfigFileMode = 0600
+	configFileName = "qbee-agent.json"
+	configFileMode = 0600
 )
 
+// Config defines the configuration of the agent.
 type Config struct {
 
 	// BootstrapKey is the bootstrap key used to bootstrap the device.
@@ -73,7 +75,7 @@ type Config struct {
 
 // LoadConfig loads config from a provided config file path.
 func LoadConfig(configDir, stateDir string) (*Config, error) {
-	configFilePath := filepath.Join(configDir, ConfigFileName)
+	configFilePath := filepath.Join(configDir, configFileName)
 
 	configBytes, err := os.ReadFile(configFilePath)
 	if err != nil {
@@ -124,9 +126,9 @@ func (agent *Agent) saveConfig() error {
 		return fmt.Errorf("error marshaling configuration file: %w", err)
 	}
 
-	configPath := filepath.Join(agent.cfg.Directory, ConfigFileName)
+	configPath := filepath.Join(agent.cfg.Directory, configFileName)
 
-	if err = os.WriteFile(configPath, config, ConfigFileMode); err != nil {
+	if err = os.WriteFile(configPath, config, configFileMode); err != nil {
 		return fmt.Errorf("error writing config file %s: %w", configPath, err)
 	}
 

@@ -44,6 +44,7 @@ type PasswordBundle struct {
 	Users []UserPassword `json:"users"`
 }
 
+// UserPassword defines a user password to be set in the system.
 type UserPassword struct {
 	Username     string `json:"username"`
 	PasswordHash string `json:"passwordhash"`
@@ -52,6 +53,7 @@ type UserPassword struct {
 const secondsInADay = 60 * 60 * 24
 const shadowFileMode = 0640
 
+// Execute password config on the system.
 func (p PasswordBundle) Execute(ctx context.Context, service *Service) error {
 	// convert user passwords to a map for quick lookup
 	passwordMap := make(map[string]string)

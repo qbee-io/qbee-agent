@@ -16,6 +16,7 @@
 
 package configuration
 
+// Supported configuration bundles.
 const (
 	BundleSettings             = "settings"
 	BundleParameters           = "parameters"
@@ -32,10 +33,7 @@ const (
 	BundleDockerContainers     = "docker_containers"
 )
 
-type Config struct {
-	Config CommittedConfig `json:"config"`
-}
-
+// CommittedConfig contains the configuration that is committed.
 type CommittedConfig struct {
 	CommitID   string     `json:"commit_id"`
 	Bundles    []string   `json:"bundles"`
@@ -85,6 +83,8 @@ func (cc *CommittedConfig) selectBundleByName(bundleName string) Bundle {
 	}
 }
 
+// BundleData contains all configuration bundles.
+// Only bundles that are mentioned in the CommittedConfig.Bundles list are populated.
 type BundleData struct {
 	// Settings
 	Settings SettingsBundle `json:"settings"`

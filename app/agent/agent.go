@@ -38,6 +38,8 @@ import (
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
+// Agent is the main agent structure.
+// It contains all the services and the main control loop.
 type Agent struct {
 	cfg *Config
 
@@ -144,10 +146,14 @@ func (agent *Agent) Run(ctx context.Context) error {
 	}
 }
 
+// RunOnceMode defines the mode of the RunOnce function.
 type RunOnceMode int
 
 const (
+	// FullRun performs a full run of the agent routines.
 	FullRun RunOnceMode = iota
+
+	// QuickRun performs only essential reporting required by the bootstrap process.
 	QuickRun
 )
 

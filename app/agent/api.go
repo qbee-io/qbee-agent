@@ -26,6 +26,7 @@ import (
 	"github.com/qbee-io/qbee-agent/app/binary"
 )
 
+// BootstrapRequest is the request sent to the device hub during device bootstrap.
 type BootstrapRequest struct {
 	// Host - The name of the current host, according to the kernel.
 	// It is undefined whether this is qualified or unqualified with a domain name.
@@ -79,11 +80,19 @@ type BootstrapRequest struct {
 	DeviceName string `json:"device_name,omitempty"`
 }
 
+// BootstrapResponse is the response sent by the device hub during device bootstrap.
 type BootstrapResponse struct {
-	Status                    string   `json:"status"`
-	CertificateRequestsStatus string   `json:"cert_req"`
-	Certificate               []string `json:"cert"`
-	CACertificate             []string `json:"ca_cert"`
+	// CertificateRequestsStatus is the status of the certificate requests.
+	// Possible values are:
+	// - registered - the request is registered, but requires approval
+	// - authorized - the request is approved and device is authorized
+	CertificateRequestsStatus string `json:"cert_req"`
+
+	// Certificate is the PEM-encoded certificate.
+	Certificate []string `json:"cert"`
+
+	// CACertificate is the PEM-encoded CA certificate.
+	CACertificate []string `json:"ca_cert"`
 }
 
 const bootstrapAPIPath = "/v1/org/device/xauth/bootstrap"
@@ -112,6 +121,7 @@ func (agent *Agent) sendBootstrapRequest(
 
 var checkInPath = fmt.Sprintf("/v1/org/device/auth/agent/%s/checkin", runtime.GOARCH)
 
+// CheckInResponse is the response sent by the device hub during agent check-in.
 type CheckInResponse struct {
 	Agent binary.Metadata `json:"agent"`
 }

@@ -24,8 +24,10 @@ import (
 	"github.com/qbee-io/qbee-agent/app/software"
 )
 
+// TypeSoftware is the inventory type for software information.
 const TypeSoftware Type = "software"
 
+// Software contains software package information for a supported package manager.
 type Software struct {
 	// PackageManager - type of package manager generating the report
 	PackageManager software.PackageManagerType `json:"pkg_manager"`

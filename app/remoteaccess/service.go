@@ -33,6 +33,7 @@ import (
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
+// NetworkInterfaceName is the name of the network interface used for remote access.
 const NetworkInterfaceName = "qbee0"
 
 // New creates a new instance of the remote access service.
@@ -398,7 +399,7 @@ func (s *Service) downloadOpenVPN(ctx context.Context) error {
 	}
 
 	// download the binary if not found
-	if err := binary.Download(s.api, ctx, binary.OpenVPN, binPath); err != nil {
+	if err := binary.Download(ctx, s.api, binary.OpenVPN, binPath); err != nil {
 		return err
 	}
 

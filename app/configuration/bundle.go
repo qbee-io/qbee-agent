@@ -18,9 +18,9 @@ package configuration
 
 import "context"
 
+// Metadata defines metadata for a bundle.
 type Metadata struct {
 	Enabled  bool   `json:"enabled"`
-	Version  string `json:"version"`
 	CommitID string `json:"bundle_commit_id"`
 }
 
@@ -34,6 +34,7 @@ func (m Metadata) BundleCommitID() string {
 	return m.CommitID
 }
 
+// Bundle defines a configuration bundle.
 type Bundle interface {
 	IsEnabled() bool
 	BundleCommitID() string

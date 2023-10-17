@@ -10,8 +10,10 @@ import (
 	"testing"
 )
 
+// Debian is the image used by the runner.
 const Debian = "debian:qbee"
 
+// New creates a new runner for the given test.
 func New(t *testing.T) *Runner {
 	cmdArgs := []string{
 		"run",
@@ -46,10 +48,8 @@ func New(t *testing.T) *Runner {
 
 // Runner provides a convenient way to run the agent in a container.
 type Runner struct {
-	t          *testing.T
-	DeviceID   string
-	DeviceUUID string
-	container  string
+	t         *testing.T
+	container string
 }
 
 // Close kills the container.
@@ -67,6 +67,8 @@ func (runner *Runner) Unpause() {
 	_ = exec.Command("docker", "unpause", runner.container).Run()
 }
 
+// Exec executes the given command in the runner container.
+// It returns the output of the command and an error if the command failed.
 func (runner *Runner) Exec(cmd ...string) ([]byte, error) {
 	execCommand := append([]string{"exec", runner.container}, cmd...)
 
@@ -84,6 +86,7 @@ func (runner *Runner) Exec(cmd ...string) ([]byte, error) {
 	return bytes.TrimSpace(output), err
 }
 
+// MustExec executes the given command and panics if it fails.
 func (runner *Runner) MustExec(cmd ...string) []byte {
 	output, err := runner.Exec(cmd...)
 	if err != nil {
@@ -97,6 +100,7 @@ func (runner *Runner) MustExec(cmd ...string) []byte {
 	return output
 }
 
+// CreateFile creates a file with the given path and contents.
 func (runner *Runner) CreateFile(path string, contents []byte) {
 	fd, err := os.CreateTemp(runner.t.TempDir(), "qbee-test-*")
 	if err != nil {
@@ -120,10 +124,12 @@ func (runner *Runner) CreateFile(path string, contents []byte) {
 	}
 }
 
+// ReadFile reads the contents of the given file from the runner.
 func (runner *Runner) ReadFile(path string) []byte {
 	return runner.MustExec("cat", path)
 }
 
+// CreateJSON creates a file with the given path and JSON-encodes the given document.
 func (runner *Runner) CreateJSON(path string, doc any) {
 	docBytes, err := json.Marshal(doc)
 	if err != nil {

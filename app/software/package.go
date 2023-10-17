@@ -18,6 +18,7 @@ package software
 
 import "fmt"
 
+// Package represents a software package.
 type Package struct {
 	// Name - package name
 	Name string `json:"name"`

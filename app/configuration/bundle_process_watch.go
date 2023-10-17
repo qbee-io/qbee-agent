@@ -65,8 +65,10 @@ func (p ProcessWatchBundle) Execute(ctx context.Context, _ *Service) error {
 	return nil
 }
 
+// ProcessPolicy defines expected state of a process.
 type ProcessPolicy string
 
+// Supported process policies.
 const (
 	ProcessPresent ProcessPolicy = "Present"
 	ProcessAbsent  ProcessPolicy = "Absent"
