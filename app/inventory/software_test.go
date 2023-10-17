@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"testing"
 
-	"qbee.io/platform/test/runner"
+	"github.com/qbee-io/qbee-agent/app/utils/runner"
 )
 
 func TestCollectSoftwareInventory_Deb(t *testing.T) {

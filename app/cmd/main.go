@@ -17,10 +17,9 @@
 package cmd
 
 import (
-	"qbee.io/platform/utils/cmd"
-
 	"github.com/qbee-io/qbee-agent/app/agent"
 	"github.com/qbee-io/qbee-agent/app/log"
+	"github.com/qbee-io/qbee-agent/app/utils/cmd"
 )
 
 const (

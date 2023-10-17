@@ -20,5 +20,11 @@ build:
 auto-build:
 	inotifywait -e close_write,moved_to,create -r -q -m app/ | while read line; do $(MAKE) build; done
 
+docker-image:
+	docker build -t debian:qbee \
+		--build-arg version=2023.01 \
+		--build-arg public_signing_key=$(PUBLIC_SIGNING_KEY) \
+		.
+
 test:
 	go test ./app/...

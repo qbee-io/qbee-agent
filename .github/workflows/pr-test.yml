@@ -1,0 +1,13 @@
+name: platform-pr-tests
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Build and test
+        run: make docker-image test

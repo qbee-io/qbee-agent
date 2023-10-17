@@ -19,9 +19,8 @@ package cmd
 import (
 	"fmt"
 
-	"qbee.io/platform/utils/cmd"
-
 	"github.com/qbee-io/qbee-agent/app"
+	"github.com/qbee-io/qbee-agent/app/utils/cmd"
 )
 
 var versionCommand = cmd.Command{
