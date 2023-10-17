@@ -20,9 +20,8 @@ import (
 	"context"
 	"fmt"
 
-	"qbee.io/platform/utils/cmd"
-
 	"github.com/qbee-io/qbee-agent/app/agent"
+	"github.com/qbee-io/qbee-agent/app/utils/cmd"
 )
 
 const (

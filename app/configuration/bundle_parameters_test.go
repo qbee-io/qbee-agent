@@ -18,14 +18,11 @@ package configuration
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
-	"time"
 
-	"qbee.io/platform/services/device"
-	"qbee.io/platform/test/assert"
-	"qbee.io/platform/test/runner"
+	"github.com/qbee-io/qbee-agent/app/utils/assert"
+	"github.com/qbee-io/qbee-agent/app/utils/runner"
 )
 
 func Test_resolveParameters(t *testing.T) {
@@ -125,64 +122,43 @@ func Test_resolveParameters(t *testing.T) {
 	}
 }
 
-func Test_FileDistributionWithParameters(t *testing.T) {
+func Test_UsersWithParameters(t *testing.T) {
 	r := runner.New(t)
-	r.Bootstrap()
-
-	// upload a known debian package to the file manager
-	pkgContents := r.ReadFile("/apt-repo/test_2.1.1.deb")
-	pkgFilename := fmt.Sprintf("%s_%d.deb", t.Name(), time.Now().UnixNano())
-	r.UploadTempFile(pkgFilename, pkgContents)
 
 	// commit config for the device
-	_, err := r.API.CreateConfigurationChange(device.Change{
-		NodeID:     r.DeviceID,
-		BundleName: BundleParameters,
-		Config: ParametersBundle{
-			Metadata: Metadata{Enabled: true},
-			Parameters: []Parameter{
-				{Key: "plain", Value: "plainValue"},
+	cfg := CommittedConfig{
+		Bundles: []string{BundleParameters, BundleUsers},
+		BundleData: BundleData{
+			Parameters: &ParametersBundle{
+				Metadata: Metadata{Enabled: true},
+				Parameters: []Parameter{
+					{Key: "plain", Value: "plainUsername"},
+				},
+				Secrets: []Parameter{
+					{Key: "secret", Value: "secretUsername"},
+				},
 			},
-			Secrets: []Parameter{
-				{Key: "secret", Value: "secretValue"},
-			},
-		},
-	})
-	assert.NoError(t, err)
-
-	_, err = r.API.CreateConfigurationChange(device.Change{
-		NodeID:     r.DeviceID,
-		BundleName: BundleFileDistribution,
-		Config: FileDistributionBundle{
-			Metadata: Metadata{Enabled: true},
-			FileSets: []FileSet{
-				{
-					Files: []File{
-						{
-							Source:      pkgFilename,
-							Destination: "/$(plain)/$(secret).deb",
-						},
+			Users: &UsersBundle{
+				Metadata: Metadata{Enabled: true},
+				Users: []User{
+					{
+						Username: "$(plain)",
+						Action:   UserAdd,
+					}, {
+						Username: "$(secret)",
+						Action:   UserAdd,
 					},
 				},
 			},
 		},
-	})
-	assert.NoError(t, err)
+	}
 
-	_, err = r.API.CommitConfiguration("test commit")
-	assert.NoError(t, err)
-
-	// execute configuration bundles
-	reports, _ := ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r"))
+	reports, _ := ExecuteTestConfigInDocker(r, cfg)
 
 	// execute configuration bundles
 	expectedReports := []string{
-		fmt.Sprintf("[INFO] Successfully downloaded file %[1]s to /plainValue/********.deb",
-			pkgFilename),
+		"[INFO] Successfully added user 'plainUsername'",
+		"[INFO] Successfully added user '********'",
 	}
 	assert.Equal(t, reports, expectedReports)
-
-	// check if package was correctly installed
-	output := r.MustExec("md5sum", "/plainValue/secretValue.deb")
-	assert.Equal(t, string(output), "8562ee4d61fba99c1525e85215cc59f3  /plainValue/secretValue.deb")
 }

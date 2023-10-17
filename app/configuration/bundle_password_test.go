@@ -20,10 +20,9 @@ import (
 	"strings"
 	"testing"
 
-	"qbee.io/platform/test/assert"
-	"qbee.io/platform/test/runner"
-
 	"github.com/qbee-io/qbee-agent/app/configuration"
+	"github.com/qbee-io/qbee-agent/app/utils/assert"
+	"github.com/qbee-io/qbee-agent/app/utils/runner"
 )
 
 func Test_Password(t *testing.T) {

@@ -31,7 +31,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/qbee-io/qbee-agent/app/api"
 	"github.com/qbee-io/qbee-agent/app/log"
@@ -46,16 +45,6 @@ const (
 
 // loadCACertificatesPool loads trusted CA certificate.
 func (agent *Agent) loadCACertificatesPool() error {
-	// to allow bootstrapping with non-production environments
-	if agent.cfg.DeviceHubServer != DefaultDeviceHubServer && os.Getenv("INSECURE_CA_DOWNLOAD") == "1" {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-
-		if err := agent.updateCACertificate(ctx, true); err != nil {
-			return err
-		}
-	}
-
 	caCertPath := filepath.Join(agent.cfg.Directory, credentialsDirectory, caCertFilename)
 
 	pemCert, err := os.ReadFile(caCertPath)

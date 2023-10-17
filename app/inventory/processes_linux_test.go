@@ -1,4 +1,3 @@
-// Copyright 2023 qbee.io
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +18,7 @@ package inventory
 import (
 	"testing"
 
-	"qbee.io/platform/test/assert"
+	"github.com/qbee-io/qbee-agent/app/utils/assert"
 )
 
 func TestCollectProcessesInventory(t *testing.T) {

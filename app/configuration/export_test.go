@@ -17,10 +17,9 @@
 package configuration
 
 import (
-	"fmt"
 	"strings"
 
-	"qbee.io/platform/test/runner"
+	"github.com/qbee-io/qbee-agent/app/utils/runner"
 )
 
 // ResetRebootAfterRun allows to reset internal rebootAfterRun flag from tests.
@@ -32,7 +31,7 @@ func (srv *Service) ResetRebootAfterRun() {
 func ExecuteTestConfigInDocker(r *runner.Runner, config CommittedConfig) ([]string, []string) {
 
 	r.MustExec("mkdir", "-p", "/etc/qbee/ppkeys")
-	r.MustExec("curl", "-k", "-s", "-o", "/etc/qbee/ppkeys/ca.cert", fmt.Sprintf("%s/ca.crt", r.GetDeviceHubUrl()))
+	r.MustExec("touch", "/etc/qbee/ppkeys/ca.cert")
 
 	r.CreateJSON("/app/config.json", config)
 

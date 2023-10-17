@@ -21,9 +21,8 @@ import (
 	"testing"
 	"time"
 
-	"qbee.io/platform/test/assert"
-
 	"github.com/qbee-io/qbee-agent/app/api"
+	"github.com/qbee-io/qbee-agent/app/utils/assert"
 )
 
 func TestService_reportsBuffer(t *testing.T) {

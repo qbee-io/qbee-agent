@@ -21,7 +21,7 @@ import (
 	"encoding/base64"
 	"testing"
 
-	"qbee.io/platform/test/assert"
+	"github.com/qbee-io/qbee-agent/app/utils/assert"
 )
 
 func Test_Reporter_Redact(t *testing.T) {
