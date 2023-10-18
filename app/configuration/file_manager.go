@@ -117,6 +117,62 @@ func (srv *Service) downloadFile(ctx context.Context, src, dst string) (bool, er
 	return true, nil
 }
 
+const localFileSchema = "file://"
+
+// getLocalFile returns file read-closer for a file on the local filesystem.
+func getLocalFile(src string) (io.ReadCloser, error) {
+	return os.Open(strings.TrimPrefix(src, localFileSchema))
+}
+
+// getFile returns file reader for a file in file manager.
+func (srv *Service) getFile(ctx context.Context, src string) (io.ReadCloser, error) {
+	if strings.HasPrefix(src, localFileSchema) {
+		return getLocalFile(src)
+	}
+
+	return srv.getFileFromAPI(ctx, src)
+}
+
+// getFileMetadataFromLocal returns metadata for a file on the local filesystem.
+func (srv *Service) getFileMetadataFromLocal(src string) (*FileMetadata, error) {
+	fp, err := os.Open(strings.TrimPrefix(src, localFileSchema))
+	if err != nil {
+		return nil, fmt.Errorf("error opening file %s: %w", src, err)
+	}
+
+	defer fp.Close()
+
+	var fileInfo os.FileInfo
+	if fileInfo, err = fp.Stat(); err != nil {
+		return nil, fmt.Errorf("error getting file metadata %s: %w", src, err)
+	}
+
+	digest := sha256.New()
+	if _, err = io.Copy(digest, fp); err != nil {
+		return nil, fmt.Errorf("error calculating file checksum %s: %w", src, err)
+	}
+
+	hexDigest := hex.EncodeToString(digest.Sum(nil))
+
+	fileMetadata := &FileMetadata{
+		LastModified: fileInfo.ModTime().Unix(),
+		Tags: map[string]string{
+			fileDigestSHA256Tag: hexDigest,
+		},
+	}
+
+	return fileMetadata, nil
+}
+
+// getFileMetadata returns metadata for a file in the file manager.
+func (srv *Service) getFileMetadata(ctx context.Context, src string) (*FileMetadata, error) {
+	if strings.HasPrefix(src, localFileSchema) {
+		return srv.getFileMetadataFromLocal(src)
+	}
+
+	return srv.getFileMetadataFromAPI(ctx, src)
+}
+
 // downloadTemplateFile and execute - returns true if file template was executed and resulted in a new dst file.
 func (srv *Service) downloadTemplateFile(ctx context.Context, src, dst string, params map[string]string) (bool, error) {
 	var err error
@@ -134,10 +190,16 @@ func (srv *Service) downloadTemplateFile(ctx context.Context, src, dst string, p
 		}
 	}()
 
-	cacheSrc := filepath.Join(srv.cacheDirectory, FileDistributionCacheDirectory, src)
+	var cacheSrc string
 
-	if _, err = srv.downloadFile(ctx, src, cacheSrc); err != nil {
-		return false, err
+	if strings.HasPrefix(src, localFileSchema) {
+		cacheSrc = strings.TrimPrefix(src, localFileSchema)
+	} else {
+		cacheSrc = filepath.Join(srv.cacheDirectory, FileDistributionCacheDirectory, src)
+
+		if _, err = srv.downloadFile(ctx, src, cacheSrc); err != nil {
+			return false, err
+		}
 	}
 
 	var sha256digest string
@@ -452,7 +514,7 @@ func resolveDestinationPath(source, destination string) (string, error) {
 	fileInfo, err := os.Stat(destination)
 
 	if err != nil {
-		// Check of the destination path is a directory
+		// Check if the destination path is a directory
 		if destination[len(destination)-1:] == string(os.PathSeparator) {
 			return "", fmt.Errorf("destination path %s is a directory", destination)
 		}

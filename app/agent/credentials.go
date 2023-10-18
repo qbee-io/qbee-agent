@@ -47,12 +47,18 @@ const (
 func (agent *Agent) loadCACertificatesPool() error {
 	caCertPath := filepath.Join(agent.cfg.Directory, credentialsDirectory, caCertFilename)
 
+	agent.caCertPool = x509.NewCertPool()
+
 	pemCert, err := os.ReadFile(caCertPath)
 	if err != nil {
+		// we want to allow local use without CA certificate, as the agent won't have to talk to the device hub
+		if errors.Is(err, fs.ErrNotExist) {
+			log.Warnf("CA certificate %s not found - only local use possible", caCertPath)
+			return nil
+		}
+
 		return fmt.Errorf("error reading CA certificate %s: %w", caCertPath, err)
 	}
-
-	caCertPool := x509.NewCertPool()
 
 	for len(pemCert) > 0 {
 		var pemBlock *pem.Block
@@ -65,10 +71,8 @@ func (agent *Agent) loadCACertificatesPool() error {
 			return fmt.Errorf("error parsing CA certificate %s: %w", caCertPath, err)
 		}
 
-		caCertPool.AddCert(envCACert)
+		agent.caCertPool.AddCert(envCACert)
 	}
-
-	agent.caCertPool = caCertPool
 
 	return nil
 }

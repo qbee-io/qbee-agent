@@ -29,10 +29,6 @@ func (srv *Service) ResetRebootAfterRun() {
 
 // ExecuteTestConfigInDocker executes provided config inside a docker container and returns reports and logs.
 func ExecuteTestConfigInDocker(r *runner.Runner, config CommittedConfig) ([]string, []string) {
-
-	r.MustExec("mkdir", "-p", "/etc/qbee/ppkeys")
-	r.MustExec("touch", "/etc/qbee/ppkeys/ca.cert")
-
 	r.CreateJSON("/app/config.json", config)
 
 	return ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r", "-f", "/app/config.json"))

@@ -179,6 +179,12 @@ func Test_resolveDestinationPath(t *testing.T) {
 			want:        filepath.Join(tempDir, "source"),
 		},
 		{
+			name:        "from local source",
+			source:      "file://source",
+			destination: tempDir,
+			want:        filepath.Join(tempDir, "source"),
+		},
+		{
 			name:        "illegal path that shoould return empty string",
 			source:      "source",
 			destination: fmt.Sprintf("%s/notallowed/", tempDir),
