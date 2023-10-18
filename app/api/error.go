@@ -31,10 +31,12 @@ type Error struct {
 	ResponseBody []byte
 }
 
+// Error returns a string representation of the error.
 func (err *Error) Error() string {
 	return fmt.Sprintf("unexpected API response: %d %s", err.ResponseCode, err.ResponseBody)
 }
 
+// NewError returns a new API error with the given response status code and body.
 func NewError(responseStatusCode int, responseBody io.Reader) error {
 	responseBodyContents, _ := io.ReadAll(responseBody)
 

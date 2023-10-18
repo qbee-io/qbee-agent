@@ -51,7 +51,7 @@ func (agent *Agent) updateAgent(ctx context.Context) error {
 		return fmt.Errorf("cannot determine absolute agent path: %w", err)
 	}
 
-	if err = binary.Download(agent.api, ctxWithTimeout, binary.Agent, agentBinPath); err != nil {
+	if err = binary.Download(ctxWithTimeout, agent.api, binary.Agent, agentBinPath); err != nil {
 		return fmt.Errorf("cannot download agent binary: %w", err)
 	}
 

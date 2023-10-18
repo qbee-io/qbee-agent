@@ -21,6 +21,7 @@ import (
 	"strings"
 )
 
+// SemanticVersion represents a semantic version (major[.minor[.patch]])
 type SemanticVersion [3]uint64
 
 // IsNewerVersion returns true if "a" is newer than "b".

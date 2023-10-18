@@ -26,7 +26,7 @@ import (
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
-// NetworkValues
+// NetworkValues contains network metrics for an interface.
 //
 // Example payload:
 //
@@ -96,6 +96,7 @@ func CollectNetwork() ([]Metric, error) {
 	return metrics, nil
 }
 
+// Delta calculates the delta between two NetworkValues.
 func (v *NetworkValues) Delta(old *NetworkValues) (*NetworkValues, error) {
 	if old == nil {
 		return v, nil

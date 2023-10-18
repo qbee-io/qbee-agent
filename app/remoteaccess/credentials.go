@@ -18,6 +18,7 @@ package remoteaccess
 
 import "strings"
 
+// Credentials represents the remote access credentials as returned by the device hub.
 type Credentials struct {
 	// CA - the CA certificate as a slice of new-lines in PEM format.
 	CA []string `json:"vpn_ca_cert"`
@@ -28,6 +29,7 @@ type Credentials struct {
 	// Expiry - time of the certificate expiration in seconds since epoch.
 	Expiry int64 `json:"vpn_cert_expiry"`
 
+	// Status - status of the request. Should be "OK" if credentials are issued.
 	Status string `json:"status"`
 }
 

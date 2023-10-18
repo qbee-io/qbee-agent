@@ -16,8 +16,10 @@
 
 package metrics
 
+// Label defines a resource type for which metrics are collected.
 type Label string
 
+// Collected metric labels.
 const (
 	CPU         Label = "cpu"
 	Memory      Label = "memory"

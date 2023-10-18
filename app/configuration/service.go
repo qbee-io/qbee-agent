@@ -32,6 +32,7 @@ import (
 
 const defaultAgentInterval = 5 // minutes
 
+// Service provides configuration management functionality for the agent.
 type Service struct {
 	api *api.Client
 

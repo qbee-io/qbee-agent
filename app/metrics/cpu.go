@@ -28,7 +28,7 @@ import (
 	"github.com/qbee-io/qbee-agent/app/inventory/linux"
 )
 
-// CPUValues
+// CPUValues contains CPU metrics.
 //
 // Example payload:
 //
@@ -88,6 +88,7 @@ func CollectCPU() (*CPUValues, error) {
 	}, nil
 }
 
+// Delta returns the delta between two CPUValues.
 func (c *CPUValues) Delta(previous *CPUValues) (*CPUValues, error) {
 	elapsed := c.totalTime() - previous.totalTime()
 	if elapsed <= 0 {

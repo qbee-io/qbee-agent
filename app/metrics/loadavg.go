@@ -27,15 +27,15 @@ import (
 	"github.com/qbee-io/qbee-agent/app/inventory/linux"
 )
 
-// LoadAverageValues
+// LoadAverageValues contains load average metrics.
 //
 // Example payload:
 //
-// {
-//  "1min": 1.17,
-//  "5min": 0.84,
-//  "15min": 0.77
-// }
+//	{
+//	 "1min": 1.17,
+//	 "5min": 0.84,
+//	 "15min": 0.77
+//	}
 type LoadAverageValues struct {
 	// Minute1 average system load over 1 minute.
 	Minute1 float64 `json:"1min"`

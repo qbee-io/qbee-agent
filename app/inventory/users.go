@@ -16,8 +16,10 @@
 
 package inventory
 
+// TypeUsers is the type of the inventory item.
 const TypeUsers Type = "users"
 
+// Users contains information about users on the system.
 type Users struct {
 	Users []User `json:"items"`
 }
@@ -33,6 +35,7 @@ func (users Users) GetUser(username string) *User {
 	return nil
 }
 
+// User represents a user on the system.
 type User struct {
 	// Name - the string a user would type in when logging into the operating system.
 	Name string `json:"user"`

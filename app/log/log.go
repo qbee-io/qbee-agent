@@ -18,6 +18,7 @@ package log
 
 import "log"
 
+// Supported logs severity levels.
 const (
 	ERROR = iota
 	WARNING

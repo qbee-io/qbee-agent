@@ -24,6 +24,8 @@ import (
 	"time"
 )
 
+// Report represents a single configuration report.
+// The report will show in the Logs section of the platform.
 type Report struct {
 	Bundle         string `json:"bundle"`
 	BundleCommitID string `json:"bundle_commit_id"`
@@ -55,10 +57,12 @@ type Reporter struct {
 	secrets         []string
 }
 
+type contextKey string
+
 const (
-	ctxReporter               = "configuration:reporter"
-	ctxReporterBundleName     = "configuration:reporter:bundle-name"
-	ctxReporterBundleCommitID = "configuration:reporter:bundle-commit-id"
+	ctxReporter               = contextKey("configuration:reporter")
+	ctxReporterBundleName     = contextKey("configuration:reporter:bundle-name")
+	ctxReporterBundleCommitID = contextKey("configuration:reporter:bundle-commit-id")
 )
 
 // BundleContext returns context with bundle information attached to it.

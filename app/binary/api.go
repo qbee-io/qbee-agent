@@ -29,7 +29,7 @@ import (
 const downloadPath = "/v1/org/device/auth/download/%s/%s"
 
 // download the latest binary version and return its metadata.
-func download(apiClient *api.Client, ctx context.Context, name string, writer io.Writer) (*Metadata, error) {
+func download(ctx context.Context, apiClient *api.Client, name string, writer io.Writer) (*Metadata, error) {
 	path := fmt.Sprintf(downloadPath, name, runtime.GOARCH)
 
 	request, err := apiClient.NewRequest(ctx, http.MethodGet, path, nil)

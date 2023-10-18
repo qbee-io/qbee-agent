@@ -16,6 +16,8 @@
 
 package binary
 
+// Metadata defines metadata of a binary used by the agent.
+// This is used to verify the integrity of the binary.
 type Metadata struct {
 	Version   string `json:"version"`
 	Digest    string `json:"digest"`

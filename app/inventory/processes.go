@@ -16,12 +16,15 @@
 
 package inventory
 
+// TypeProcesses is the inventory type for process information.
 const TypeProcesses Type = "processes"
 
+// Processes contains information about processes running on the system.
 type Processes struct {
 	Processes []Process `json:"items"`
 }
 
+// Process contains information about a running process.
 type Process struct {
 	// PID - process ID.
 	PID int `json:"pid"`

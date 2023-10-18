@@ -16,12 +16,15 @@
 
 package inventory
 
+// TypePorts is the inventory type for listening network ports.
 const TypePorts Type = "ports"
 
+// Ports contains information about currently listening network ports.
 type Ports struct {
 	Ports []Port `json:"items"`
 }
 
+// Port contains information about a listening network port.
 type Port struct {
 	// Protocol - network protocol used (e.g. "tcp", "tcp6", "udp" or "udp6").
 	Protocol string `json:"proto"`

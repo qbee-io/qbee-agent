@@ -24,8 +24,7 @@ import (
 	"github.com/qbee-io/qbee-agent/app/log"
 )
 
-const defaultAgentInterval = 5 // minutes
-
+// Service collects system metrics and sends them to the device hub.
 type Service struct {
 	api                   *api.Client
 	previousCPUValues     *CPUValues

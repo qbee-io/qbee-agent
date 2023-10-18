@@ -24,12 +24,15 @@ import (
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
+// TypeDockerContainers is the inventory type for Docker containers.
 const TypeDockerContainers Type = "docker_containers"
 
+// DockerContainers represents a list of Docker containers.
 type DockerContainers struct {
 	Containers []DockerContainer `json:"items"`
 }
 
+// DockerContainer represents a single Docker container.
 type DockerContainer struct {
 	// ID - container ID.
 	ID string `json:"id"`

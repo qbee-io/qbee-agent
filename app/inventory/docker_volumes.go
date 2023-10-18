@@ -24,12 +24,15 @@ import (
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
+// TypeDockerVolumes is the inventory type for Docker volumes.
 const TypeDockerVolumes Type = "docker_volumes"
 
+// DockerVolumes represents a list of Docker volumes.
 type DockerVolumes struct {
 	Volumes []DockerVolume `json:"items"`
 }
 
+// DockerVolume represents a single Docker volume.
 type DockerVolume struct {
 	// Name - volume name.
 	Name string `json:"name"`

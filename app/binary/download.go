@@ -25,13 +25,14 @@ import (
 	"github.com/qbee-io/qbee-agent/app/api"
 )
 
+// Binaries supported for automatic distribution and verification.
 const (
 	Agent   = "agent"
 	OpenVPN = "openvpn"
 )
 
 // Download and verify the latest binary version.
-func Download(apiClient *api.Client, ctx context.Context, name, dstPath string) error {
+func Download(ctx context.Context, apiClient *api.Client, name, dstPath string) error {
 	fp, err := os.CreateTemp(filepath.Dir(dstPath), filepath.Base(dstPath)+".*.tmp")
 	if err != nil {
 		return fmt.Errorf("cannot create temporary binary file: %w", err)
@@ -48,7 +49,7 @@ func Download(apiClient *api.Client, ctx context.Context, name, dstPath string) 
 	defer os.Remove(tmpPath)
 
 	var metadata *Metadata
-	if metadata, err = download(apiClient, ctx, name, fp); err != nil {
+	if metadata, err = download(ctx, apiClient, name, fp); err != nil {
 		return fmt.Errorf("cannot download update: %w", err)
 	}
 

@@ -50,8 +50,12 @@ type PackageManagementBundle struct {
 // RebootMode defines whether system should be rebooted after package maintenance or not.
 type RebootMode string
 
+// Supported reboot modes.
 const (
-	RebootNever  RebootMode = "never"
+	// RebootNever means that system will never be rebooted after package maintenance.
+	RebootNever RebootMode = "never"
+
+	// RebootAlways means that system will always be rebooted after package maintenance.
 	RebootAlways RebootMode = "always"
 )
 

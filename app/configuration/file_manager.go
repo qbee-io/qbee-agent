@@ -48,6 +48,7 @@ const SoftwareCacheDirectory = "software"
 // DockerContainerDirectory is where the agent will download docker related files.
 const DockerContainerDirectory = "docker_containers"
 
+// FileMetadata is the metadata of a file.
 type FileMetadata struct {
 	MD5          string            `json:"md5"`
 	LastModified int64             `json:"last_modified"`

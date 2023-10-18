@@ -31,6 +31,7 @@ import (
 	"github.com/qbee-io/qbee-agent/app/utils"
 )
 
+// PackageManagerTypeDebian is the type of the Debian package manager.
 const PackageManagerTypeDebian PackageManagerType = "deb"
 
 const (
@@ -41,6 +42,7 @@ const (
 	dpkgLockMode = 0640
 )
 
+// DebianPackageManager implements PackageManager interface for Debian-based systems.
 type DebianPackageManager struct {
 	supportsAllowDowngradesFlag bool
 	lock                        sync.Mutex

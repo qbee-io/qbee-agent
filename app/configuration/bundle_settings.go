@@ -20,17 +20,18 @@ import (
 	"time"
 )
 
-// SettingsBundle
+// SettingsBundle defines settings for the agent.
 //
 // Example payload:
-// "settings": {
-//   "metrics": true,
-//   "reports": true,
-//   "remoteconsole": true,
-//   "software_inventory": true,
-//   "process_inventory": true,
-//   "agentinterval": 10
-// }
+//
+//	"settings": {
+//	  "metrics": true,
+//	  "reports": true,
+//	  "remoteconsole": true,
+//	  "software_inventory": true,
+//	  "process_inventory": true,
+//	  "agentinterval": 10
+//	}
 type SettingsBundle struct {
 	Metadata
 
