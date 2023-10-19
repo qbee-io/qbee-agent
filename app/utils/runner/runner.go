@@ -126,7 +126,26 @@ func (runner *Runner) CreateFile(path string, contents []byte) {
 
 // ReadFile reads the contents of the given file from the runner.
 func (runner *Runner) ReadFile(path string) []byte {
-	return runner.MustExec("cat", path)
+	fd, err := os.CreateTemp(runner.t.TempDir(), "qbee-test-*")
+	if err != nil {
+		panic(err)
+	}
+	_ = fd.Close()
+
+	defer os.Remove(fd.Name())
+
+	containerPath := fmt.Sprintf("%s:%s", runner.container, path)
+
+	if err = exec.Command("docker", "cp", containerPath, fd.Name()).Run(); err != nil {
+		panic(err)
+	}
+
+	var output []byte
+	if output, err = os.ReadFile(fd.Name()); err != nil {
+		panic(err)
+	}
+
+	return output
 }
 
 // CreateJSON creates a file with the given path and JSON-encodes the given document.

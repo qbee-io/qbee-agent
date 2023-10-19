@@ -52,7 +52,7 @@ type fileMetadataResponse struct {
 }
 
 // getFileMetadata returns metadata for a file in the file manager.
-func (srv *Service) getFileMetadata(ctx context.Context, src string) (*FileMetadata, error) {
+func (srv *Service) getFileMetadataFromAPI(ctx context.Context, src string) (*FileMetadata, error) {
 	path := fmt.Sprintf(fileManagerMetadataAPIPath, src)
 
 	fileMetadataResp := new(fileMetadataResponse)
@@ -67,7 +67,7 @@ func (srv *Service) getFileMetadata(ctx context.Context, src string) (*FileMetad
 const fileManagerAPIPath = "/v1/org/device/auth/files/%s"
 
 // getFile returns file reader.
-func (srv *Service) getFile(ctx context.Context, src string) (io.ReadCloser, error) {
+func (srv *Service) getFileFromAPI(ctx context.Context, src string) (io.ReadCloser, error) {
 	path := fmt.Sprintf(fileManagerAPIPath, src)
 
 	request, err := srv.api.NewRequest(ctx, http.MethodGet, path, nil)
