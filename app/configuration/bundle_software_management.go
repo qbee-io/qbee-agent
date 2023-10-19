@@ -187,9 +187,16 @@ func (s Software) Execute(ctx context.Context, srv *Service, pkgManager software
 // installFromFile installs package from a file.
 func (s Software) installFromFile(ctx context.Context, srv *Service, pkgManager software.PackageManager) (bool, error) {
 	// download package from the file manager into software cache directory
-	pkgFileCachePath := filepath.Join(srv.cacheDirectory, SoftwareCacheDirectory, s.Package)
-	if _, err := srv.downloadFile(ctx, s.Package, pkgFileCachePath); err != nil {
-		return false, err
+	var pkgFileCachePath string
+
+	if strings.HasPrefix(s.Package, localFileSchema) {
+		pkgFileCachePath = strings.TrimPrefix(s.Package, localFileSchema)
+	} else {
+		pkgFileCachePath = filepath.Join(srv.cacheDirectory, SoftwareCacheDirectory, s.Package)
+
+		if _, err := srv.downloadFile(ctx, s.Package, pkgFileCachePath); err != nil {
+			return false, err
+		}
 	}
 
 	// get package info
