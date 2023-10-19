@@ -1,14 +1,5 @@
-# This is an example .goreleaser.yml file with some sensible defaults.
-# Make sure to check the documentation at https://goreleaser.com
-
-# The lines bellow are called `modelines`. See `:help modeline`
-# Feel free to remove those if you don't want/need to use them.
-# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
-# vim: set ts=2 sw=2 tw=0 fo=cnqoj
-
 before:
   hooks:
-    # You may remove this if you don't use go modules.
     - go mod tidy
 
 builds:
@@ -32,7 +23,6 @@ builds:
 
 archives:
   - format: tar.gz
-    # this name template makes the OS and Arch compatible with the results of `uname`.
     name_template: >-
       {{ .ProjectName }}_
       {{- title .Os }}_
@@ -46,6 +36,7 @@ changelog:
     exclude:
       - "^docs:"
       - "^test:"
+
 nfpms:
   - vendor: qbee.io
     homepage: https://qbee.io/
@@ -94,4 +85,3 @@ nfpms:
       preinstall: package/install-scripts/preinst
       postinstall: package/install-scripts/postinst
       preremove: package/install-scripts/prerm
-
