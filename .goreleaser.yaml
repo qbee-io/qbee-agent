@@ -58,7 +58,8 @@ nfpms:
 
     file_name_template: "{{.ConventionalFileName }}"
 
-    priority: extra 
+    priority: extra
+    section: default 
 
     formats:
       - deb
@@ -88,7 +89,7 @@ nfpms:
           mode: 0644
           owner: root
           group: root
-          
+
     scripts:
       preinstall: package/install-scripts/preinst
       postinstall: package/install-scripts/postinst
