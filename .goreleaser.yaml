@@ -1,0 +1,96 @@
+# This is an example .goreleaser.yml file with some sensible defaults.
+# Make sure to check the documentation at https://goreleaser.com
+
+# The lines bellow are called `modelines`. See `:help modeline`
+# Feel free to remove those if you don't want/need to use them.
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# vim: set ts=2 sw=2 tw=0 fo=cnqoj
+
+before:
+  hooks:
+    # You may remove this if you don't use go modules.
+    - go mod tidy
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+      - PUBLIC_SIGNING_KEY={{ if index .Env "PUBLIC_SIGNING_KEY"  }}{{ .Env.PUBLIC_SIGNING_KEY }}{{ else }}xSHbUBG7LTuNfXd3zod4EX8_Es8FTCINgrjvx1WXFE4.plCHzlDAeb3IWW1wK6P6paMRYO4f8qceV3lrNCqNpWo{{ end }}
+
+    gcflags:
+      - -trimpath
+    ldflags:
+      - -s 
+      - -w 
+      - -X github.com/qbee-io/qbee-agent/app.Version={{.Version}}
+      - -X github.com/qbee-io/qbee-agent/app/binary.PublicSigningKey={{.Env.PUBLIC_SIGNING_KEY}}
+      - -X github.com/qbee-io/qbee-agent/app.Commit={{.FullCommit}}
+    targets:
+      - "linux_amd64"
+      - "linux_386"
+      - "linux_arm"
+      - "linux_arm64"
+
+archives:
+  - format: tar.gz
+    # this name template makes the OS and Arch compatible with the results of `uname`.
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+nfpms:
+  - vendor: qbee.io
+    homepage: https://qbee.io/
+    maintainer: The Qbee Team <support@qbee.io>
+
+    description: |-
+      Qbee agent
+      Qbee is a lightweight system management platform for IoT devices.
+    license: Apache 2.0
+
+    file_name_template: "{{.ConventionalFileName }}"
+
+    priority: extra 
+
+    formats:
+      - deb
+      - rpm
+    
+    contents:
+      - src: package/share/
+        dst: /opt/qbee/share/
+        type: tree
+        file_info:
+          mode: 0600
+          owner: root
+          group: root
+      
+      - src: package/bin/
+        dst: /opt/qbee/bin
+        type: tree
+        file_info:
+          mode: 0755
+          owner: root
+          group: root
+      
+      - src: package/init-scripts/systemd/
+        dst: /lib/systemd/system/
+        type: tree
+        file_info:
+          mode: 0644
+          owner: root
+          group: root
+          
+    scripts:
+      preinstall: package/install-scripts/preinst
+      postinstall: package/install-scripts/postinst
+      preremove: package/install-scripts/prerm
+
