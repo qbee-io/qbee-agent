@@ -1,14 +1,13 @@
 # qbee-agent v2
 
+qbee-agent is the software running on Linux devices which are managed by the [qbee.io](https://qbee.io) IoT device management platform. For more information about the platform, please see our [documentation](https://qbee.io/docs/).
 
-## License
+# License
 
 The qbee-agent is licensed under the Apache License, Version 2.0. See
 [LICENSE](https://github.com/qbee-io/qbee-agent/blob/master/LICENSE) for the full license text.
 
-## Obtain the signing key
-
-Obtain the signing key from a secure location.
+# Releasing new version
 
 ## Prerequisites
 
@@ -33,6 +32,10 @@ Other dependencies (some usually installed on Linux systems already):
 sudo apt install awscli gzip coreutils make
 ```
 
+## Obtain the signing key
+
+Obtain the signing key from a secure location.
+
 ## Build packages
 
 Build the packages pointing to our signing key. Package versions will by default be 0000.00. Set the VERSION environment
@@ -50,7 +53,7 @@ These packages can be tested without a general release
 
 Run simple tests on the built packages (TBD)
 
-## Release procedure
+## Uploading packages
 
 Make sure you have your AWS environment credentials for production
 
