@@ -48,17 +48,13 @@ type Agent struct {
 	caCertPool  *x509.CertPool
 
 	api        *api.Client
-	inProgress *sync.WaitGroup
+	lock       *sync.Mutex
 	loopTicker *time.Ticker
 	stop       chan bool
 	update     chan bool
 	reboot     chan bool
 
 	Inventory     *inventory.Service
-	inventoryLock sync.Mutex
-	checkinLock   sync.Mutex
-	metricsLock   sync.Mutex
-	configLock    sync.Mutex
 	Configuration *configuration.Service
 	Metrics       *metrics.Service
 	remoteAccess  *remoteaccess.Service
@@ -92,7 +88,7 @@ func (agent *Agent) Run(ctx context.Context) error {
 			log.Infof("stopping the agent")
 
 			// let all the processing finish
-			agent.inProgress.Wait()
+			agent.Wait()
 
 			if agent.disableRemoteAccess {
 				return nil
@@ -133,7 +129,7 @@ func (agent *Agent) Run(ctx context.Context) error {
 			log.Infof("starting agent update")
 
 			// wait for all the processing to finish
-			agent.inProgress.Wait()
+			agent.Wait()
 
 			// and run the update (this will block until the update is finished)
 			if err := agent.updateAgent(ctx); err != nil {
@@ -159,7 +155,10 @@ const (
 
 // RunOnce performs a single run of the agent routines.
 func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
+	agent.lock.Lock()
 	defer func() {
+		agent.lock.Unlock()
+
 		if err := recover(); err != nil {
 			log.Errorf("fatal agent error: %v", err)
 		}
@@ -176,40 +175,29 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 	agent.Configuration.UpdateSettings(configData)
 
 	if mode == FullRun {
-		agent.do(ctx, "inventories", agent.doInventories)
 		agent.do(ctx, "check-in", agent.doCheckIn)
 		agent.do(ctx, "metrics", agent.doMetrics)
-		agent.do(ctx, "config", agent.doConfig(configData))
 		agent.do(ctx, "remote-access", agent.doRemoteAccess)
+		agent.do(ctx, "config", agent.doConfig(configData))
+		agent.do(ctx, "inventories", agent.doInventories)
 	} else {
 		agent.do(ctx, "system-inventory", agent.doSystemInventory)
 	}
 }
 
-// do execute a function in a background goroutine.
+// do execute a named function and report on errors.
 func (agent *Agent) do(ctx context.Context, name string, fn func(ctx context.Context) error) {
 	log.Debugf("starting %s", name)
-	agent.inProgress.Add(1)
 
-	go func() {
-		defer func() {
-			log.Debugf("stopping %s", name)
-			agent.inProgress.Done()
-		}()
+	if err := fn(ctx); err != nil {
+		log.Errorf("failed to do %s: %v", name, err)
+	}
 
-		if err := fn(ctx); err != nil {
-			log.Errorf("failed to do %s: %v", name, err)
-		}
-	}()
+	log.Debugf("stopping %s", name)
 }
 
 // doCheckIn sends a heartbeat to the device hub and checks for updates.
 func (agent *Agent) doCheckIn(ctx context.Context) error {
-	if !agent.checkinLock.TryLock() {
-		return nil
-	}
-	defer agent.checkinLock.Unlock()
-
 	response, err := agent.checkIn(ctx, agent.cfg.AutoUpdate)
 	if err != nil {
 		return fmt.Errorf("failed to check-in: %w", err)
@@ -224,11 +212,6 @@ func (agent *Agent) doCheckIn(ctx context.Context) error {
 
 // doMetrics collects system metrics - if enabled - and delivers them to the device hub API.
 func (agent *Agent) doMetrics(ctx context.Context) error {
-	if !agent.metricsLock.TryLock() {
-		return nil
-	}
-	defer agent.metricsLock.Unlock()
-
 	if !agent.Configuration.MetricsEnabled() {
 		return nil
 	}
@@ -243,20 +226,8 @@ func (agent *Agent) doMetrics(ctx context.Context) error {
 // doConfig returns a function which executes the committed configuration.
 func (agent *Agent) doConfig(configData *configuration.CommittedConfig) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
-		if !agent.configLock.TryLock() {
-			return nil
-		}
-		defer agent.configLock.Unlock()
-
-		currentCommitID := agent.Configuration.CurrentCommitID()
-
 		if err := agent.Configuration.Execute(ctx, configData); err != nil {
 			return fmt.Errorf("failed to apply configuration: %w", err)
-		}
-
-		// when new config has a different commitID then applied to the system, let's push new inventories out
-		if currentCommitID != configData.CommitID {
-			agent.do(ctx, "inventories-on-change", agent.doInventories)
 		}
 
 		// Send reboot command if it is scheduled
@@ -287,7 +258,7 @@ func (agent *Agent) RebootSystem(ctx context.Context) {
 		return
 	}
 	log.Debugf("waiting for agent routines to finish")
-	agent.inProgress.Wait()
+	agent.Wait()
 
 	if output, err := utils.RunCommand(ctx, []string{"/sbin/shutdown", "-r", "+1"}); err != nil {
 		log.Errorf("scheduling system reboot failed: %v", err)
@@ -298,6 +269,12 @@ func (agent *Agent) RebootSystem(ctx context.Context) {
 	agent.stop <- true
 }
 
+// Wait for the agent to finish any ongoing processing to finish.
+func (agent *Agent) Wait() {
+	agent.lock.Lock()
+	agent.lock.Unlock()
+}
+
 // NewWithoutCredentials returns a new instance of Agent without loaded credentials.
 func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 	if err := prepareDirectories(cfg.Directory, cfg.StateDirectory); err != nil {
@@ -305,11 +282,10 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 	}
 
 	agent := &Agent{
-		cfg:        cfg,
-		inProgress: new(sync.WaitGroup),
-		stop:       make(chan bool, 1),
-		update:     make(chan bool, 1),
-		reboot:     make(chan bool, 1),
+		cfg:    cfg,
+		stop:   make(chan bool, 1),
+		update: make(chan bool, 1),
+		reboot: make(chan bool, 1),
 	}
 
 	var proxy *api.Proxy
