@@ -84,7 +84,7 @@ func Bootstrap(ctx context.Context, cfg *Config) error {
 	}
 
 	agent.RunOnce(ctx, QuickRun)
-	agent.inProgress.Wait()
+	agent.Wait()
 
 	log.Infof("Bootstrap successfully completed")
 

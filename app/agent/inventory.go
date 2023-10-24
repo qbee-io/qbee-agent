@@ -26,11 +26,6 @@ import (
 
 // doInventories collects all inventories and delivers them to the device hub API.
 func (agent *Agent) doInventories(ctx context.Context) error {
-	if !agent.inventoryLock.TryLock() {
-		return nil
-	}
-	defer agent.inventoryLock.Unlock()
-
 	inventories := map[string]func(ctx context.Context) error{
 		"system":            agent.doSystemInventory,
 		"users":             agent.doUsersInventory,
@@ -54,9 +49,6 @@ func (agent *Agent) doInventories(ctx context.Context) error {
 
 // doInventoriesSimple collects lightweight inventories and delivers them to the device hub API.
 func (agent *Agent) doInventoriesSimple(ctx context.Context) error {
-	agent.inventoryLock.Lock()
-	defer agent.inventoryLock.Unlock()
-
 	inventories := map[string]func(ctx context.Context) error{
 		"system":  agent.doSystemInventory,
 		"users":   agent.doUsersInventory,
