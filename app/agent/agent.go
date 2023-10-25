@@ -48,7 +48,7 @@ type Agent struct {
 	caCertPool  *x509.CertPool
 
 	api        *api.Client
-	lock       *sync.Mutex
+	lock       sync.Mutex
 	loopTicker *time.Ticker
 	stop       chan bool
 	update     chan bool
