@@ -205,25 +205,11 @@ func (s Software) installFromFile(ctx context.Context, srv *Service, pkgManager 
 		return false, err
 	}
 
-	// check if package is already installed
-	var installedPackages []software.Package
-	if installedPackages, err = pkgManager.ListPackages(ctx); err != nil {
+	// Check whether package is installed
+	if isInstalled, err := s.isPackageInstalled(ctx, pkgInfo, pkgManager); err != nil {
 		return false, err
-	}
-
-	for _, pkg := range installedPackages {
-		// continue if name do not match
-		if pkg.Name != pkgInfo.Name {
-			continue
-		}
-		// name matches, continue if versions do not match
-		if pkg.Version != pkgInfo.Version {
-			continue
-		}
-		// name and version match, return if architecture is the same
-		if pkg.Architecture == pkgInfo.Architecture {
-			return false, nil
-		}
+	} else if isInstalled {
+		return false, nil
 	}
 
 	// install package using the package manager
@@ -233,13 +219,21 @@ func (s Software) installFromFile(ctx context.Context, srv *Service, pkgManager 
 		return false, err
 	}
 
+	// Verify that package was installed
+	if isInstalled, err := s.isPackageInstalled(ctx, pkgInfo, pkgManager); err != nil {
+		ReportError(ctx, err, "Unable to verify installation of '%s'", s.Package)
+		return false, err
+	} else if !isInstalled {
+		ReportError(ctx, output, "Unable to install '%s'", s.Package)
+		return false, fmt.Errorf("unable to install '%s'", s.Package)
+	}
+
 	ReportInfo(ctx, output, "Successfully installed '%s'", s.Package)
 
 	return true, nil
 }
 
-// installFromRepository install package from package repository.
-func (s Software) installFromRepository(ctx context.Context, pkgManager software.PackageManager) (bool, error) {
+func (s Software) isPackageInstalled(ctx context.Context, pkgInfo *software.Package, pkgManager software.PackageManager) (bool, error) {
 	// check if package is already installed
 	installedPackages, err := pkgManager.ListPackages(ctx)
 	if err != nil {
@@ -247,13 +241,41 @@ func (s Software) installFromRepository(ctx context.Context, pkgManager software
 	}
 
 	for _, pkg := range installedPackages {
-		if pkg.Name == s.Package {
-			return false, nil
+		// continue if name do not match
+		if pkg.Name != pkgInfo.Name {
+			continue
 		}
+		// name matches and we do not have version information
+		if pkgInfo.Version == "" {
+			return true, nil
+		}
+		// name matches, continue if versions do not match
+		if pkg.Version != pkgInfo.Version {
+			continue
+		}
+		// name and version match, return if architecture is the same
+		if pkg.Architecture == pkgInfo.Architecture {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// installFromRepository install package from package repository.
+func (s Software) installFromRepository(ctx context.Context, pkgManager software.PackageManager) (bool, error) {
+	// Check whether package is installed
+	pkgInfo := &software.Package{
+		Name: s.Package,
+	}
+	if isInstalled, err := s.isPackageInstalled(ctx, pkgInfo, pkgManager); err != nil {
+		return false, err
+	} else if isInstalled {
+		return false, nil
 	}
 
 	// install package
 	var output []byte
+	var err error
 	if output, err = pkgManager.Install(ctx, s.Package, ""); err != nil {
 		ReportError(ctx, err, "Unable to install '%s'", s.Package)
 		return false, err
