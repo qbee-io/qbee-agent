@@ -53,6 +53,24 @@ func Test_SoftwareManagementBundle_InstallPackageFromFile(t *testing.T) {
 	assert.Equal(t, string(output), "2.1.1")
 }
 
+func Test_SoftwareManagementBundle_InstallPackageFromFile_WithConflicts(t *testing.T) {
+	r := runner.New(t)
+
+	pkgFilename := "file:///apt-repo/qbee-test-conflicts_1.0.0_all.deb"
+
+	packages := []configuration.Software{
+		{
+			Package: pkgFilename,
+		},
+	}
+
+	reports := executeSoftwareManagementBundle(r, packages)
+	expectedReports := []string{
+		fmt.Sprintf("[ERR] Unable to install '%s'", pkgFilename),
+	}
+	assert.Equal(t, reports, expectedReports)
+}
+
 func Test_SoftwareManagementBundle_InstallPackageFromFile_WithDependencies(t *testing.T) {
 	r := runner.New(t)
 
