@@ -292,27 +292,23 @@ func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath s
 	deb.lock.Lock()
 	defer deb.lock.Unlock()
 
+	defer InvalidateCache(PackageManagerTypeDebian)
+
 	installCommand := []string{dpkgPath, "-i", pkgFilePath}
 	cmd := []string{"sh", "-c", strings.Join(installCommand, " ")}
 	dpkgOutput, err := utils.RunCommand(ctx, cmd)
 
 	// dpkg succeded, return
 	if err == nil {
-		InvalidateCache(PackageManagerTypeDebian)
 		return dpkgOutput, nil
 	}
 
+	// dpkg fails, so we need to run "apt-get install -f" to any dependencies
 	dpkgOutput = []byte(err.Error())
 
-	// dpkg fails, so we need to run "apt-get install -f"
 	installCommand = append(aptGetBaseCommand, "install")
 	cmd = []string{"sh", "-c", strings.Join(installCommand, " ")}
 	aptOutput, err := utils.RunCommand(ctx, cmd)
-
-	// package installation succeeded, invalidate cache
-	if err == nil {
-		InvalidateCache(PackageManagerTypeDebian)
-	}
 
 	return append(dpkgOutput, aptOutput...), err
 }
