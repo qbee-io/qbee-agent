@@ -298,12 +298,12 @@ func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath s
 	cmd := []string{"sh", "-c", strings.Join(installCommand, " ")}
 	dpkgOutput, err := utils.RunCommand(ctx, cmd)
 
-	// dpkg succeded, return
+	// dpkg succeeded, return
 	if err == nil {
 		return dpkgOutput, nil
 	}
 
-	// dpkg fails, so we need to run "apt-get install -f" to any dependencies
+	// dpkg fails, so we need to run "apt-get install -f" to install any possible dependencies
 	dpkgOutput = []byte(err.Error())
 
 	installCommand = append(aptGetBaseCommand, "install")
