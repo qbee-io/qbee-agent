@@ -1,58 +1,89 @@
 #!/usr/bin/env bash
 
-SCRIPT_DIR=$(cd $(dirname $0) && pwd)
-BASEDIR=$(dirname $SCRIPT_DIR)
-source $SCRIPT_DIR/config.env
+# shellcheck disable=SC2086
+SCRIPT_DIR=$(cd "$(dirname $0)" && pwd)
+
+# shellcheck disable=SC1090
+source "$SCRIPT_DIR/config.env"
 
 PACKAGE_BUCKET="qbee-static-eu-west-1-pro"
 
-function generate_shasums() {
+function generate_shasums_cdn() {
   local old_pwd
 
   old_pwd=$(pwd)
 
-  cd $PKG_OUTPUT
-  sha512sum * > SHA512SUMS
+  cd "$PKG_OUTPUT" || exit 1
+  rm SHA512SUMS -f
+  sha512sum qbee-agent* > SHA512SUMS
 
-  cd $TAR_OUTPUT
-  sha512sum * > SHA512SUMS
+  cd "$TAR_OUTPUT" || exit 1
+  rm SHA512SUMS -f
+  sha512sum qbee-agent* > SHA512SUMS
 
-  cd $old_pwd
+  cd "$old_pwd" || exit 1
 }
 
-function upload_packages() {
+function generate_shasums_gh() {
+  local old_pwd
 
+  old_pwd=$(pwd)
+
+  cd "$PKG_OUTPUT" || exit 1
+  rm SHA512SUMS "qbee-agent-$VERSION-SHA512SUMS" -f
+  sha512sum qbee-agent* >> "$PKG_OUTPUT/qbee-agent-$VERSION-SHA512SUMS"
+
+  cd "$TAR_OUTPUT" || exit 1
+  sha512sum qbee-agent* >> "$PKG_OUTPUT/qbee-agent-$VERSION-SHA512SUMS"
+
+  cd "$old_pwd" || exit 1
+}
+
+function upload_packages_cdn() {
   PACKAGE_S3_BASE="s3://$PACKAGE_BUCKET/software/qbee-agent/$VERSION/packages"
 
-  for file in $PKG_OUTPUT/*; do
-    pkg=$(basename $file)
+  for file in "$PKG_OUTPUT"/*; do
+    pkg=$(basename "$file")
     aws s3 cp "$file" "$PACKAGE_S3_BASE/$pkg"
   done
 }
 
-function upload_binaries(){
+function upload_binaries_cdn(){
   PACKAGE_S3_BASE="s3://$PACKAGE_BUCKET/software/qbee-agent/$VERSION/binaries"
 
-  for file in $TAR_OUTPUT/*; do 
-    bin=$(basename $file)
+  for file in "$TAR_OUTPUT"/*; do 
+    bin=$(basename "$file")
     aws s3 cp "$file" "$PACKAGE_S3_BASE/$bin"
     sha256sum "$file"
   done
 }
 
-function set_latest_release() {
+function set_latest_release_cdn() {
   LATEST_URL="s3://$PACKAGE_BUCKET/software/qbee-agent/latest.txt"
 
-  if [[ $VERSION =~ ^20[0-9]+\.[0-9]+$ ]]; then
+  if [[ "$VERSION" =~ ^20[0-9]+\.[0-9]+$ ]]; then
     LATEST_FILE=$(mktemp /tmp/latest.txt.XXXXXXXX)
-    echo "$VERSION" > $LATEST_FILE
+    echo "$VERSION" > "$LATEST_FILE"
     aws s3 cp "$LATEST_FILE" "$LATEST_URL"
     rm "$LATEST_FILE" -f
   fi
 }
 
-generate_shasums
-upload_packages
-# upload binaries to cdn (Yocto)
-upload_binaries
-set_latest_release
+upload_assets_gh() {
+  GH_OPTS=""
+  if [[ ! "$VERSION" =~ ^20[0-9]+\.[0-9]+$ ]]; then
+    GH_OPTS="--prerelease"
+  fi
+  gh release create "$VERSION" --title "$VERSION" --generate-notes $GH_OPTS
+  gh release upload "$VERSION" "$PKG_OUTPUT"/* "$TAR_OUTPUT"/*
+}
+
+# Upload the CDN
+generate_shasums_cdn
+upload_packages_cdn
+upload_binaries_cdn
+set_latest_release_cdn
+
+# Upload to Github
+generate_shasums_gh
+upload_assets_gh
