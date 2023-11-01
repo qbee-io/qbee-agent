@@ -49,7 +49,7 @@ function build_package() {
     --version "$VERSION" \
     -m "The Qbee Team <support@qbee.io>" \
     --url "https://qbee.io" \
-    --license "Qbee Proprietary License" \
+    --license "Apache-2.0" \
     --description "Qbee agent
 Qbee is a lightweight system management platform for IoT devices" \
     -p $PKG_OUTPUT \
