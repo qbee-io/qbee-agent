@@ -2,6 +2,8 @@
 
 # shellcheck disable=SC2086
 SCRIPT_DIR=$(cd "$(dirname $0)" && pwd)
+BASEDIR=$(dirname $SCRIPT_DIR)
+export BASEDIR
 
 # shellcheck disable=SC1090
 source "$SCRIPT_DIR/config.env"
@@ -79,10 +81,10 @@ upload_assets_gh() {
 }
 
 # Upload the CDN
-generate_shasums_cdn
-upload_packages_cdn
-upload_binaries_cdn
-set_latest_release_cdn
+#generate_shasums_cdn
+#upload_packages_cdn
+#upload_binaries_cdn
+#set_latest_release_cdn
 
 # Upload to Github
 generate_shasums_gh
