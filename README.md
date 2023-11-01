@@ -32,6 +32,11 @@ Other dependencies (some usually installed on Linux systems already):
 sudo apt install awscli gzip coreutils make
 ```
 
+Install the gh cli
+```bash
+sudo snap install gh
+```
+
 ## Obtain the signing key
 
 Obtain the signing key from a secure location.
@@ -66,7 +71,12 @@ AWS_ACCESS_KEY_ID=<AWS_ACCESS_KEY_ID>
 ```
 
 Upload packages to our S3 backed CloudFront. If the VERSION is prefixed with ^20 we overwrite move the latest version pointer 
-(https://cdn.qbee.io/software/qbee-agent/latest.txt) to point to this version.
+(https://cdn.qbee.io/software/qbee-agent/latest.txt) to point to this version. We are also uploading the release to GitHub. 
+Remember to to log into github first.
+
+```bash
+gh auth login
+```
 
 ```bash
 ./script/upload-release 
