@@ -81,10 +81,10 @@ upload_assets_gh() {
 }
 
 # Upload the CDN
-#generate_shasums_cdn
-#upload_packages_cdn
-#upload_binaries_cdn
-#set_latest_release_cdn
+generate_shasums_cdn
+upload_packages_cdn
+upload_binaries_cdn
+set_latest_release_cdn
 
 # Upload to Github
 generate_shasums_gh
