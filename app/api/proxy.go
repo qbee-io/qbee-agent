@@ -21,7 +21,7 @@ import (
 	"os"
 )
 
-const proxyEnvVar = "HTTP_PROXY"
+const proxyEnvVar = "HTTPS_PROXY"
 
 // Proxy represents a proxy server configuration.
 type Proxy struct {
