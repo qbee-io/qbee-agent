@@ -210,7 +210,7 @@ func (s *Service) start() error {
 	if s.proxy != nil {
 		args = append(args, "--http-proxy", s.proxy.Host, s.proxy.Port)
 
-		if s.proxy.User == "" {
+		if s.proxy.User != "" {
 			proxyAuthFile := filepath.Join(s.certDir, "qbee-vpn-password")
 			proxyAuthFileContents := fmt.Sprintf("%s\n%s", s.proxy.User, s.proxy.Password)
 
