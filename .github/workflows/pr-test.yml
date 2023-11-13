@@ -18,6 +18,8 @@ jobs:
     steps:
       - id: govulncheck
         uses: golang/govulncheck-action@v1
+        with:
+          go-version-input: 1.21.4
 
   golint:
     runs-on: ubuntu-latest
