@@ -4,35 +4,32 @@ on:
   push:
     branches:
       - main
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.21.4
+
       - name: Build and test
         run: make docker-image test
 
-  govulncheck_job:
-    runs-on: ubuntu-latest
-    name: Run govulncheck
-    steps:
+      - name: Build and test
+        run: go test ./...
+
       - id: govulncheck
         uses: golang/govulncheck-action@v1
         with:
           go-version-input: 1.21.4
+          go-package: ./...
 
-  golint:
-    runs-on: ubuntu-latest
-    name: Run golint
-    steps:
-      - uses: actions/checkout@v1
       - name: golint
         run: go run golang.org/x/lint/golint@latest ./...
 
-  govet:
-    runs-on: ubuntu-latest
-    name: Run govet
-    steps:
-      - uses: actions/checkout@v1
       - name: govet
         run: go vet ./...
