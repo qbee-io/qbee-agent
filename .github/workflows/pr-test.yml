@@ -19,9 +19,6 @@ jobs:
       - name: Build and test
         run: make docker-image test
 
-      - name: Build and test
-        run: go test ./...
-
       - id: govulncheck
         uses: golang/govulncheck-action@v1
         with:
