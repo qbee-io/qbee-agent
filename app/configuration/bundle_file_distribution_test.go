@@ -21,9 +21,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/qbee-io/qbee-agent/app/configuration"
-	"github.com/qbee-io/qbee-agent/app/utils/assert"
-	"github.com/qbee-io/qbee-agent/app/utils/runner"
+	"go.qbee.io/agent/app/configuration"
+	"go.qbee.io/agent/app/utils/assert"
+	"go.qbee.io/agent/app/utils/runner"
 )
 
 func Test_FileDistributionBundle(t *testing.T) {

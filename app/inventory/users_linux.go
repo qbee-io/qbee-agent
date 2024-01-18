@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/qbee-io/qbee-agent/app/utils"
+	"go.qbee.io/agent/app/utils"
 )
 
 // Paths to standard passwd and shadow files.

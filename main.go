@@ -21,7 +21,7 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/qbee-io/qbee-agent/app/cmd"
+	"go.qbee.io/agent/app/cmd"
 )
 
 var defaultUmask int = 0077

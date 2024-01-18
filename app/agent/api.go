@@ -22,8 +22,8 @@ import (
 	"net/http"
 	"runtime"
 
-	"github.com/qbee-io/qbee-agent/app"
-	"github.com/qbee-io/qbee-agent/app/binary"
+	"go.qbee.io/agent/app"
+	"go.qbee.io/agent/app/binary"
 )
 
 // BootstrapRequest is the request sent to the device hub during device bootstrap.

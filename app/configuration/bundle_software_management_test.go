@@ -21,9 +21,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/qbee-io/qbee-agent/app/configuration"
-	"github.com/qbee-io/qbee-agent/app/utils/assert"
-	"github.com/qbee-io/qbee-agent/app/utils/runner"
+	"go.qbee.io/agent/app/configuration"
+	"go.qbee.io/agent/app/utils/assert"
+	"go.qbee.io/agent/app/utils/runner"
 )
 
 const cacheDir = "/var/lib/qbee/app_workdir/cache"

@@ -24,8 +24,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/qbee-io/qbee-agent/app/software"
-	"github.com/qbee-io/qbee-agent/app/utils"
+	"go.qbee.io/agent/app/software"
+	"go.qbee.io/agent/app/utils"
 )
 
 // SoftwareManagementBundle controls software in the system.

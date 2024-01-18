@@ -19,15 +19,20 @@ package configuration_test
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
-	"github.com/qbee-io/qbee-agent/app/configuration"
-	"github.com/qbee-io/qbee-agent/app/utils/assert"
-	"github.com/qbee-io/qbee-agent/app/utils/runner"
+	"go.qbee.io/agent/app/configuration"
+	"go.qbee.io/agent/app/utils/assert"
+	"go.qbee.io/agent/app/utils/runner"
 )
 
 func Test_DockerContainers_Auths(t *testing.T) {
+	if os.Getenv("DOCKER_USERNAME") == "" || os.Getenv("DOCKER_PASSWORD") == "" {
+		t.Skip("Skipping test, since DOCKER_USERNAME and DOCKER_PASSWORD are not set")
+	}
+
 	r := runner.New(t)
 
 	r.MustExec("apt-get", "install", "-y", "docker-ce-cli")
@@ -35,8 +40,8 @@ func Test_DockerContainers_Auths(t *testing.T) {
 	dockerBundle := configuration.DockerContainersBundle{
 		RegistryAuths: []configuration.RegistryAuth{
 			{
-				Username: "qbeetester",
-				Password: "dckr_pat_rGiJ1QOxQNeVeJHbonJyXfKaZsY",
+				Username: os.Getenv("DOCKER_USERNAME"),
+				Password: os.Getenv("DOCKER_PASSWORD"),
 			},
 		},
 	}

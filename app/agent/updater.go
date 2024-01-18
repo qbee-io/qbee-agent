@@ -23,7 +23,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/qbee-io/qbee-agent/app/binary"
+	"go.qbee.io/agent/app/binary"
 )
 
 // Update the agent binary.

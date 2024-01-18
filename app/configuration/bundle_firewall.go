@@ -23,8 +23,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/qbee-io/qbee-agent/app/remoteaccess"
-	"github.com/qbee-io/qbee-agent/app/utils"
+	"go.qbee.io/agent/app/remoteaccess"
+	"go.qbee.io/agent/app/utils"
 )
 
 // FirewallBundle configures system firewall.

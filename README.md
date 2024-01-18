@@ -5,7 +5,7 @@ qbee-agent is the software running on Linux devices which are managed by the [qb
 # License
 
 The qbee-agent is licensed under the Apache License, Version 2.0. See
-[LICENSE](https://github.com/qbee-io/qbee-agent/blob/master/LICENSE) for the full license text.
+[LICENSE](./LICENSE) for the full license text.
 
 # Releasing new version
 

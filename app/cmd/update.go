@@ -19,8 +19,8 @@ package cmd
 import (
 	"context"
 
-	"github.com/qbee-io/qbee-agent/app/agent"
-	"github.com/qbee-io/qbee-agent/app/utils/cmd"
+	"go.qbee.io/agent/app/agent"
+	"go.qbee.io/agent/app/utils/cmd"
 )
 
 var updateCommand = cmd.Command{

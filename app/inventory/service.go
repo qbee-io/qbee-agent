@@ -24,8 +24,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/qbee-io/qbee-agent/app/api"
-	"github.com/qbee-io/qbee-agent/app/log"
+	"go.qbee.io/agent/app/api"
+	"go.qbee.io/agent/app/log"
 )
 
 // Service provides methods for collecting and delivering inventory data.

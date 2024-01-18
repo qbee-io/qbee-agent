@@ -22,7 +22,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/qbee-io/qbee-agent/app/api"
+	"go.qbee.io/agent/app/api"
 )
 
 // Binaries supported for automatic distribution and verification.

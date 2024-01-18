@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/qbee-io/qbee-agent/app/inventory/linux"
+	"go.qbee.io/agent/app/inventory/linux"
 )
 
 // CPUValues contains CPU metrics.

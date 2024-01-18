@@ -22,8 +22,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/qbee-io/qbee-agent/app/inventory/linux"
-	"github.com/qbee-io/qbee-agent/app/utils"
+	"go.qbee.io/agent/app/inventory/linux"
+	"go.qbee.io/agent/app/utils"
 )
 
 // MemoryValues contains memory metrics.

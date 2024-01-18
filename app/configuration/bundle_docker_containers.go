@@ -30,7 +30,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/qbee-io/qbee-agent/app/utils"
+	"go.qbee.io/agent/app/utils"
 )
 
 // DockerContainersBundle controls docker containers running in the system.
