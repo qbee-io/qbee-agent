@@ -23,7 +23,7 @@ import (
 	"net/http"
 	"runtime"
 
-	"github.com/qbee-io/qbee-agent/app/api"
+	"go.qbee.io/agent/app/api"
 )
 
 const downloadPath = "/v1/org/device/auth/download/%s/%s"

@@ -24,7 +24,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/qbee-io/qbee-agent/app/log"
+	"go.qbee.io/agent/app/log"
 )
 
 const deviceConfigurationAPIPath = "/v1/org/device/auth/config"

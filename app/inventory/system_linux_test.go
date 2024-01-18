@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/qbee-io/qbee-agent/app/inventory"
+	"go.qbee.io/agent/app/inventory"
 )
 
 func TestCollectSystemInventory(t *testing.T) {

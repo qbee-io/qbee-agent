@@ -32,8 +32,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/qbee-io/qbee-agent/app/api"
-	"github.com/qbee-io/qbee-agent/app/log"
+	"go.qbee.io/agent/app/api"
+	"go.qbee.io/agent/app/log"
 )
 
 const (

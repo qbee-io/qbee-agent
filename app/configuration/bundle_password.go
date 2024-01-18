@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/qbee-io/qbee-agent/app/inventory"
+	"go.qbee.io/agent/app/inventory"
 )
 
 // PasswordBundle bundle sets passwords for existing users.

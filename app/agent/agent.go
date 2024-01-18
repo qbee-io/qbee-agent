@@ -29,13 +29,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/qbee-io/qbee-agent/app/api"
-	"github.com/qbee-io/qbee-agent/app/configuration"
-	"github.com/qbee-io/qbee-agent/app/inventory"
-	"github.com/qbee-io/qbee-agent/app/log"
-	"github.com/qbee-io/qbee-agent/app/metrics"
-	"github.com/qbee-io/qbee-agent/app/remoteaccess"
-	"github.com/qbee-io/qbee-agent/app/utils"
+	"go.qbee.io/agent/app/api"
+	"go.qbee.io/agent/app/configuration"
+	"go.qbee.io/agent/app/inventory"
+	"go.qbee.io/agent/app/log"
+	"go.qbee.io/agent/app/metrics"
+	"go.qbee.io/agent/app/remoteaccess"
+	"go.qbee.io/agent/app/utils"
 )
 
 // Agent is the main agent structure.

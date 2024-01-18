@@ -31,7 +31,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/qbee-io/qbee-agent/app"
+	"go.qbee.io/agent/app"
 )
 
 // UserAgent is the user agent string used for all API calls.

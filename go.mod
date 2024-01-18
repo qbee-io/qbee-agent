@@ -1,4 +1,4 @@
-module github.com/qbee-io/qbee-agent
+module go.qbee.io/agent
 
 go 1.21
 

@@ -28,7 +28,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/qbee-io/qbee-agent/app/utils"
+	"go.qbee.io/agent/app/utils"
 )
 
 // PackageManagerTypeDebian is the type of the Debian package manager.

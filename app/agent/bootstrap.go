@@ -26,8 +26,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/qbee-io/qbee-agent/app/inventory"
-	"github.com/qbee-io/qbee-agent/app/log"
+	"go.qbee.io/agent/app/inventory"
+	"go.qbee.io/agent/app/log"
 )
 
 const bootstrapWaitTime = 5 * time.Second

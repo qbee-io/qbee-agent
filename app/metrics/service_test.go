@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/qbee-io/qbee-agent/app/api"
+	"go.qbee.io/agent/app/api"
 )
 
 func TestCollectServiceCollectAll(t *testing.T) {

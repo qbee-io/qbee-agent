@@ -27,10 +27,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/qbee-io/qbee-agent/app/api"
-	"github.com/qbee-io/qbee-agent/app/binary"
-	"github.com/qbee-io/qbee-agent/app/log"
-	"github.com/qbee-io/qbee-agent/app/utils"
+	"go.qbee.io/agent/app/api"
+	"go.qbee.io/agent/app/binary"
+	"go.qbee.io/agent/app/log"
+	"go.qbee.io/agent/app/utils"
 )
 
 // NetworkInterfaceName is the name of the network interface used for remote access.

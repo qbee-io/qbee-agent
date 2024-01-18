@@ -21,8 +21,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/qbee-io/qbee-agent/app/api"
-	"github.com/qbee-io/qbee-agent/app/configuration"
+	"go.qbee.io/agent/app/api"
+	"go.qbee.io/agent/app/configuration"
 )
 
 func Test_ConnectivityWatchdog(t *testing.T) {

@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/qbee-io/qbee-agent/app/software"
+	"go.qbee.io/agent/app/software"
 )
 
 // PackageManagementBundle controls system packages.

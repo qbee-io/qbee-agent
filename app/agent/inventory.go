@@ -20,8 +20,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/qbee-io/qbee-agent/app"
-	"github.com/qbee-io/qbee-agent/app/inventory"
+	"go.qbee.io/agent/app"
+	"go.qbee.io/agent/app/inventory"
 )
 
 // doInventories collects all inventories and delivers them to the device hub API.

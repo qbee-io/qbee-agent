@@ -1,10 +1,10 @@
 FROM golang:1.21 as builder
 
 ARG version
-ENV VERSION_VAR=github.com/qbee-io/qbee-agent/app.Version
+ENV VERSION_VAR=go.qbee.io/agent/app.Version
 
 ARG public_signing_key
-ENV PUBLIC_SINGING_KEY_VAR=github.com/qbee-io/qbee-agent/app/binary.PublicSigningKey
+ENV PUBLIC_SINGING_KEY_VAR=go.qbee.io/agent/app/binary.PublicSigningKey
 
 ENV CGO_ENABLED=0
 
