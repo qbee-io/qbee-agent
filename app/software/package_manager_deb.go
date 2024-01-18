@@ -313,6 +313,7 @@ func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath s
 	return append(dpkgOutput, aptOutput...), err
 }
 
+// PackageArchitecture returns the architecture of the package manager
 func (deb *DebianPackageManager) PackageArchitecture() (string, error) {
 	cmd := []string{dpkgPath, "--print-architecture"}
 
