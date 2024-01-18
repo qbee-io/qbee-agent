@@ -62,4 +62,7 @@ type PackageManager interface {
 
 	// InstallLocal package.
 	InstallLocal(ctx context.Context, pkgFilePath string) ([]byte, error)
+
+	// PackageArchitecture returns the architecture of the package manager
+	PackageArchitecture() (string, error)
 }

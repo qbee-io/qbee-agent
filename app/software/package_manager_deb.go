@@ -313,6 +313,17 @@ func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath s
 	return append(dpkgOutput, aptOutput...), err
 }
 
+func (deb *DebianPackageManager) PackageArchitecture() (string, error) {
+	cmd := []string{dpkgPath, "--print-architecture"}
+
+	output, err := utils.RunCommand(context.Background(), cmd)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(string(output)), nil
+}
+
 // ParseDebianPackage and return Package information.
 func ParseDebianPackage(ctx context.Context, pkgFilePath string) (*Package, error) {
 	cmd := []string{dpkgPath, "-I", pkgFilePath}
