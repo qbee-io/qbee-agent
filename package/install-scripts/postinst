@@ -20,13 +20,18 @@ if [[ -n $SYSTEMCTL ]]; then
   systemctl enable qbee-agent
 fi
 
-# start the agent if config file is in place
-if [[ -f /etc/qbee/qbee-agent.json ]]; then
-  if [[ -n $SYSTEMCTL ]]; then
-    if [[ -d /run/systemd/system ]]; then
-      systemctl start qbee-agent
-    fi
-  fi
-else 
+
+# Check of systemctl is available on system
+[[ -z $SYSTEMCTL ]] && exit 0
+
+# Check if system is running systemd
+[[ ! -d /run/systemd/system ]] && exit 0
+
+# Only start the agent if config file is in place
+if [[ ! -f /etc/qbee/qbee-agent.json ]]; then
   echo "Device seems to not have been bootstrapped. Please run 'qbee-agent bootstrap -k <bootstrap-key>' as root to bootstrap."
+  exit 0
 fi
+
+# Do a non-blocking restart of qbee-agent
+systemctl --no-block restart qbee-agent
