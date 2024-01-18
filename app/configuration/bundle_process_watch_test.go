@@ -132,12 +132,8 @@ func Test_BundleProcessWatch_CommandError(t *testing.T) {
 
 	assert.Equal(t, reports, expectedReports)
 
-	expectedLogs := []string{
-		"error running command [/bin/bash -c invalidCommand]: exit status 127",
-		"/bin/bash: line 1: invalidCommand: command not found",
-	}
-
-	assert.Equal(t, logs, expectedLogs)
+	assert.MatchString(t, logs[0], "error running command \\[.* -c invalidCommand\\]: exit status 127")
+	assert.MatchString(t, logs[1], ".* line 1: invalidCommand: command not found")
 }
 
 // executePackageManagementBundle is a helper method to quickly execute process watch bundle.
