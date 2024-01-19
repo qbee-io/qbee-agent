@@ -26,7 +26,7 @@ import (
 var DefaultPackageManager PackageManager
 
 const pkgCacheTTL = 24 * time.Hour
-const pkgCacheKey = "packages"
+const pkgCacheKeyPrefix = "packages"
 
 // PackageManagers provides a map of all package managers supported by the agent.
 var PackageManagers = map[PackageManagerType]PackageManager{

@@ -35,8 +35,8 @@ import (
 // PackageManagerTypeDebian is the type of the Debian package manager.
 const PackageManagerTypeDebian PackageManagerType = "deb"
 
-var packagesCacheKey = fmt.Sprintf("%s-%s", pkgCacheKey, PackageManagerTypeDebian)
-var pkgArchCacheKey = fmt.Sprintf("%s-arch", packagesCacheKey)
+var packagesCacheKey = fmt.Sprintf("%s:%s:packages", pkgCacheKeyPrefix, PackageManagerTypeDebian)
+var pkgArchCacheKey = fmt.Sprintf("%s:arch", packagesCacheKey)
 
 const (
 	aptGetPath = "/usr/bin/apt-get"
@@ -286,7 +286,7 @@ func (deb *DebianPackageManager) Install(ctx context.Context, pkgName, version s
 
 	shellCmd := []string{"sh", "-c", strings.Join(installCommand, " ")}
 
-	defer cache.InvalidateCache(pkgCacheKey)
+	defer cache.InvalidateCache(pkgCacheKeyPrefix)
 
 	return utils.RunCommand(ctx, shellCmd)
 }

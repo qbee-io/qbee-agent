@@ -26,7 +26,7 @@ type System struct {
 	System SystemInfo `json:"system"`
 }
 
-const systemInventoryCacheKey = "system_inventory"
+const systemInventoryCacheKey = "inventory:system"
 const systemInventoryCacheTTL = 60 * time.Second // 1 minute
 
 // SystemInfo contains system information.
