@@ -32,6 +32,7 @@ import (
 	"go.qbee.io/agent/app/inventory/linux"
 	"go.qbee.io/agent/app/log"
 	"go.qbee.io/agent/app/utils"
+	"go.qbee.io/agent/app/utils/cache"
 )
 
 const (
@@ -41,6 +42,11 @@ const (
 
 // CollectSystemInventory returns populated System inventory based on current system status.
 func CollectSystemInventory() (*System, error) {
+
+	if cachedItem, ok := cache.GetCachedItem(systemInventoryCacheKey); ok {
+		return cachedItem.(*System), nil
+	}
+
 	systemInfo := &SystemInfo{
 		AgentVersion: app.Version,
 		Class:        systemClass,
@@ -78,6 +84,8 @@ func CollectSystemInventory() (*System, error) {
 	systemInfo.CPUs = fmt.Sprintf("%d", runtime.NumCPU())
 
 	systemInventory := &System{System: *systemInfo}
+
+	cache.SetCachedItem(systemInventoryCacheKey, systemInventory, systemInventoryCacheTTL)
 
 	return systemInventory, nil
 }

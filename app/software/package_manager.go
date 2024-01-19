@@ -16,11 +16,17 @@
 
 package software
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // DefaultPackageManager is set to the supporter package manager for the OS.
 // If there are no support package managers available, this will be nil.
 var DefaultPackageManager PackageManager
+
+const pkgCacheTTL = 24 * time.Hour
+const pkgCacheKey = "packages"
 
 // PackageManagers provides a map of all package managers supported by the agent.
 var PackageManagers = map[PackageManagerType]PackageManager{

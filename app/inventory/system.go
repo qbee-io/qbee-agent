@@ -16,6 +16,8 @@
 
 package inventory
 
+import "time"
+
 // TypeSystem is the inventory type for system information.
 const TypeSystem Type = "system"
 
@@ -23,6 +25,9 @@ const TypeSystem Type = "system"
 type System struct {
 	System SystemInfo `json:"system"`
 }
+
+const systemInventoryCacheKey = "system_inventory"
+const systemInventoryCacheTTL = 60 * time.Second // 1 minute
 
 // SystemInfo contains system information.
 type SystemInfo struct {
