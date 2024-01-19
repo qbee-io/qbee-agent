@@ -296,7 +296,7 @@ func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath s
 	deb.lock.Lock()
 	defer deb.lock.Unlock()
 
-	defer cache.InvalidateCache(pkgCacheKey)
+	defer cache.InvalidateCache(packagesCacheKey)
 
 	installCommand := []string{dpkgPath, "-i", pkgFilePath}
 	cmd := []string{"sh", "-c", strings.Join(installCommand, " ")}
