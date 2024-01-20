@@ -106,7 +106,7 @@ func (deb *DebianPackageManager) ListPackages(ctx context.Context) ([]Package, e
 	deb.lock.Lock()
 	defer deb.lock.Unlock()
 
-	if cachedPackages, ok := cache.GetCachedItem(packagesCacheKey); ok {
+	if cachedPackages, ok := cache.Get(packagesCacheKey); ok {
 		return cachedPackages.([]Package), nil
 	}
 
@@ -125,7 +125,7 @@ func (deb *DebianPackageManager) ListPackages(ctx context.Context) ([]Package, e
 		installedPackages[i].Update = availableUpdates[pkg.ID()]
 	}
 
-	cache.SetCachedItem(packagesCacheKey, installedPackages, pkgCacheTTL)
+	cache.Set(packagesCacheKey, installedPackages, pkgCacheTTL)
 
 	return installedPackages, nil
 }
@@ -259,7 +259,7 @@ func (deb *DebianPackageManager) UpgradeAll(ctx context.Context) (int, []byte, e
 		return 0, output, err
 	}
 
-	cache.InvalidateCache(packagesCacheKey)
+	cache.Delete(packagesCacheKey)
 
 	return updatesAvailable, output, err
 }
@@ -286,7 +286,7 @@ func (deb *DebianPackageManager) Install(ctx context.Context, pkgName, version s
 
 	shellCmd := []string{"sh", "-c", strings.Join(installCommand, " ")}
 
-	defer cache.InvalidateCache(pkgCacheKeyPrefix)
+	defer cache.Delete(pkgCacheKeyPrefix)
 
 	return utils.RunCommand(ctx, shellCmd)
 }
@@ -296,7 +296,7 @@ func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath s
 	deb.lock.Lock()
 	defer deb.lock.Unlock()
 
-	defer cache.InvalidateCache(packagesCacheKey)
+	defer cache.Delete(packagesCacheKey)
 
 	installCommand := []string{dpkgPath, "-i", pkgFilePath}
 	cmd := []string{"sh", "-c", strings.Join(installCommand, " ")}
@@ -320,7 +320,7 @@ func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath s
 // PackageArchitecture returns the architecture of the package manager
 func (deb *DebianPackageManager) PackageArchitecture() (string, error) {
 
-	if cachedArch, ok := cache.GetCachedItem(pkgArchCacheKey); ok {
+	if cachedArch, ok := cache.Get(pkgArchCacheKey); ok {
 		return cachedArch.(string), nil
 	}
 
@@ -331,7 +331,7 @@ func (deb *DebianPackageManager) PackageArchitecture() (string, error) {
 		return "", err
 	}
 
-	cache.SetCachedItem(pkgArchCacheKey, strings.TrimSpace(string(output)), pkgCacheTTL)
+	cache.Set(pkgArchCacheKey, strings.TrimSpace(string(output)), pkgCacheTTL)
 
 	return strings.TrimSpace(string(output)), nil
 }

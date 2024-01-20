@@ -43,7 +43,7 @@ const (
 // CollectSystemInventory returns populated System inventory based on current system status.
 func CollectSystemInventory() (*System, error) {
 
-	if cachedItem, ok := cache.GetCachedItem(systemInventoryCacheKey); ok {
+	if cachedItem, ok := cache.Get(systemInventoryCacheKey); ok {
 		return cachedItem.(*System), nil
 	}
 
@@ -85,7 +85,7 @@ func CollectSystemInventory() (*System, error) {
 
 	systemInventory := &System{System: *systemInfo}
 
-	cache.SetCachedItem(systemInventoryCacheKey, systemInventory, systemInventoryCacheTTL)
+	cache.Set(systemInventoryCacheKey, systemInventory, systemInventoryCacheTTL)
 
 	return systemInventory, nil
 }

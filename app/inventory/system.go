@@ -27,7 +27,7 @@ type System struct {
 }
 
 const systemInventoryCacheKey = "inventory:system"
-const systemInventoryCacheTTL = 60 * time.Second // 1 minute
+const systemInventoryCacheTTL = time.Minute
 
 // SystemInfo contains system information.
 type SystemInfo struct {

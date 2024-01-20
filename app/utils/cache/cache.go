@@ -1,3 +1,19 @@
+// Copyright 2023 qbee.io
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package cache
 
 import (
@@ -5,28 +21,20 @@ import (
 	"time"
 )
 
-type cacheMap struct {
-	mutex sync.Mutex
-	items map[string]cacheItem
-}
-
-type cacheItem struct {
+type item struct {
 	expires time.Time
-	item    any
+	data    any
 }
 
-var appCacheMap cacheMap
+var mutex sync.Mutex
+var items = make(map[string]item)
 
-func init() {
-	appCacheMap.items = make(map[string]cacheItem)
-}
+// Get returns cached item and true for provided cache key if item is fresh in cache.
+func Get(key string) (any, bool) {
+	mutex.Lock()
+	defer mutex.Unlock()
 
-// GetCachedItem returns cached item and true for provided cache key if item is fresh in cache.
-func GetCachedItem(key string) (any, bool) {
-	appCacheMap.mutex.Lock()
-	defer appCacheMap.mutex.Unlock()
-
-	cacheItem, ok := appCacheMap.items[key]
+	cacheItem, ok := items[key]
 	if !ok {
 		return nil, false
 	}
@@ -35,24 +43,24 @@ func GetCachedItem(key string) (any, bool) {
 		return nil, false
 	}
 
-	return cacheItem.item, true
+	return cacheItem.data, true
 }
 
-// SetCachedItem for provided cache key.
-func SetCachedItem(key string, item any, ttl time.Duration) {
-	appCacheMap.mutex.Lock()
-	defer appCacheMap.mutex.Unlock()
+// Set for provided cache key.
+func Set(key string, data any, ttl time.Duration) {
+	mutex.Lock()
+	defer mutex.Unlock()
 
-	appCacheMap.items[key] = cacheItem{
+	items[key] = item{
 		expires: time.Now().Add(ttl),
-		item:    item,
+		data:    data,
 	}
 }
 
-// InvalidateCache for provided cache key.
-func InvalidateCache(key string) {
-	appCacheMap.mutex.Lock()
-	defer appCacheMap.mutex.Unlock()
+// Delete for provided cache key.
+func Delete(key string) {
+	mutex.Lock()
+	defer mutex.Unlock()
 
-	delete(appCacheMap.items, key)
+	delete(items, key)
 }
