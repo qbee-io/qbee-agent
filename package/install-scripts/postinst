@@ -33,5 +33,5 @@ if [[ ! -f /etc/qbee/qbee-agent.json ]]; then
   exit 0
 fi
 
-# Do a non-blocking restart of qbee-agent
+# Do a non-blocking restart of qbee-agent in case upgrade is done through qbee-agent itself
 systemctl --no-block restart qbee-agent
