@@ -336,6 +336,12 @@ func (s Software) restart(ctx context.Context, srv *Service) {
 
 	// restart the service
 	cmd = []string{systemctlBin, "restart", serviceUnit}
+
+	// Make sure that qbee-agent is never restarted in blocking mode.
+	if s.Package == "qbee-agent" {
+		cmd = []string{systemctlBin, "--no-block", "restart", serviceUnit}
+	}
+
 	if output, err = utils.RunCommand(ctx, cmd); err != nil {
 		return
 	}

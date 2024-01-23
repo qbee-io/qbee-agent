@@ -16,11 +16,17 @@
 
 package software
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // DefaultPackageManager is set to the supporter package manager for the OS.
 // If there are no support package managers available, this will be nil.
 var DefaultPackageManager PackageManager
+
+const pkgCacheTTL = 24 * time.Hour
+const pkgCacheKeyPrefix = "packages"
 
 // PackageManagers provides a map of all package managers supported by the agent.
 var PackageManagers = map[PackageManagerType]PackageManager{
@@ -62,4 +68,7 @@ type PackageManager interface {
 
 	// InstallLocal package.
 	InstallLocal(ctx context.Context, pkgFilePath string) ([]byte, error)
+
+	// PackageArchitecture returns the architecture of the package manager
+	PackageArchitecture() (string, error)
 }

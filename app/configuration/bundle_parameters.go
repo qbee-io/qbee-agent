@@ -18,8 +18,12 @@ package configuration
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
+
+	"go.qbee.io/agent/app/inventory"
+	"go.qbee.io/agent/app/software"
 )
 
 // Parameter defines a parameters as key/value pair.
@@ -65,6 +69,67 @@ const (
 
 var systemParameters = map[string]func() (string, error){
 	"sys.host": os.Hostname,
+	"sys.pkg_arch": func() (string, error) {
+		if software.DefaultPackageManager == nil {
+			return "", fmt.Errorf("package manager is not supported")
+		}
+		return software.DefaultPackageManager.PackageArchitecture()
+	},
+	"sys.pkg_type": func() (string, error) {
+		if software.DefaultPackageManager == nil {
+			return "", fmt.Errorf("package manager is not supported")
+		}
+		return string(software.DefaultPackageManager.Type()), nil
+	},
+	"sys.os": func() (string, error) {
+		systemInventory, err := inventory.CollectSystemInventory()
+		if err != nil {
+			return "", err
+		}
+		return systemInventory.System.OS, nil
+	},
+	"sys.arch": func() (string, error) {
+		systemInventory, err := inventory.CollectSystemInventory()
+		if err != nil {
+			return "", err
+		}
+		return systemInventory.System.Architecture, nil
+	},
+	"sys.os_type": func() (string, error) {
+		systemInventory, err := inventory.CollectSystemInventory()
+		if err != nil {
+			return "", err
+		}
+		return systemInventory.System.OSType, nil
+	},
+	"sys.flavor": func() (string, error) {
+		systemInventory, err := inventory.CollectSystemInventory()
+		if err != nil {
+			return "", err
+		}
+		return systemInventory.System.Flavor, nil
+	},
+	"sys.agent_version": func() (string, error) {
+		systemInventory, err := inventory.CollectSystemInventory()
+		if err != nil {
+			return "", err
+		}
+		return systemInventory.System.AgentVersion, nil
+	},
+	"sys.long_arch": func() (string, error) {
+		systemInventory, err := inventory.CollectSystemInventory()
+		if err != nil {
+			return "", err
+		}
+		return systemInventory.System.LongArchitecture, nil
+	},
+	"sys.boot_time": func() (string, error) {
+		systemInventory, err := inventory.CollectSystemInventory()
+		if err != nil {
+			return "", err
+		}
+		return systemInventory.System.BootTime, nil
+	},
 }
 
 // resolveParameter given context with parameter store attached, returns resolved parameter value.
@@ -131,6 +196,7 @@ func resolveParameters(ctx context.Context, value string) string {
 
 // Context returns a new context based on parent context with parameter store attached.
 func (parameters *ParametersBundle) Context(ctx context.Context) context.Context {
+
 	parametersStore := make(ParameterStore)
 
 	for _, parameter := range parameters.Parameters {

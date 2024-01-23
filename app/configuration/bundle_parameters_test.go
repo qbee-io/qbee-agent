@@ -21,6 +21,8 @@ import (
 	"os"
 	"testing"
 
+	"go.qbee.io/agent/app/inventory"
+	"go.qbee.io/agent/app/software"
 	"go.qbee.io/agent/app/utils/assert"
 	"go.qbee.io/agent/app/utils/runner"
 )
@@ -28,6 +30,16 @@ import (
 func Test_resolveParameters(t *testing.T) {
 	hostname, err := os.Hostname()
 	assert.NoError(t, err)
+
+	pkgArch, err := software.DefaultPackageManager.PackageArchitecture()
+	assert.NoError(t, err)
+
+	pkgType := software.DefaultPackageManager.Type()
+
+	systemInventory, err := inventory.CollectSystemInventory()
+	assert.NoError(t, err)
+
+	invSystem := systemInventory.System
 
 	tests := []struct {
 		name       string
@@ -104,6 +116,18 @@ func Test_resolveParameters(t *testing.T) {
 			parameters: []Parameter{},
 			value:      "example $(sys.host)",
 			want:       "example " + hostname,
+		},
+		{
+			name:       "more than one system variable",
+			parameters: []Parameter{},
+			value:      "example $(sys.host) $(sys.pkg_arch) $(sys.pkg_type)",
+			want:       "example " + hostname + " " + pkgArch + " " + string(pkgType),
+		},
+		{
+			name:       "inventory related sys variables",
+			parameters: []Parameter{},
+			value:      "example $(sys.os) $(sys.os_type) $(sys.flavor) $(sys.boot_time)",
+			want:       "example " + invSystem.OS + " " + invSystem.OSType + " " + invSystem.Flavor + " " + invSystem.BootTime,
 		},
 	}
 	for _, tt := range tests {
