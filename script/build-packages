@@ -56,7 +56,7 @@ Qbee is a lightweight system management platform for IoT devices" \
     -C $build_dir \
     --after-install $build_dir/postinst \
     --before-install $build_dir/preinst \
-    --before-remove $build_dir/prerm \
+    --before-remove $build_dir/prerm-${pkg_type} \
     usr lib opt
 }
 
