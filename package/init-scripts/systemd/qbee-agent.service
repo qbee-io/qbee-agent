@@ -1,6 +1,6 @@
 [Unit]
 Description=The Qbee fleet management agent
-After=syslog.target
+After=network.target
 ConditionPathExists=/etc/qbee/qbee-agent.json
 
 [Service]
