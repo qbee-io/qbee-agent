@@ -172,9 +172,6 @@ type SystemInfo struct {
 	// AgentVersion used to collect the inventory.
 	AgentVersion string `json:"cf_version"`
 
-	// AutoUpdateEnabled - flags whether auto update is enabled or not.
-	AutoUpdateEnabled bool `json:"auto_update_enabled"`
-
 	// VPNIndex - defines numeric ID of the VPN server to which the device is connected.
 	// For now all devices are connected to the same VPN server, so this value is always 1.
 	VPNIndex string `json:"vpn_idx" bson:"vpn_idx"`

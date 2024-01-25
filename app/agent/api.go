@@ -21,9 +21,6 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
-
-	"go.qbee.io/agent/app"
-	"go.qbee.io/agent/app/binary"
 )
 
 // BootstrapRequest is the request sent to the device hub during device bootstrap.
@@ -121,28 +118,7 @@ func (agent *Agent) sendBootstrapRequest(
 
 var checkInPath = fmt.Sprintf("/v1/org/device/auth/agent/%s/checkin", runtime.GOARCH)
 
-// CheckInResponse is the response sent by the device hub during agent check-in.
-type CheckInResponse struct {
-	Agent binary.Metadata `json:"agent"`
-}
-
-// UpdateAvailable returns true if the agent version is different from the one currently running.
-func (r *CheckInResponse) UpdateAvailable() bool {
-	return r.Agent.Version != "" && app.Version != r.Agent.Version
-}
-
 // checkIn sends a heartbeat to the device hub and retrieves agent metadata.
-func (agent *Agent) checkIn(ctx context.Context, withMetadata bool) (*CheckInResponse, error) {
-	response := new(CheckInResponse)
-
-	path := checkInPath
-	if withMetadata {
-		path += "?md=1"
-	}
-
-	if err := agent.api.Get(ctx, path, response); err != nil {
-		return nil, fmt.Errorf("cannot create request: %v", err)
-	}
-
-	return response, nil
+func (agent *Agent) checkIn(ctx context.Context) error {
+	return agent.api.Get(ctx, checkInPath, nil)
 }

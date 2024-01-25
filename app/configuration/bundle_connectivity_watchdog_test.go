@@ -26,7 +26,7 @@ import (
 )
 
 func Test_ConnectivityWatchdog(t *testing.T) {
-	apiClient := api.NewClient("invalid-host.example", "12345", nil)
+	apiClient := api.NewClient("invalid-host.example", "12345")
 	service := configuration.New(apiClient, "", "")
 
 	committedConfig := configuration.CommittedConfig{

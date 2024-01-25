@@ -18,7 +18,6 @@ docker run -it -e BOOTSTRAP_KEY=<bootstrap-key> qbeeio/qbee-demo
 ```bash
 docker run -it -e BOOTSTRAP_KEY=<bootstrap-key> \
   -e QBEE_DEMO_DEVICE_HUB_HOST=device.app.qbee-dev.qbee.io \
-  -e QBEE_DEMO_VPN_SERVER=vpn.app.qbee-dev.qbee.io \
   qbeeio/qbee-demo
 ```
 

@@ -27,7 +27,6 @@ import (
 const (
 	DefaultDeviceHubServer = "device.app.qbee.io"
 	DefaultDeviceHubPort   = "443"
-	DefaultVPNServer       = "vpn.app.qbee.io"
 )
 
 const (
@@ -60,12 +59,6 @@ type Config struct {
 	// TPM Configuration
 	TPMDevice string `json:"tpm_device,omitempty"`
 
-	// AutoUpdate enables automatic updates of the agent binary.
-	AutoUpdate bool `json:"auto_update,omitempty"`
-
-	// VPNServer is the IP address of the VPN server to connect to.
-	VPNServer string `json:"vpn_server,omitempty"`
-
 	// DeviceName is the name of the device - only to be used during bootstrap
 	DeviceName string `json:"device_name,omitempty"`
 
@@ -92,11 +85,6 @@ func LoadConfig(configDir, stateDir string) (*Config, error) {
 
 	if config.StateDirectory, err = filepath.Abs(stateDir); err != nil {
 		return nil, fmt.Errorf("cannot determine state directory path: %w", err)
-	}
-
-	// vpn_server is not a legacy configuration option, if it is not set, use the default
-	if config.VPNServer == "" {
-		config.VPNServer = DefaultVPNServer
 	}
 
 	// Set default device hub port and server if not set

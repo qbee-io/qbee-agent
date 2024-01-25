@@ -26,10 +26,8 @@ import (
 
 const (
 	bootstrapKeyOption                 = "bootstrap-key"
-	bootstrapAutoUpdateOption          = "enable-auto-update"
 	bootstrapDeviceHubHostOption       = "device-hub-host"
 	bootstrapDeviceHubPortOption       = "device-hub-port"
-	bootstrapVPNServerOption           = "vpn-server"
 	bootstrapTPMDeviceOption           = "tpm-device"
 	bootstrapProxyHostOption           = "proxy-host"
 	bootstrapProxyPortOption           = "proxy-port"
@@ -47,11 +45,6 @@ var bootstrapCommand = cmd.Command{
 			Short:    "k",
 			Help:     "Set the bootstrap key found in the user profile.",
 			Required: true,
-		},
-		{
-			Name: bootstrapAutoUpdateOption,
-			Flag: "true",
-			Help: "Enable auto-update.",
 		},
 		{
 			Name: bootstrapDisableRemoteAccessOption,
@@ -75,18 +68,9 @@ var bootstrapCommand = cmd.Command{
 			Help: "Custom device name to use.",
 		},
 		{
-			Name:    bootstrapVPNServerOption,
-			Hidden:  true,
-			Help:    "VPN Server IP address.",
-			Default: agent.DefaultVPNServer,
-		},
-		{
 			Name:  bootstrapTPMDeviceOption,
 			Short: "t",
-			// Hiding for now, since TPM protected key can't be used with OpenVPN.
-			// Once we implement our own remote access solution, this won't be an issue.
-			Hidden: true,
-			Help:   "[Experimental] TPM device to use (e.g. /dev/tpm0).",
+			Help:  "[Beta] TPM device to use (e.g. /dev/tpm0).",
 		},
 		{
 			Name: bootstrapProxyHostOption,
@@ -111,10 +95,8 @@ var bootstrapCommand = cmd.Command{
 			BootstrapKey:        opts[bootstrapKeyOption],
 			Directory:           opts[mainConfigDirOption],
 			StateDirectory:      opts[mainStateDirOption],
-			AutoUpdate:          opts[bootstrapAutoUpdateOption] == "true",
 			DeviceHubServer:     opts[bootstrapDeviceHubHostOption],
 			DeviceHubPort:       opts[bootstrapDeviceHubPortOption],
-			VPNServer:           opts[bootstrapVPNServerOption],
 			TPMDevice:           opts[bootstrapTPMDeviceOption],
 			ProxyServer:         opts[bootstrapProxyHostOption],
 			ProxyPort:           opts[bootstrapProxyPortOption],

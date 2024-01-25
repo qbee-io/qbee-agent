@@ -20,9 +20,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"crypto/ecdsa"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -50,7 +48,7 @@ type Client struct {
 }
 
 // NewClient returns a new device hub client.
-func NewClient(host, port string, rootCAPool *x509.CertPool) *Client {
+func NewClient(host, port string) *Client {
 	return &Client{
 		host: host,
 		port: port,
@@ -66,28 +64,16 @@ func NewClient(host, port string, rootCAPool *x509.CertPool) *Client {
 				IdleConnTimeout:       60 * time.Second,
 				TLSHandshakeTimeout:   10 * time.Second,
 				ExpectContinueTimeout: 1 * time.Second,
-				TLSClientConfig: &tls.Config{
-					RootCAs: rootCAPool,
-				},
 			},
 			Timeout: 60 * time.Second,
 		},
 	}
 }
 
-// SkipCAVerification makes the client accept untrusted certificates.
-func (cli *Client) SkipCAVerification() {
-	cli.httpClient.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify = true
-}
-
-// UseTLSCredentials adds TLS certificate to TLSClientConfig.
-func (cli *Client) UseTLSCredentials(privateKey *ecdsa.PrivateKey, certificate *x509.Certificate) {
-	cli.httpClient.Transport.(*http.Transport).TLSClientConfig.Certificates = []tls.Certificate{
-		{
-			Certificate: [][]byte{certificate.Raw},
-			PrivateKey:  privateKey,
-		},
-	}
+// WithTLSConfig sets the TLS config used by the HTTP client.
+func (cli *Client) WithTLSConfig(config *tls.Config) *Client {
+	cli.httpClient.Transport.(*http.Transport).TLSClientConfig = config
+	return cli
 }
 
 // NewRequest returns a new HTTP request for provided method, path and src.

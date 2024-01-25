@@ -100,7 +100,7 @@ func TestService_reportsBuffer(t *testing.T) {
 }
 
 func TestService_persistConfig(t *testing.T) {
-	apiClient := api.NewClient("invalid-host.example", "12345", nil)
+	apiClient := api.NewClient("invalid-host.example", "12345")
 	srv := New(apiClient, t.TempDir(), "")
 
 	cfg := &CommittedConfig{

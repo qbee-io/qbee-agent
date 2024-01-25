@@ -19,6 +19,7 @@ package agent
 import (
 	"context"
 	"crypto/ecdsa"
+	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"os"
@@ -51,7 +52,6 @@ type Agent struct {
 	lock       sync.Mutex
 	loopTicker *time.Ticker
 	stop       chan bool
-	update     chan bool
 	reboot     chan bool
 
 	Inventory     *inventory.Service
@@ -75,9 +75,6 @@ func (agent *Agent) Run(ctx context.Context) error {
 	updateSignalCh := make(chan os.Signal, 1)
 	signal.Notify(updateSignalCh, syscall.SIGUSR1)
 
-	// remote access state change notification
-	remoteAccessStateChange := agent.remoteAccess.GetNotificationChannel()
-
 	// ticker won't trigger the first run immediately, so let's do that ourselves
 	go agent.RunOnce(ctx, FullRun)
 
@@ -87,17 +84,13 @@ func (agent *Agent) Run(ctx context.Context) error {
 		case <-agent.stop:
 			log.Infof("stopping the agent")
 
-			// let all the processing finish
-			agent.Wait()
-
-			if agent.disableRemoteAccess {
-				return nil
-			}
-
-			// stop the remote access service
+			// stop the remote access service (if running)
 			if err := agent.remoteAccess.Stop(); err != nil {
 				log.Errorf("failed to stop remote access: %s", err)
 			}
+
+			// let all the processing finish
+			agent.Wait()
 
 			// and return
 			return nil
@@ -114,10 +107,6 @@ func (agent *Agent) Run(ctx context.Context) error {
 		case <-agent.loopTicker.C:
 			go agent.RunOnce(ctx, FullRun)
 
-		case <-remoteAccessStateChange:
-			log.Debugf("remote access state changed, sending system inventory")
-			agent.do(ctx, "inventories-on-remote-access", agent.doInventoriesSimple)
-
 		case <-updateSignalCh:
 			log.Debugf("received update signal")
 			// reset the ticker, so we don't run the update twice (scheduled and manually triggered)
@@ -125,21 +114,15 @@ func (agent *Agent) Run(ctx context.Context) error {
 
 			go agent.RunOnce(ctx, FullRun)
 
-		case <-agent.update:
-			log.Infof("starting agent update")
-
-			// wait for all the processing to finish
-			agent.Wait()
-
-			// and run the update (this will block until the update is finished)
-			if err := agent.updateAgent(ctx); err != nil {
-				log.Errorf("failed to update the agent: %v", err)
-			}
-
 		case <-agent.reboot:
 			agent.RebootSystem(ctx)
 		}
 	}
+}
+
+// Stop the agent.
+func (agent *Agent) Stop() {
+	agent.stop <- true
 }
 
 // RunOnceMode defines the mode of the RunOnce function.
@@ -175,9 +158,9 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 	agent.Configuration.UpdateSettings(configData)
 
 	if mode == FullRun {
-		agent.do(ctx, "check-in", agent.doCheckIn)
+		agent.do(ctx, "check-in", agent.checkIn)
 		agent.do(ctx, "metrics", agent.doMetrics)
-		agent.do(ctx, "remote-access", agent.doRemoteAccess)
+		agent.do(ctx, "remote-access", agent.doRemoteAccess(configData))
 		agent.do(ctx, "config", agent.doConfig(configData))
 		agent.do(ctx, "inventories", agent.doInventories)
 	} else {
@@ -198,13 +181,9 @@ func (agent *Agent) do(ctx context.Context, name string, fn func(ctx context.Con
 
 // doCheckIn sends a heartbeat to the device hub and checks for updates.
 func (agent *Agent) doCheckIn(ctx context.Context) error {
-	response, err := agent.checkIn(ctx, agent.cfg.AutoUpdate)
+	err := agent.checkIn(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to check-in: %w", err)
-	}
-
-	if agent.cfg.AutoUpdate && response.UpdateAvailable() {
-		agent.update <- true
 	}
 
 	return nil
@@ -241,12 +220,15 @@ func (agent *Agent) doConfig(configData *configuration.CommittedConfig) func(ctx
 }
 
 // doRemoteAccess maintains remote access for the agent - if enabled.
-func (agent *Agent) doRemoteAccess(ctx context.Context) error {
-	// do not run remote access if it is disabled
-	if agent.disableRemoteAccess {
-		return nil
+func (agent *Agent) doRemoteAccess(cfg *configuration.CommittedConfig) func(ctx context.Context) error {
+	return func(ctx context.Context) error {
+		// do not run remote access if it is disabled in local configuration
+		if agent.disableRemoteAccess {
+			return nil
+		}
+
+		return agent.remoteAccess.UpdateState(ctx, cfg.EdgeURL, cfg.BundleData.Settings.EnableRemoteConsole)
 	}
-	return agent.remoteAccess.UpdateState(ctx, agent.Configuration.RemoteAccessEnabled())
 }
 
 const shutdownBinPath = "/sbin/shutdown"
@@ -284,7 +266,6 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 	agent := &Agent{
 		cfg:    cfg,
 		stop:   make(chan bool, 1),
-		update: make(chan bool, 1),
 		reboot: make(chan bool, 1),
 	}
 
@@ -306,17 +287,16 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 		return nil, err
 	}
 
-	agent.api = api.NewClient(cfg.DeviceHubServer, cfg.DeviceHubPort, agent.caCertPool)
+	agent.api = api.NewClient(cfg.DeviceHubServer, cfg.DeviceHubPort).
+		WithTLSConfig(&tls.Config{RootCAs: agent.caCertPool})
 
 	appDir := filepath.Join(cfg.StateDirectory, appWorkingDirectory)
-	binDir := filepath.Join(appDir, binDirectory)
 	cacheDir := filepath.Join(appDir, cacheDirectory)
-	certDir := filepath.Join(cfg.Directory, credentialsDirectory)
 
 	agent.Inventory = inventory.New(agent.api)
 	agent.Configuration = configuration.New(agent.api, appDir, cacheDir)
 	agent.Metrics = metrics.New(agent.api)
-	agent.remoteAccess = remoteaccess.New(agent.api, cfg.VPNServer, certDir, binDir, proxy)
+	agent.remoteAccess = remoteaccess.New()
 	agent.loopTicker = time.NewTicker(agent.Configuration.RunInterval())
 	agent.disableRemoteAccess = cfg.DisableRemoteAccess
 
@@ -338,7 +318,18 @@ func New(cfg *Config) (*Agent, error) {
 		return nil, err
 	}
 
-	agent.api.UseTLSCredentials(agent.privateKey, agent.certificate)
+	tlsConfig := &tls.Config{
+		RootCAs: agent.caCertPool,
+		Certificates: []tls.Certificate{
+			{
+				Certificate: [][]byte{agent.certificate.Raw},
+				PrivateKey:  agent.privateKey,
+			},
+		},
+	}
+
+	agent.api.WithTLSConfig(tlsConfig)
+	agent.remoteAccess.WithTLSConfig(tlsConfig)
 
 	return agent, nil
 }
