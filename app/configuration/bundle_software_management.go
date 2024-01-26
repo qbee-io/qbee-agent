@@ -347,6 +347,4 @@ func (s Software) restart(ctx context.Context, srv *Service) {
 	}
 
 	ReportInfo(ctx, output, "Restarted service '%s'.", serviceName)
-
-	return
 }
