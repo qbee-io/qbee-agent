@@ -26,8 +26,6 @@ import (
 	"go.qbee.io/agent/app/utils/runner"
 )
 
-const cacheDir = "/var/lib/qbee/app_workdir/cache"
-
 func Test_SoftwareManagementBundle_InstallPackageFromFile(t *testing.T) {
 	r := runner.New(t)
 

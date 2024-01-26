@@ -272,7 +272,7 @@ func (agent *Agent) RebootSystem(ctx context.Context) {
 // Wait for the agent to finish any ongoing processing to finish.
 func (agent *Agent) Wait() {
 	agent.lock.Lock()
-	agent.lock.Unlock()
+	defer agent.lock.Unlock()
 }
 
 // NewWithoutCredentials returns a new instance of Agent without loaded credentials.

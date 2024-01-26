@@ -29,7 +29,7 @@ func (srv *Service) Send(ctx context.Context, metrics []Metric) error {
 		return nil
 	}
 
-	path := fmt.Sprintf("/v1/org/device/auth/metric")
+	path := "/v1/org/device/auth/metric"
 
 	buf := new(bytes.Buffer)
 

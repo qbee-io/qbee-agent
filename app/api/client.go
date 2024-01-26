@@ -75,11 +75,6 @@ func NewClient(host, port string, rootCAPool *x509.CertPool) *Client {
 	}
 }
 
-// SkipCAVerification makes the client accept untrusted certificates.
-func (cli *Client) SkipCAVerification() {
-	cli.httpClient.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify = true
-}
-
 // UseTLSCredentials adds TLS certificate to TLSClientConfig.
 func (cli *Client) UseTLSCredentials(privateKey *ecdsa.PrivateKey, certificate *x509.Certificate) {
 	cli.httpClient.Transport.(*http.Transport).TLSClientConfig.Certificates = []tls.Certificate{
