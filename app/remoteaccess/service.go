@@ -34,6 +34,12 @@ type Service struct {
 	client    *transport.DeviceClient
 	tlsConfig *tls.Config
 	mutex     sync.Mutex
+
+	// consoleMap is a map of all active consoles.
+	consoleMap map[string]*Console
+
+	// consoleMapMutex is a mutex to protect the consoleMap from concurrent access.
+	consoleMapMutex sync.Mutex
 }
 
 // WithTLSConfig sets the TLS configuration for the remote access service.
@@ -61,7 +67,9 @@ func (s *Service) ensureInit(edgeURL string) error {
 
 	s.client = client.
 		WithHandler(transport.MessageTypeTCPTunnel, transport.HandleTCPTunnel).
-		WithHandler(transport.MessageTypeUDPTunnel, transport.HandleUDPTunnel)
+		WithHandler(transport.MessageTypeUDPTunnel, transport.HandleUDPTunnel).
+		WithHandler(transport.MessageTypePTY, s.HandleConsole).
+		WithHandler(transport.MessageTypePTYCommand, s.HandleConsoleCommand)
 
 	return nil
 }
