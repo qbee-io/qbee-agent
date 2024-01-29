@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -161,6 +162,11 @@ func (s *Service) HandleConsole(ctx context.Context, stream *smux.Stream, payloa
 		return transport.WriteError(stream, fmt.Errorf("failed to start console: %w", err))
 	}
 
+	go func() {
+		_ = console.cmd.Wait()
+		console.Close()
+	}()
+
 	s.consoleMapMutex.Lock()
 	s.consoleMap[console.id] = console
 	s.consoleMapMutex.Unlock()
@@ -176,9 +182,16 @@ func (s *Service) HandleConsole(ctx context.Context, stream *smux.Stream, payloa
 		return err
 	}
 
-	_, _, err = transport.Pipe(stream, console.pty)
+	if _, _, err = transport.Pipe(stream, console.pty); err != nil {
+		// handle expected read /dev/ptmx: input/output error
+		if errors.Is(err, syscall.EIO) {
+			return nil
+		}
 
-	return err
+		return fmt.Errorf("failed to pipe console stream: %w", err)
+	}
+
+	return nil
 }
 
 // HandleConsoleCommand handles a remote console command.
