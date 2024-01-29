@@ -165,6 +165,7 @@ func (s *Service) HandleConsole(ctx context.Context, stream *smux.Stream, payloa
 	go func() {
 		_ = console.cmd.Wait()
 		console.Close()
+		_ = stream.Close()
 	}()
 
 	s.consoleMapMutex.Lock()
