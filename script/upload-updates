@@ -6,7 +6,7 @@ SCRIPT_DIR=$(cd $(dirname $0) && pwd)
 BASEDIR=$(dirname $SCRIPT_DIR)
 source $SCRIPT_DIR/config.env
 
-COMMON_SRC_DIR="$BASEDIR/../../src"
+COMMON_SRC_DIR="$BASEDIR/../platform/src"
 
 SIGNING_KEY_PATH=$1
 UPLOAD_AWS_REGION="${AWS_REGION:-eu-west-1}"
@@ -54,17 +54,4 @@ function upload_agent_update() {
   done
 }
 
-
-function upload_openvpn_update() {
-  
-  OPENVPN_BASE="$BASEDIR/../agent-v1/static/targets"
-
-  for arch in "${SUPPORTED_ARCHS[@]}"; do 
-    echo "Uploading openvpn $VERSION $arch (file: $OPENVPN_BASE/${arch_openvpn[$arch]}/openvpn"
-    upload_update "openvpn" "$arch" "$OPENVPN_BASE/${arch_openvpn[$arch]}/openvpn"
-  done
-
-}
-
-upload_openvpn_update
 upload_agent_update
