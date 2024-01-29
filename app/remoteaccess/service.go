@@ -26,7 +26,9 @@ import (
 
 // New creates a new instance of the remote access service.
 func New() *Service {
-	return &Service{}
+	return &Service{
+		consoleMap: make(map[string]*Console),
+	}
 }
 
 // Service controls remote access for the agent.

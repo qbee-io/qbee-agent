@@ -154,7 +154,6 @@ func (s *Service) HandleConsole(ctx context.Context, stream *smux.Stream, payloa
 
 	if initCmd.Type != transport.PTYCommandTypeResize {
 		return transport.WriteError(stream, fmt.Errorf("invalid initial PTY command type"))
-
 	}
 
 	console, err := NewConsole(ctx, initCmd.Rows, initCmd.Cols)
