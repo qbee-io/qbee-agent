@@ -58,7 +58,6 @@ type SettingsBundle struct {
 func (s SettingsBundle) Execute(service *Service) {
 	service.reportingEnabled = s.EnableReports
 	service.metricsEnabled = s.EnableMetrics
-	service.remoteConsoleEnabled = s.EnableRemoteConsole
 	service.softwareInventoryEnabled = s.EnableSoftwareInventory
 	service.processInventoryEnabled = s.EnableProcessInventory
 

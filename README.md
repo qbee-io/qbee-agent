@@ -37,19 +37,15 @@ Install the gh cli
 sudo snap install gh
 ```
 
-## Obtain the signing key
-
-Obtain the signing key from a secure location.
-
 ## Build packages
 
-Build the packages pointing to our signing key. Package versions will by default be 0000.00. Set the VERSION environment
-variable to override. We're currently building deb and rpm packages in addition to a tarball to be used in YOCTO or any custom
+Package versions will by default be 0000.00. Set the VERSION environment variable to override.
+We're currently building deb and rpm packages in addition to a tarball to be used in YOCTO or any custom
 package builds.
 
 ```bash
 export VERSION=<version>
-./script/build-packages /path/to/signing.key
+./script/build-packages
 ```
 
 These packages can be tested without a general release
@@ -80,10 +76,4 @@ gh auth login
 
 ```bash
 ./script/upload-release 
-```
-
-Upload binaries pointing to the signing key (make sure you have built the openvpn binaries first, look at README.md in apps/agent-v1/static)
-
-```bash
-./script/upload-updates /path/to/signing.key
 ```

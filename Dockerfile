@@ -3,24 +3,17 @@ FROM golang:1.21 as builder
 ARG version
 ENV VERSION_VAR=go.qbee.io/agent/app.Version
 
-ARG public_signing_key
-ENV PUBLIC_SINGING_KEY_VAR=go.qbee.io/agent/app/binary.PublicSigningKey
-
 ENV CGO_ENABLED=0
 
 WORKDIR /src
 
 COPY . /src
 
-# build the agent (with two different versions, so we can test auto-update mechanism)
+# build the agent
 RUN --mount=type=cache,target=/go \
     --mount=type=cache,target=/root/.cache/go-build \
     go build \
-    -ldflags "-s -w -X ${VERSION_VAR}=$version -X ${PUBLIC_SINGING_KEY_VAR}=$public_signing_key" \
-    -o /usr/sbin/qbee-agent.$version \
-    main.go && \
-    go build \
-    -ldflags "-s -w -X ${PUBLIC_SINGING_KEY_VAR}=$public_signing_key" \
+    -ldflags "-s -w -X ${VERSION_VAR}=$version" \
     -o /usr/sbin/qbee-agent \
     main.go
 
@@ -50,4 +43,3 @@ WORKDIR /app
 
 # copy the agent
 COPY --from=builder /usr/sbin/qbee-agent /usr/sbin/qbee-agent
-COPY --from=builder /usr/sbin/qbee-agent.$version /usr/sbin/qbee-agent.$version
