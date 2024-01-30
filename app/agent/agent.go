@@ -179,16 +179,6 @@ func (agent *Agent) do(ctx context.Context, name string, fn func(ctx context.Con
 	log.Debugf("stopping %s", name)
 }
 
-// doCheckIn sends a heartbeat to the device hub and checks for updates.
-func (agent *Agent) doCheckIn(ctx context.Context) error {
-	err := agent.checkIn(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to check-in: %w", err)
-	}
-
-	return nil
-}
-
 // doMetrics collects system metrics - if enabled - and delivers them to the device hub API.
 func (agent *Agent) doMetrics(ctx context.Context) error {
 	if !agent.Configuration.MetricsEnabled() {
