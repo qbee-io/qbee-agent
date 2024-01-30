@@ -17,6 +17,7 @@ import (
 	"github.com/creack/pty"
 	"github.com/xtaci/smux"
 	"go.qbee.io/transport"
+	"golang.org/x/sys/unix"
 
 	"go.qbee.io/agent/app/inventory"
 	"go.qbee.io/agent/app/utils"
@@ -143,6 +144,11 @@ func NewConsole(ctx context.Context, rows, cols uint16) (*Console, error) {
 		return nil, fmt.Errorf("failed to start command: %v", err)
 	}
 
+	if err = unix.SetNonblock(int(console.pty.Fd()), true); err != nil {
+		console.Close()
+		return nil, fmt.Errorf("failed to set PTY to non-blocking mode: %v", err)
+	}
+
 	return console, nil
 }
 
@@ -161,12 +167,6 @@ func (s *Service) HandleConsole(ctx context.Context, stream *smux.Stream, payloa
 	if err != nil {
 		return transport.WriteError(stream, fmt.Errorf("failed to start console: %w", err))
 	}
-
-	go func() {
-		_ = console.cmd.Wait()
-		console.Close()
-		_ = stream.Close()
-	}()
 
 	s.consoleMapMutex.Lock()
 	s.consoleMap[console.id] = console

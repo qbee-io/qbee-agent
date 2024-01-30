@@ -7,8 +7,8 @@ require (
 	github.com/google/go-tpm v0.3.3
 	github.com/google/go-tpm-tools v0.3.9
 	github.com/xtaci/smux v1.5.24
-	go.qbee.io/transport v1.24.5-pre3
+	go.qbee.io/transport v1.24.5-pre4
 	google.golang.org/protobuf v1.30.0
 )
 
-require golang.org/x/sys v0.13.0 // indirect
+require golang.org/x/sys v0.16.0
