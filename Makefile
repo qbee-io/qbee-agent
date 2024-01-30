@@ -21,3 +21,6 @@ docker-image:
 
 test:
 	go test ./app/...
+
+lint:
+	docker run --rm -v $(shell pwd):/app -w /app golangci/golangci-lint:v1.55.2 golangci-lint run

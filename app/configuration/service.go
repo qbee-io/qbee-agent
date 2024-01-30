@@ -153,7 +153,11 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 		log.Infof("failed to acquire execution lock - %v", err)
 		return nil
 	}
-	defer srv.releaseLock()
+	defer func() {
+		if err := srv.releaseLock(); err != nil {
+			log.Errorf("failed to release execution lock - %v", err)
+		}
+	}()
 
 	// disable connectivity watchdog if not set in the configData
 	if !configData.HasBundle(BundleConnectivityWatchdog) {

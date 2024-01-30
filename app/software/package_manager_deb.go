@@ -193,7 +193,7 @@ func (deb *DebianPackageManager) listAvailableUpdates(ctx context.Context) (map[
 	return updates, nil
 }
 
-var debPkgUpdateRE = regexp.MustCompile("^Inst (\\S+) (?:\\[(.+)] )?\\((\\S+) .* \\[(.*)]\\)")
+var debPkgUpdateRE = regexp.MustCompile(`^Inst (\S+) (?:\[(.+)] )?\((\S+) .* \[(.*)]\)`)
 
 // parseUpdateAvailableLine parses a line from `apt-get --just-print upgrade` output into a Package.
 // If line doesn't match the expected format, nil is returned.
