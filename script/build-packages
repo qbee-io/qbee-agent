@@ -13,20 +13,11 @@ GOOS=${GOOS:-linux}
 rm $PKG_OUTPUT/* -f
 mkdir -p "$PKG_OUTPUT"
 
-SIGNING_KEY_PATH=$1
-
-if [[ -z $SIGNING_KEY_PATH ]] || [[ ! -f $SIGNING_KEY_PATH ]]; then
-  echo "ERROR: Need to provide path to private signing key"
-  exit 1
-fi
-
-PUBLIC_SIGNING_KEY=$(cd $BASEDIR && go run app/utils/get-public-signing-key/main.go -signingKey $SIGNING_KEY_PATH | awk '{print $NF}')
-
 function build_agent() {
   local arch
   arch=$1
   cd $BASEDIR
-  make VERSION=$VERSION GOOS=$GOOS GOARCH=$arch PUBLIC_SIGNING_KEY=$PUBLIC_SIGNING_KEY
+  make VERSION=$VERSION GOOS=$GOOS GOARCH=$arch
   mv ./bin/qbee-agent ./bin/qbee-agent-$arch
 }
 

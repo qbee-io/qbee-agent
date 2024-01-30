@@ -31,7 +31,6 @@ const (
 	credentialsDirectory = "ppkeys"
 	appWorkingDirectory  = "app_workdir"
 	cacheDirectory       = "cache"
-	binDirectory         = "bin"
 )
 
 // prepareDirectories makes sure that agent's directories are in place.
@@ -42,7 +41,6 @@ func prepareDirectories(cfgDirectory, stateDirectory string) error {
 
 	directories := []string{
 		filepath.Join(cfgDirectory, credentialsDirectory),
-		filepath.Join(stateDirectory, appWorkingDirectory, binDirectory),
 		filepath.Join(cacheDirectoryPath, configuration.FileDistributionCacheDirectory),
 		filepath.Join(cacheDirectoryPath, configuration.SoftwareCacheDirectory),
 		filepath.Join(cacheDirectoryPath, configuration.DockerContainerDirectory),

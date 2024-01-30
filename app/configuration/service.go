@@ -52,7 +52,6 @@ type Service struct {
 	reportToConsole          bool
 	reportingEnabled         bool
 	metricsEnabled           bool
-	remoteConsoleEnabled     bool
 	softwareInventoryEnabled bool
 	processInventoryEnabled  bool
 
@@ -82,11 +81,6 @@ func New(apiClient *api.Client, appDirectory, cacheDirectory string) *Service {
 // MetricsEnabled returns true if metrics collection is enabled.
 func (srv *Service) MetricsEnabled() bool {
 	return srv.metricsEnabled
-}
-
-// RemoteAccessEnabled returns true if remote access is enabled.
-func (srv *Service) RemoteAccessEnabled() bool {
-	return srv.remoteConsoleEnabled
 }
 
 // CollectSoftwareInventory returns true if software inventory collection is enabled.
@@ -124,7 +118,6 @@ func (srv *Service) applyDefaultSettings() {
 	srv.reportToConsole = true
 	srv.reportingEnabled = true
 	srv.metricsEnabled = true
-	srv.remoteConsoleEnabled = true
 	srv.softwareInventoryEnabled = true
 	srv.processInventoryEnabled = false
 	srv.runInterval = defaultAgentInterval

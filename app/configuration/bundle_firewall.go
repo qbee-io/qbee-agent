@@ -23,7 +23,6 @@ import (
 	"os/exec"
 	"strings"
 
-	"go.qbee.io/agent/app/remoteaccess"
 	"go.qbee.io/agent/app/utils"
 )
 
@@ -177,8 +176,6 @@ func (c FirewallChain) renderRules(table FirewallTableName, chain FirewallChainN
 		rules = append(rules,
 			"-A INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT",
 			"-A INPUT -i lo -j ACCEPT",
-			// allow all traffic from the remote access network interface
-			fmt.Sprintf("-A INPUT -i %s -j ACCEPT", remoteaccess.NetworkInterfaceName),
 		)
 	}
 
