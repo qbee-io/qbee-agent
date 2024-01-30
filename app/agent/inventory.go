@@ -47,24 +47,6 @@ func (agent *Agent) doInventories(ctx context.Context) error {
 	return nil
 }
 
-// doInventoriesSimple collects lightweight inventories and delivers them to the device hub API.
-func (agent *Agent) doInventoriesSimple(ctx context.Context) error {
-	inventories := map[string]func(ctx context.Context) error{
-		"system":  agent.doSystemInventory,
-		"users":   agent.doUsersInventory,
-		"ports":   agent.doPortsInventory,
-		"process": agent.doProcessInventory,
-	}
-
-	for name, fn := range inventories {
-		if err := fn(ctx); err != nil {
-			return fmt.Errorf("failed to do %s inventory: %w", name, err)
-		}
-	}
-
-	return nil
-}
-
 // doSystemInventory collects system inventory and delivers it to the device hub API.
 func (agent *Agent) doSystemInventory(ctx context.Context) error {
 	systemInventory, err := inventory.CollectSystemInventory()
