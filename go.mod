@@ -8,7 +8,6 @@ require (
 	github.com/google/go-tpm-tools v0.3.9
 	github.com/xtaci/smux v1.5.24
 	go.qbee.io/transport v1.24.6
+	golang.org/x/sys v0.16.0
 	google.golang.org/protobuf v1.30.0
 )
-
-require golang.org/x/sys v0.16.0
