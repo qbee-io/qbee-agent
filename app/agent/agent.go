@@ -19,6 +19,7 @@ package agent
 import (
 	"context"
 	"crypto/ecdsa"
+	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"os"
@@ -83,6 +84,11 @@ func (agent *Agent) Run(ctx context.Context) error {
 		case <-agent.stop:
 			log.Infof("stopping the agent")
 
+			// stop the remote access service (if running)
+			if err := agent.remoteAccess.Stop(); err != nil {
+				log.Errorf("failed to stop remote access: %s", err)
+			}
+
 			// let all the processing finish
 			agent.Wait()
 
@@ -112,6 +118,11 @@ func (agent *Agent) Run(ctx context.Context) error {
 			agent.RebootSystem(ctx)
 		}
 	}
+}
+
+// Stop the agent.
+func (agent *Agent) Stop() {
+	agent.stop <- true
 }
 
 // RunOnceMode defines the mode of the RunOnce function.
@@ -149,7 +160,7 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 	if mode == FullRun {
 		agent.do(ctx, "check-in", agent.checkIn)
 		agent.do(ctx, "metrics", agent.doMetrics)
-		agent.do(ctx, "remote-access", agent.doRemoteAccess)
+		agent.do(ctx, "remote-access", agent.doRemoteAccess(configData))
 		agent.do(ctx, "config", agent.doConfig(configData))
 		agent.do(ctx, "inventories", agent.doInventories)
 	} else {
@@ -199,13 +210,15 @@ func (agent *Agent) doConfig(configData *configuration.CommittedConfig) func(ctx
 }
 
 // doRemoteAccess maintains remote access for the agent - if enabled.
-func (agent *Agent) doRemoteAccess(ctx context.Context) error {
-	// do not run remote access if it is disabled
-	if agent.disableRemoteAccess {
-		return nil
-	}
+func (agent *Agent) doRemoteAccess(cfg *configuration.CommittedConfig) func(ctx context.Context) error {
+	return func(ctx context.Context) error {
+		// do not run remote access if it is disabled in local configuration
+		if agent.disableRemoteAccess {
+			return nil
+		}
 
-	return nil
+		return agent.remoteAccess.UpdateState(ctx, cfg.EdgeURL, cfg.BundleData.Settings.EnableRemoteConsole)
+	}
 }
 
 const shutdownBinPath = "/sbin/shutdown"
@@ -264,7 +277,8 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 		return nil, err
 	}
 
-	agent.api = api.NewClient(cfg.DeviceHubServer, cfg.DeviceHubPort, agent.caCertPool)
+	agent.api = api.NewClient(cfg.DeviceHubServer, cfg.DeviceHubPort).
+		WithTLSConfig(&tls.Config{RootCAs: agent.caCertPool})
 
 	appDir := filepath.Join(cfg.StateDirectory, appWorkingDirectory)
 	cacheDir := filepath.Join(appDir, cacheDirectory)
@@ -294,7 +308,18 @@ func New(cfg *Config) (*Agent, error) {
 		return nil, err
 	}
 
-	agent.api.UseTLSCredentials(agent.privateKey, agent.certificate)
+	tlsConfig := &tls.Config{
+		RootCAs: agent.caCertPool,
+		Certificates: []tls.Certificate{
+			{
+				Certificate: [][]byte{agent.certificate.Raw},
+				PrivateKey:  agent.privateKey,
+			},
+		},
+	}
+
+	agent.api.WithTLSConfig(tlsConfig)
+	agent.remoteAccess.WithTLSConfig(tlsConfig)
 
 	return agent, nil
 }

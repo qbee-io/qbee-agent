@@ -35,9 +35,17 @@ const (
 
 // CommittedConfig contains the configuration that is committed.
 type CommittedConfig struct {
-	CommitID   string     `json:"commit_id"`
-	Bundles    []string   `json:"bundles"`
+	// CommitID represents commit ID of the most recent commit affecting the device.
+	CommitID string `json:"commit_id"`
+
+	// Bundles contains a list of strings representing configuration bundles
+	Bundles []string `json:"bundles"`
+
+	// BundleData contain configuration data for bundles in the Bundles list
 	BundleData BundleData `json:"bundle_data"`
+
+	// EdgeURL is the URL of the edge server the agent should connect to enable remote access.
+	EdgeURL string `json:"edge_url"`
 }
 
 // HasBundle returns true if bundleName is set in the Bundles list.

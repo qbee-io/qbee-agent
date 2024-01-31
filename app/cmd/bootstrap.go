@@ -70,10 +70,7 @@ var bootstrapCommand = cmd.Command{
 		{
 			Name:  bootstrapTPMDeviceOption,
 			Short: "t",
-			// Hiding for now, since TPM protected key can't be used with OpenVPN.
-			// Once we implement our own remote access solution, this won't be an issue.
-			Hidden: true,
-			Help:   "[Experimental] TPM device to use (e.g. /dev/tpm0).",
+			Help:  "[Beta] TPM device to use (e.g. /dev/tpm0).",
 		},
 		{
 			Name: bootstrapProxyHostOption,
