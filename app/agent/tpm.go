@@ -21,7 +21,7 @@ import (
 
 	"github.com/google/go-tpm-tools/client"
 	"github.com/google/go-tpm-tools/proto/tpm"
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 	"google.golang.org/protobuf/proto"
 
 	"go.qbee.io/agent/app/log"
