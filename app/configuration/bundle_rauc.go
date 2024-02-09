@@ -126,23 +126,43 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	return nil
 }
 
+// RaucImageInfo represents the information about a RAUC image.
 type RaucImageInfo struct {
-	Label    string `json:"label,omitempty"`
-	Variant  string `json:"variant"`
-	Filename string `json:"filename"`
-	Checksum string `json:"checksum"`
-	Size     int64  `json:"size"`
+	// Variant - RAUC image variant
+	Variant string `json:"variant"`
 
+	// Filename - RAUC image filename
+	Filename string `json:"filename"`
+
+	// Checksum - RAUC image checksum
+	Checksum string `json:"checksum"`
+
+	// Size - RAUC image size
+	Size int64 `json:"size"`
+
+	// Adaptive - RAUC image adaptive metadata
 	Adaptive []string `json:"adaptive"`
 }
 
+// RaucBundleInfo represents the information about a RAUC bundle.
 type RaucBundleInfo struct {
-	Compatible  string                     `json:"compatible"`
-	Version     string                     `json:"version"`
-	Description string                     `json:"description"`
-	Build       string                     `json:"build"`
-	Hash        string                     `json:"hash"`
-	Images      []map[string]RaucImageInfo `json:"images"`
+	// Compatible - RAUC compatible version.
+	Compatible string `json:"compatible"`
+
+	// Version - RAUC bundle version.
+	Version string `json:"version"`
+
+	// Description - RAUC bundle description.
+	Description string `json:"description"`
+
+	// Build - RAUC bundle build id/number.
+	Build string `json:"build"`
+
+	// Hash - RAUC bundle hash.
+	Hash string `json:"hash"`
+
+	// Images - RAUC bundle images metadata
+	Images []map[string]RaucImageInfo `json:"images"`
 }
 
 func (r RaucBundle) getRaucBundleInfo(ctx context.Context, url string) (*RaucBundleInfo, error) {
