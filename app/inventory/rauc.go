@@ -26,7 +26,7 @@ import (
 const TypeRauc Type = "rauc"
 
 // CollectRaucInventory collects the RAUC inventory.
-func CollectRaucInventory(ctx context.Context) (*image.RaucInfo, error) {
+func CollectRaucInventory(ctx context.Context) (*image.RaucStatus, error) {
 	if !image.HasRauc() {
 		return nil, nil
 	}

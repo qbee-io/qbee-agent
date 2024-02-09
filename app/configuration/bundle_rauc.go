@@ -182,7 +182,7 @@ func (r RaucBundle) getRaucBundleInfo(ctx context.Context, url string) (*RaucBun
 	return &raucInfoBundle, nil
 }
 
-func doInstall(localRaucInfo *image.RaucInfo, remoteBundleData *RaucBundleInfo) (bool, error) {
+func doInstall(localRaucInfo *image.RaucStatus, remoteBundleData *RaucBundleInfo) (bool, error) {
 	if remoteBundleData.Compatible != localRaucInfo.Compatible {
 		return false, fmt.Errorf("RAUC bundle '%s' is not compatible with the system '%s'", remoteBundleData.Compatible, localRaucInfo.Compatible)
 	}
@@ -200,7 +200,7 @@ func doInstall(localRaucInfo *image.RaucInfo, remoteBundleData *RaucBundleInfo) 
 	return true, nil
 }
 
-func getCurrentSlot(localRaucInfo *image.RaucInfo) (string, *image.SlotData, error) {
+func getCurrentSlot(localRaucInfo *image.RaucStatus) (string, *image.SlotData, error) {
 	for _, slot := range localRaucInfo.Slots {
 		for slotName, slotData := range slot {
 			if slotData.Bootname == localRaucInfo.Booted {

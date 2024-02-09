@@ -102,7 +102,7 @@ type SlotData struct {
 	} `json:"slot_status"`
 }
 
-type RaucInfo struct {
+type RaucStatus struct {
 	// Compatible - RAUC compatible version.
 	Compatible string `json:"compatible"`
 
@@ -129,7 +129,7 @@ func HasRauc() bool {
 }
 
 // GetRaucInfo returns RAUC information.
-func GetRaucInfo(ctx context.Context) (*RaucInfo, error) {
+func GetRaucInfo(ctx context.Context) (*RaucStatus, error) {
 
 	raucStatusCmd := []string{"rauc", "status", "--output-format", "json", "--detailed"}
 
@@ -139,7 +139,7 @@ func GetRaucInfo(ctx context.Context) (*RaucInfo, error) {
 		return nil, err
 	}
 
-	var raucInfo RaucInfo
+	var raucInfo RaucStatus
 	err = json.Unmarshal(raucInfoBytes, &raucInfo)
 	if err != nil {
 		return nil, err
