@@ -31,7 +31,7 @@ import (
 // example payload
 // {
 //   "pre_condition": "true",
-//   "rauc_bundle": "/path/to/bundle.rauc",
+//   "rauc_bundle": "/path/to/bundle.raucb",
 // }
 
 // RaucBundle configures the system to install a RAUC bundle.
