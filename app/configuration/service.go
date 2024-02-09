@@ -48,6 +48,9 @@ type Service struct {
 	// configChangeTime represents a time when the currentCommitID changed last time
 	configChangeTime time.Time
 
+	// urlSigner is used to sign URLs for the device hub
+	urlSigner URLSigner
+
 	rebootAfterRun           bool
 	reportToConsole          bool
 	reportingEnabled         bool
@@ -76,6 +79,12 @@ func New(apiClient *api.Client, appDirectory, cacheDirectory string) *Service {
 		// we don't expect more than a single consumer of this, that's why a buffered channel is used
 		runIntervalChangeNotifier: make(chan time.Duration, 1),
 	}
+}
+
+// WithURLSigner sets the URL signer for the service.
+func (srv *Service) WithURLSigner(urlSigner URLSigner) *Service {
+	srv.urlSigner = urlSigner
+	return srv
 }
 
 // MetricsEnabled returns true if metrics collection is enabled.
@@ -144,7 +153,7 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 	if parametersBundle == nil {
 		parametersBundle = new(ParametersBundle)
 	}
-	ctxWithParameters := parametersBundle.Context(ctx)
+	ctxWithParameters := parametersBundle.Context(ctx, srv.urlSigner)
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctxWithParameters, executeTimeout)
 	defer cancel()

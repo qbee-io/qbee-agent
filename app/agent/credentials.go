@@ -204,3 +204,12 @@ func (agent *Agent) loadCertificate() error {
 
 	return nil
 }
+
+// GetOrganizationID returns the organization ID from the certificate.
+func (agent *Agent) GetOrganizationID() (string, error) {
+	if agent.certificate == nil {
+		return "", errors.New("certificate not loaded")
+	}
+
+	return string(agent.certificate.AuthorityKeyId), nil
+}

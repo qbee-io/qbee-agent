@@ -18,6 +18,7 @@ package configuration
 
 import (
 	"context"
+	"net/url"
 	"os"
 	"testing"
 
@@ -26,6 +27,23 @@ import (
 	"go.qbee.io/agent/app/utils/assert"
 	"go.qbee.io/agent/app/utils/runner"
 )
+
+// mockURLSigner is a mock implementation of the URLSigner interface.
+type mockURLSigner struct{}
+
+// SignURL returns a signed URL for the given source URL.
+func (m *mockURLSigner) SignURL(src string) (string, error) {
+	parsedURL, err := url.Parse(src)
+	if err != nil {
+		return "", err
+	}
+
+	parsedURL.Scheme = "https"
+	parsedURL.Host = "example.com"
+	parsedURL.RawQuery = "signed=true"
+
+	return parsedURL.String(), nil
+}
 
 func Test_resolveParameters(t *testing.T) {
 	hostname, err := os.Hostname()
@@ -129,6 +147,12 @@ func Test_resolveParameters(t *testing.T) {
 			value:      "example $(sys.os) $(sys.os_type) $(sys.flavor) $(sys.boot_time)",
 			want:       "example " + invSystem.OS + " " + invSystem.OSType + " " + invSystem.Flavor + " " + invSystem.BootTime,
 		},
+		{
+			name:       "signed file manager url",
+			parameters: []Parameter{},
+			value:      "example $(file://test.cfg)",
+			want:       "example https://example.com/v1/org/device/public/files/test.cfg?signed=true",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -137,7 +161,7 @@ func Test_resolveParameters(t *testing.T) {
 				Secrets:    tt.secrets,
 			}
 
-			ctx := parametersBundle.Context(context.Background())
+			ctx := parametersBundle.Context(context.Background(), new(mockURLSigner))
 
 			got := resolveParameters(ctx, tt.value)
 
