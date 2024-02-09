@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 	"strings"
 
 	"go.qbee.io/agent/app/inventory"
@@ -59,12 +60,21 @@ type ParametersBundle struct {
 	Secrets    []Parameter `json:"secrets"`
 }
 
-// ParameterStore defines a key->value map of parameters.
-type ParameterStore map[string]string
+// URLSigner is an interface for signing URLs.
+type URLSigner interface {
+	SignURL(url string) (string, error)
+}
+
+// ParameterStore defines a key->value map of parameters, as well as URL signer.
+type ParameterStore struct {
+	values    map[string]string
+	urlSigner URLSigner
+}
 
 const (
-	parameterKeyOpen  = "$("
-	parameterKeyClose = ')'
+	parameterKeyOpen       = "$("
+	parameterKeyClose      = ')'
+	parameterKeyFilePrefix = "file://"
 )
 
 var systemParameters = map[string]func() (string, error){
@@ -134,7 +144,7 @@ var systemParameters = map[string]func() (string, error){
 
 // resolveParameter given context with parameter store attached, returns resolved parameter value.
 func resolveParameters(ctx context.Context, value string) string {
-	parameterStore, ok := ctx.Value(ctxParameterStore).(ParameterStore)
+	parameterStore, ok := ctx.Value(ctxParameterStore).(*ParameterStore)
 	if !ok {
 		ReportError(ctx, "cannot resolve parameter", "parameter store is not set in context")
 		return value
@@ -169,8 +179,22 @@ func resolveParameters(ctx context.Context, value string) string {
 		// Extract parameter key
 		key := value[startParam:i]
 
+		if strings.HasPrefix(key, parameterKeyFilePrefix) {
+			filePath := strings.TrimPrefix(strings.TrimPrefix(key, parameterKeyFilePrefix), "/")
+			filePath = path.Join(fileManagerPublicAPIPath, filePath)
+			signedURL, err := parameterStore.urlSigner.SignURL(filePath)
+			if err != nil {
+				ReportError(ctx, err, "cannot sign URL for %s", filePath)
+				result.WriteString(value[start : i+1])
+				continue
+			} else {
+				result.WriteString(signedURL)
+				continue
+			}
+		}
+
 		// Lookup in the parameter store and use if found.
-		if val, exists := parameterStore[key]; exists {
+		if val, exists := parameterStore.values[key]; exists {
 			result.WriteString(val)
 			continue
 		}
@@ -195,16 +219,19 @@ func resolveParameters(ctx context.Context, value string) string {
 }
 
 // Context returns a new context based on parent context with parameter store attached.
-func (parameters *ParametersBundle) Context(ctx context.Context) context.Context {
+func (parameters *ParametersBundle) Context(ctx context.Context, urlSigner URLSigner) context.Context {
 
-	parametersStore := make(ParameterStore)
+	parametersStore := &ParameterStore{
+		urlSigner: urlSigner,
+		values:    make(map[string]string),
+	}
 
 	for _, parameter := range parameters.Parameters {
-		parametersStore[parameter.Key] = parameter.Value
+		parametersStore.values[parameter.Key] = parameter.Value
 	}
 
 	for _, secret := range parameters.Secrets {
-		parametersStore[secret.Key] = secret.Value
+		parametersStore.values[secret.Key] = secret.Value
 	}
 
 	return context.WithValue(ctx, ctxParameterStore, parametersStore)

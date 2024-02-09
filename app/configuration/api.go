@@ -65,6 +65,7 @@ func (srv *Service) getFileMetadataFromAPI(ctx context.Context, src string) (*Fi
 }
 
 const fileManagerAPIPath = "/v1/org/device/auth/files/%s"
+const fileManagerPublicAPIPath = "/v1/org/device/public/files"
 
 // getFile returns file reader.
 func (srv *Service) getFileFromAPI(ctx context.Context, src string) (io.ReadCloser, error) {
