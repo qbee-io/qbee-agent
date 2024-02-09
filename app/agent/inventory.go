@@ -36,6 +36,7 @@ func (agent *Agent) doInventories(ctx context.Context) error {
 		"docker-networks":   agent.doDockerNetworksInventory,
 		"software":          agent.doSoftwareInventory,
 		"process":           agent.doProcessInventory,
+		"rauc":              agent.doRaucInventory,
 	}
 
 	for name, fn := range inventories {
@@ -149,4 +150,14 @@ func (agent *Agent) doProcessInventory(ctx context.Context) error {
 	}
 
 	return agent.Inventory.Send(ctx, inventory.TypeProcesses, processesInventory)
+}
+
+// doRaucInventory collects RAUC inventory - if enabled - and delivers it to the device hub API.
+func (agent *Agent) doRaucInventory(ctx context.Context) error {
+	raucInventory, err := inventory.CollectRaucInventory(ctx)
+	if err != nil {
+		return err
+	}
+
+	return agent.Inventory.Send(ctx, inventory.TypeRauc, raucInventory)
 }

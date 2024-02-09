@@ -69,7 +69,7 @@ var configCommand = cmd.Command{
 		var deviceAgent *agent.Agent
 
 		if fromFile != "" {
-			deviceAgent, err = agent.NewWithoutCredentials(cfg)
+			deviceAgent, err = agent.New(cfg)
 		} else {
 			deviceAgent, err = agent.New(cfg)
 		}
