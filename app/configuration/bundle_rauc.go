@@ -75,7 +75,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	if err != nil {
 		ReportError(
 			ctx,
-			strings.ReplaceAll(err.Error(), raucUrl, redactedValue),
+			strings.ReplaceAll(err.Error(), raucUrl, r.RaucBundle),
 			"Failed to get RAUC bundle info for '%s'", r.RaucBundle,
 		)
 		return err
@@ -109,7 +109,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	if err != nil {
 		ReportError(
 			ctx,
-			strings.ReplaceAll(err.Error(), raucUrl, redactedValue),
+			strings.ReplaceAll(err.Error(), raucUrl, r.RaucBundle),
 			"Failed to install RAUC bundle",
 		)
 		return err
@@ -117,7 +117,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 
 	ReportInfo(
 		ctx,
-		strings.ReplaceAll(string(output), raucUrl, redactedValue),
+		strings.ReplaceAll(string(output), raucUrl, r.RaucBundle),
 		"RAUC bundle successfully installed '%s'",
 		r.RaucBundle,
 	)
