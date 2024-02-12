@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"path"
 	"strings"
 
@@ -97,13 +96,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return nil
 	}
 
-	raucCmd, err := exec.LookPath("rauc")
-	if err != nil {
-		ReportError(ctx, err, "RAUC not found")
-		return err
-	}
-
-	raucInstallCmd := []string{raucCmd, "install", raucURL}
+	raucInstallCmd := []string{"rauc", "install", raucURL}
 	output, err := utils.RunCommand(ctx, raucInstallCmd)
 
 	if err != nil {
