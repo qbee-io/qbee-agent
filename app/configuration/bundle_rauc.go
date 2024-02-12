@@ -65,17 +65,17 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	}
 
 	filePath := path.Join(fileManagerPublicAPIPath, r.RaucBundle)
-	raucUrl, err := service.urlSigner.SignURL(filePath)
+	raucURL, err := service.urlSigner.SignURL(filePath)
 	if err != nil {
 		ReportError(ctx, err, "Failed to create authenticated url for rauc")
 		return err
 	}
 
-	raucBundleInfo, err := r.getRaucBundleInfo(ctx, raucUrl)
+	raucBundleInfo, err := r.getRaucBundleInfo(ctx, raucURL)
 	if err != nil {
 		ReportError(
 			ctx,
-			strings.ReplaceAll(err.Error(), raucUrl, r.RaucBundle),
+			strings.ReplaceAll(err.Error(), raucURL, r.RaucBundle),
 			"Failed to get RAUC bundle info for '%s'", r.RaucBundle,
 		)
 		return err
@@ -103,13 +103,13 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return err
 	}
 
-	raucInstallCmd := []string{raucCmd, "install", raucUrl}
+	raucInstallCmd := []string{raucCmd, "install", raucURL}
 	output, err := utils.RunCommand(ctx, raucInstallCmd)
 
 	if err != nil {
 		ReportError(
 			ctx,
-			strings.ReplaceAll(err.Error(), raucUrl, r.RaucBundle),
+			strings.ReplaceAll(err.Error(), raucURL, r.RaucBundle),
 			"Failed to install RAUC bundle",
 		)
 		return err
@@ -117,7 +117,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 
 	ReportInfo(
 		ctx,
-		strings.ReplaceAll(string(output), raucUrl, r.RaucBundle),
+		strings.ReplaceAll(string(output), raucURL, r.RaucBundle),
 		"RAUC bundle successfully installed '%s'",
 		r.RaucBundle,
 	)

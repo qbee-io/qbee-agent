@@ -24,6 +24,7 @@ import (
 	"go.qbee.io/agent/app/utils"
 )
 
+// SlotData contains metadata of the RAUC slots
 type SlotData struct {
 	// Class - RAUC slot class
 	Class string `json:"class"`
@@ -102,6 +103,7 @@ type SlotData struct {
 	} `json:"slot_status"`
 }
 
+// RaucStatus contains the current RAUC status of the system
 type RaucStatus struct {
 	// Compatible - RAUC compatible version.
 	Compatible string `json:"compatible"`
@@ -122,10 +124,7 @@ type RaucStatus struct {
 // HasRauc returns true if RAUC is installed on the system.
 func HasRauc() bool {
 	_, err := exec.LookPath("rauc")
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 // GetRaucInfo returns RAUC information.
