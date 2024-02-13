@@ -31,6 +31,7 @@ const (
 	BundleFirewall             = "firewall"
 	BundlePassword             = "password"
 	BundleDockerContainers     = "docker_containers"
+	BundleRauc                 = "rauc"
 )
 
 // CommittedConfig contains the configuration that is committed.
@@ -86,6 +87,8 @@ func (cc *CommittedConfig) selectBundleByName(bundleName string) Bundle {
 		return cc.BundleData.Password
 	case BundleDockerContainers:
 		return cc.BundleData.DockerContainers
+	case BundleRauc:
+		return cc.BundleData.Rauc
 	default:
 		return nil
 	}
@@ -114,4 +117,7 @@ type BundleData struct {
 	// Security
 	Password *PasswordBundle `json:"password,omitempty"`
 	Firewall *FirewallBundle `json:"firewall,omitempty"`
+
+	//Image OTA
+	Rauc *RaucBundle `json:"rauc,omitempty"`
 }
