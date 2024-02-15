@@ -200,12 +200,20 @@ func (systemInfo *SystemInfo) parseOSRelease() error {
 		return nil
 	}
 
-	id := canonify(strings.ToLower(data["ID"]))
-	versionID := canonify(data["VERSION_ID"])
+	if _, ok := data["VERSION"]; ok {
+		systemInfo.Flavor = data["VERSION"]
+		return nil
+	}
 
-	version := strings.Split(versionID, "_")
+	if _, ok := data["ID"]; !ok {
+		return nil
+	}
 
-	systemInfo.Flavor = fmt.Sprintf("%s_%s", id, version[0])
+	if _, ok := data["VERSION_ID"]; !ok {
+		return nil
+	}
+
+	systemInfo.Flavor = fmt.Sprintf("%s %s", data["ID"], data["VERSION_ID"])
 	return nil
 }
 
