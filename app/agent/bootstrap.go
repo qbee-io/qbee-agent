@@ -28,6 +28,7 @@ import (
 
 	"go.qbee.io/agent/app/inventory"
 	"go.qbee.io/agent/app/log"
+	"go.qbee.io/agent/app/utils"
 )
 
 const bootstrapWaitTime = 5 * time.Second
@@ -88,9 +89,14 @@ func Bootstrap(ctx context.Context, cfg *Config) error {
 
 	log.Infof("Bootstrap successfully completed")
 
-	upstartCmd := guessUpstartCommand("qbee-agent", "start")
+	upstartCmd, err := utils.GuessUpstartCommand("qbee-agent", "start")
+	if err != nil {
+		log.Infof("Error guessing upstart command: %s", err)
+		return nil
+	}
+	upstartCmdString := strings.Join(upstartCmd, " ")
 	log.Infof("Please remember to start the qbee-agent service as administrative user")
-	log.Infof("Detected start command based on OS attributes is: $ %s", upstartCmd)
+	log.Infof("Detected start command based on OS attributes is: $ %s", upstartCmdString)
 
 	return nil
 }

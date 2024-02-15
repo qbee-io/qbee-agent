@@ -31,6 +31,8 @@ const pkgCacheKeyPrefix = "packages"
 // PackageManagers provides a map of all package managers supported by the agent.
 var PackageManagers = map[PackageManagerType]PackageManager{
 	PackageManagerTypeDebian: new(DebianPackageManager),
+	PackageManagerTypeOpkg:   new(OpkgPackageManager),
+	//PackageManagerTypeRpm:     new(RpmPackageManager),
 }
 
 func init() {

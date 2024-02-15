@@ -288,3 +288,67 @@ func checkInstalledVersionOfTestPackage(r *runner.Runner) string {
 
 	return string(output)
 }
+
+func Test_PackageManagement_UpgradeAll_Opkg(t *testing.T) {
+
+	r := runner.NewOpenWRTRunner(t)
+
+	r.MustExec("mkdir", "-p", "/var/lock")
+	// ensure we have the latest updates
+	r.MustExec("opkg", "update")
+
+	reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
+		FullUpgrade: true,
+		RebootMode:  configuration.RebootAlways,
+	})
+
+	// check if a correct reboot warning report is recorded
+	assert.HasPrefix(t, reports[0], "[INFO] Full upgrade was successful - ")
+	assert.Equal(t, reports[1], "[WARN] Scheduling system reboot.")
+
+	reports = executePackageManagementBundle(r, configuration.PackageManagementBundle{
+		FullUpgrade: true,
+		RebootMode:  configuration.RebootAlways,
+	})
+
+	// check if a correct reboot warning report is recorded
+	assert.Empty(t, reports)
+}
+
+func Test_PackageManagement_InstallPackage_UpdateWithReboot_Opkg(t *testing.T) {
+	r := runner.NewOpenWRTRunner(t)
+
+	r.MustExec("mkdir", "-p", "/var/lock")
+	// ensure we have the latest updates
+	r.MustExec("opkg", "update")
+
+	// when package has no version string, we assume that the latest version should be installed
+	reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
+		RebootMode: configuration.RebootAlways,
+		Packages:   []configuration.Package{{Name: "jsonfilter"}},
+	})
+
+	// check if a correct reboot warning report is recorded
+	expectedReports := []string{
+		"[INFO] Package 'jsonfilter' successfully installed.",
+		"[WARN] Scheduling system reboot.",
+	}
+
+	//output, err := r.Exec("opkg", "info", "jsonfilter")
+
+	assert.Equal(t, reports, expectedReports)
+
+	// when package has no version string, we assume that the latest version should be installed
+	reports = executePackageManagementBundle(r, configuration.PackageManagementBundle{
+		RebootMode: configuration.RebootAlways,
+		Packages:   []configuration.Package{{Name: "jsonfilter"}},
+	})
+
+	assert.Empty(t, reports)
+
+	reports = executePackageManagementBundle(r, configuration.PackageManagementBundle{
+		RebootMode: configuration.RebootNever,
+		Packages:   []configuration.Package{{Name: "jsonfilter", Version: "1.1.1"}},
+	})
+	assert.Equal(t, reports, []string{"[ERR] Unable to install package 'jsonfilter'"})
+}

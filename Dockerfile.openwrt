@@ -1,0 +1,45 @@
+FROM golang:1.21 as builder
+
+ARG version
+ENV VERSION_VAR=go.qbee.io/agent/app.Version
+
+ENV CGO_ENABLED=0
+
+WORKDIR /src
+
+COPY . /src
+
+# build the agent
+RUN --mount=type=cache,target=/go \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go build \
+    -ldflags "-s -w -X ${VERSION_VAR}=$version" \
+    -o /usr/bin/qbee-agent \
+    main.go
+
+FROM scratch
+# Downloaded from here: https://downloads.openwrt.org/releases/23.05.0/targets/x86/64/openwrt-23.05.0-x86-64-rootfs.tar.gz
+ADD docker/dev/openwrt/rootfs.tar.gz /
+RUN mkdir -p /var/lock
+#RUN opkg remove --force-depends \
+#      dnsmasq* \
+#      wpad* \
+#      iw* && \
+#    opkg update && \
+#    opkg install luci \
+#      wpad-wolfssl \
+#      iw-full \
+#      ip-full \
+#      kmod-mac80211 \
+#      dnsmasq-full \
+#      iptables-mod-checksum
+#RUN opkg list-upgradable | awk '{print $1}' | xargs opkg upgrade || true
+#
+#RUN echo "iptables -A POSTROUTING -t mangle -p udp --dport 68 -j CHECKSUM --checksum-fill" >> /etc/firewall.user
+RUN sed -i '/^exit 0/i cat \/tmp\/resolv.conf > \/etc\/resolv.conf' /etc/rc.local
+
+RUN mkdir /etc/qbee && echo '{}' > /etc/qbee/qbee-agent.json
+COPY --from=builder /usr/bin/qbee-agent /usr/bin/qbee-agent
+
+WORKDIR /app
+CMD [ "/bin/sh" ]
