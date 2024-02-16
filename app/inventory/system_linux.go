@@ -27,6 +27,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 
 	"go.qbee.io/agent/app"
 	"go.qbee.io/agent/app/inventory/linux"
@@ -186,22 +187,20 @@ func (systemInfo *SystemInfo) gatherNetworkInfo() error {
 	return nil
 }
 
-// parseOSRelease extracts flavor information from os-release file.
+// parseOSRelease extracts flavor and os_version information from os-release file.
 func (systemInfo *SystemInfo) parseOSRelease() error {
-	// Set default to unknown
+	// Set defaults to unknown
 	systemInfo.Flavor = "unknown"
+	systemInfo.OSVersion = "unknown"
+
 	data, err := utils.ParseEnvFile("/etc/os-release")
+
 	if err != nil {
 		data, err = utils.ParseEnvFile("/usr/lib/os-release")
 	}
 
 	if err != nil {
 		log.Debugf("error parsing os-release file: %v", err)
-		return nil
-	}
-
-	if _, ok := data["VERSION"]; ok {
-		systemInfo.Flavor = data["VERSION"]
 		return nil
 	}
 
@@ -213,7 +212,20 @@ func (systemInfo *SystemInfo) parseOSRelease() error {
 		return nil
 	}
 
-	systemInfo.Flavor = fmt.Sprintf("%s %s", data["ID"], data["VERSION_ID"])
+	id := canonify(strings.ToLower(data["ID"]))
+	versionID := canonify(data["VERSION_ID"])
+	version := strings.Split(versionID, "_")
+	systemInfo.Flavor = fmt.Sprintf("%s_%s", id, version[0])
+
+	if _, ok := data["VERSION"]; ok {
+
+		idUppercaseFirst := []rune(data["ID"])
+		idUppercaseFirst[0] = unicode.ToUpper(idUppercaseFirst[0])
+		systemInfo.OSVersion = fmt.Sprintf("%s %s", string(idUppercaseFirst), data["VERSION"])
+		return nil
+	}
+
+	systemInfo.OSVersion = fmt.Sprintf("%s %s", strings.ToTitle(data["ID"]), data["VERSION_ID"])
 	return nil
 }
 

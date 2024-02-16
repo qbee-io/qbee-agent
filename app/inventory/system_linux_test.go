@@ -38,4 +38,5 @@ func TestCollectSystemInventory(t *testing.T) {
 	assert.Equal(t, systemInfo.System.Class, "linux")
 	assert.NotEmpty(t, systemInfo.System.Host)
 	assert.NotEmpty(t, systemInfo.System.Architecture)
+	assert.NotEmpty(t, systemInfo.System.OSVersion)
 }
