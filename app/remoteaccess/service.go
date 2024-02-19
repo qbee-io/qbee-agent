@@ -19,8 +19,10 @@ package remoteaccess
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"sync"
 
+	"github.com/xtaci/smux"
 	"go.qbee.io/transport"
 )
 
@@ -42,6 +44,9 @@ type Service struct {
 
 	// consoleMapMutex is a mutex to protect the consoleMap from concurrent access.
 	consoleMapMutex sync.Mutex
+
+	// configReloadNotifierChannel is a function that is called when the agent configuration reload is requested remotely.
+	configReloadNotifierChannel chan bool
 }
 
 // WithTLSConfig sets the TLS configuration for the remote access service.
@@ -71,7 +76,8 @@ func (s *Service) ensureInit(edgeURL string) error {
 		WithHandler(transport.MessageTypeTCPTunnel, transport.HandleTCPTunnel).
 		WithHandler(transport.MessageTypeUDPTunnel, transport.HandleUDPTunnel).
 		WithHandler(transport.MessageTypePTY, s.HandleConsole).
-		WithHandler(transport.MessageTypePTYCommand, s.HandleConsoleCommand)
+		WithHandler(transport.MessageTypePTYCommand, s.HandleConsoleCommand).
+		WithHandler(transport.MessageTypeReload, s.HandleReloadCommand)
 
 	return nil
 }
@@ -104,4 +110,21 @@ func (s *Service) UpdateState(ctx context.Context, edgeURL string, enabled bool)
 	}
 
 	return nil
+}
+
+// WithConfigReloadNotifier registers a channel to be notified when a remote configuration reload is requested.
+func (s *Service) WithConfigReloadNotifier(ch chan bool) *Service {
+	s.configReloadNotifierChannel = ch
+	return s
+}
+
+// HandleReloadCommand handles the reload command.
+func (s *Service) HandleReloadCommand(_ context.Context, stream *smux.Stream, _ []byte) error {
+	if s.configReloadNotifierChannel == nil {
+		return transport.WriteError(stream, fmt.Errorf("config reload notifier not set"))
+	}
+
+	s.configReloadNotifierChannel <- true
+
+	return transport.WriteOK(stream, nil)
 }
