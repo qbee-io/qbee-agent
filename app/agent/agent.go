@@ -51,6 +51,7 @@ type Agent struct {
 	api        *api.Client
 	lock       sync.Mutex
 	loopTicker *time.Ticker
+	update     chan bool
 	stop       chan bool
 	reboot     chan bool
 
@@ -109,6 +110,10 @@ func (agent *Agent) Run(ctx context.Context) error {
 
 		case <-updateSignalCh:
 			log.Debugf("received update signal")
+
+			agent.update <- true
+
+		case <-agent.update:
 			// reset the ticker, so we don't run the update twice (scheduled and manually triggered)
 			agent.loopTicker.Reset(agent.Configuration.RunInterval())
 
@@ -255,6 +260,7 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 
 	agent := &Agent{
 		cfg:    cfg,
+		update: make(chan bool, 1),
 		stop:   make(chan bool, 1),
 		reboot: make(chan bool, 1),
 	}
@@ -286,7 +292,8 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 	agent.Inventory = inventory.New(agent.api)
 	agent.Configuration = configuration.New(agent.api, appDir, cacheDir).WithURLSigner(agent)
 	agent.Metrics = metrics.New(agent.api)
-	agent.remoteAccess = remoteaccess.New()
+	agent.remoteAccess = remoteaccess.New().
+		WithConfigReloadNotifier(agent.update)
 	agent.loopTicker = time.NewTicker(agent.Configuration.RunInterval())
 	agent.disableRemoteAccess = cfg.DisableRemoteAccess
 
