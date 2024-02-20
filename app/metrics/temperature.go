@@ -34,6 +34,9 @@ type TemperatureValues struct {
 
 const hostTemperatureScale = 1000.0
 
+var hwMonGlobPath = filepath.Join(linux.SysFS, "class", "hwmon", "hwmon*", "temp*_input")
+var thermalZoneGlobPath = filepath.Join(linux.SysFS, "class", "thermal", "thermal_zone*")
+
 func CollectTemperature() ([]Metric, error) {
 
 	// Attempt to collect temperature metrics from hwmon
@@ -54,15 +57,10 @@ func CollectTemperature() ([]Metric, error) {
 	return nil, fmt.Errorf("no temperature files found")
 }
 
-// hwMonTemperatureMetrics collects temperature metrics from /sys/class/hwmon/hwmon*/temp*_input
-func hwMonTemperatureMetrics() ([]Metric, error) {
-
-	var files []string
-	var err error
-
+func getHwMonFiles() ([]string, error) {
 	globPath := filepath.Join(linux.SysFS, "class", "hwmon", "hwmon*", "temp*_input")
-
-	if files, err = filepath.Glob(globPath); err != nil {
+	files, err := filepath.Glob(globPath)
+	if err != nil {
 		return nil, err
 	}
 
@@ -75,8 +73,29 @@ func hwMonTemperatureMetrics() ([]Metric, error) {
 		}
 	}
 
+	return files, nil
+}
+
+func getThermalZoneFiles() ([]string, error) {
+	globPath := filepath.Join(linux.SysFS, "class", "thermal", "thermal_zone*")
+	files, err := filepath.Glob(globPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return files, nil
+}
+
+// hwMonTemperatureMetrics collects temperature metrics from /sys/class/hwmon/hwmon*/temp*_input
+func hwMonTemperatureMetrics() ([]Metric, error) {
+
+	files, err := getHwMonFiles()
+	if err != nil {
+		return nil, err
+	}
+
 	if len(files) == 0 {
-		return nil, fmt.Errorf("no temperature metrics found")
+		return nil, fmt.Errorf("no hwmon temperature metrics found")
 	}
 
 	// Collect temperature metrics
@@ -148,8 +167,7 @@ func hwMonTemperatureMetrics() ([]Metric, error) {
 
 func thermalZoneTemperatureMetrics() ([]Metric, error) {
 
-	globPath := filepath.Join(linux.SysFS, "class", "thermal", "thermal_zone*")
-	files, err := filepath.Glob(globPath)
+	files, err := getThermalZoneFiles()
 
 	if err != nil {
 		return nil, err

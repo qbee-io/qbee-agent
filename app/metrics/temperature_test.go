@@ -17,16 +17,17 @@
 package metrics
 
 import (
-	"os"
 	"testing"
 )
 
 func TestCollectTemperature(t *testing.T) {
 
-	// Skip test if hwmon is not available, eg. in a vm
-	if _, err := os.Stat("/sys/class/hwmon"); os.IsNotExist(err) {
-		if _, err := os.Stat("/sys/class/thermal"); os.IsNotExist(err) {
-			t.Skipf("skipping test, hwmon and thermal not available: %v", err)
+	files, _ := getHwMonFiles()
+	if len(files) == 0 {
+		files, _ = getThermalZoneFiles()
+		if len(files) == 0 {
+			// No temperature files found, skip test. CI uses vms and they don't have temperature files.
+			t.Skip("no temperature files found")
 		}
 	}
 
