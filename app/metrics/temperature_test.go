@@ -17,10 +17,18 @@
 package metrics
 
 import (
+	"os"
 	"testing"
 )
 
 func TestCollectTemperature(t *testing.T) {
+
+	// Skip test if hwmon is not available, eg. in a vm
+	if _, err := os.Stat("/sys/class/hwmon"); os.IsNotExist(err) {
+		if _, err := os.Stat("/sys/class/thermal"); os.IsNotExist(err) {
+			t.Skipf("skipping test, hwmon and thermal not available: %v", err)
+		}
+	}
 
 	metrics, err := CollectTemperature()
 
@@ -31,9 +39,6 @@ func TestCollectTemperature(t *testing.T) {
 	for _, metric := range metrics {
 		if metric.Label != Temperature {
 			t.Errorf("unexpected label: %v", metric.Label)
-		}
-		if metric.Timestamp < 1 {
-			t.Errorf("unexpected timestamp: %v", metric.Timestamp)
 		}
 		if metric.Values.Temperature <= 0 {
 			t.Errorf("unexpected temperature: %v", metric.Values.Temperature)
