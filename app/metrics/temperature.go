@@ -23,6 +23,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"go.qbee.io/agent/app/inventory/linux"
 )
 
 type TemperatureValues struct {
@@ -30,7 +32,6 @@ type TemperatureValues struct {
 	Temperature float64 `json:"temperature"`
 }
 
-const sysFS = "/sys"
 const hostTemperatureScale = 1000.0
 
 func CollectTemperature() ([]Metric, error) {
@@ -59,7 +60,7 @@ func hwMonTemperatureMetrics() ([]Metric, error) {
 	var files []string
 	var err error
 
-	globPath := filepath.Join(sysFS, "class", "hwmon", "hwmon*", "temp*_input")
+	globPath := filepath.Join(linux.SysFS, "class", "hwmon", "hwmon*", "temp*_input")
 
 	if files, err = filepath.Glob(globPath); err != nil {
 		return nil, err
@@ -68,7 +69,7 @@ func hwMonTemperatureMetrics() ([]Metric, error) {
 	if len(files) == 0 {
 		// CentOS has an intermediate /device directory:
 		// https://github.com/giampaolo/psutil/issues/971
-		globPath = filepath.Join(sysFS, "class", "hwmon", "hwmon*", "device", "temp*_input")
+		globPath = filepath.Join(linux.SysFS, "class", "hwmon", "hwmon*", "device", "temp*_input")
 		if files, err = filepath.Glob(globPath); err != nil {
 			return nil, err
 		}
@@ -147,7 +148,7 @@ func hwMonTemperatureMetrics() ([]Metric, error) {
 
 func thermalZoneTemperatureMetrics() ([]Metric, error) {
 
-	globPath := filepath.Join(sysFS, "class", "thermal", "thermal_zone*")
+	globPath := filepath.Join(linux.SysFS, "class", "thermal", "thermal_zone*")
 	files, err := filepath.Glob(globPath)
 
 	if err != nil {
