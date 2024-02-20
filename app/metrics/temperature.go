@@ -27,6 +27,7 @@ import (
 	"go.qbee.io/agent/app/inventory/linux"
 )
 
+// TemperatureValues represents temperature metrics
 type TemperatureValues struct {
 	// Temperature in degrees Celsius
 	Temperature float64 `json:"temperature"`
@@ -34,6 +35,7 @@ type TemperatureValues struct {
 
 const hostTemperatureScale = 1000.0
 
+// CollectTemperature collects temperature metrics from from /sys/class/[hwmon|thermal]
 func CollectTemperature() ([]Metric, error) {
 
 	// Attempt to collect temperature metrics from hwmon
@@ -54,6 +56,7 @@ func CollectTemperature() ([]Metric, error) {
 	return nil, fmt.Errorf("no temperature files found")
 }
 
+// getHwMonFiles returns a list of temperature files in /sys/class/hwmon/hwmon*/temp*_input
 func getHwMonFiles() ([]string, error) {
 	globPath := filepath.Join(linux.SysFS, "class", "hwmon", "hwmon*", "temp*_input")
 	files, err := filepath.Glob(globPath)
@@ -73,6 +76,7 @@ func getHwMonFiles() ([]string, error) {
 	return files, nil
 }
 
+// getThermalZoneFiles returns a list of temperature files in /sys/class/thermal/thermal_zone*/temp
 func getThermalZoneFiles() ([]string, error) {
 	globPath := filepath.Join(linux.SysFS, "class", "thermal", "thermal_zone*")
 	files, err := filepath.Glob(globPath)
@@ -162,6 +166,7 @@ func hwMonTemperatureMetrics() ([]Metric, error) {
 	return metrics, nil
 }
 
+// thermalZoneTemperatureMetrics collects temperature metrics from /sys/class/thermal/thermal_zone*/temp
 func thermalZoneTemperatureMetrics() ([]Metric, error) {
 
 	files, err := getThermalZoneFiles()
