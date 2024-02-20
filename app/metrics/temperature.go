@@ -34,9 +34,6 @@ type TemperatureValues struct {
 
 const hostTemperatureScale = 1000.0
 
-var hwMonGlobPath = filepath.Join(linux.SysFS, "class", "hwmon", "hwmon*", "temp*_input")
-var thermalZoneGlobPath = filepath.Join(linux.SysFS, "class", "thermal", "thermal_zone*")
-
 func CollectTemperature() ([]Metric, error) {
 
 	// Attempt to collect temperature metrics from hwmon
