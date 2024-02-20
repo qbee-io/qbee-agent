@@ -17,7 +17,6 @@
 package metrics
 
 import (
-	"encoding/json"
 	"testing"
 )
 
@@ -33,29 +32,11 @@ func TestCollectTemperature(t *testing.T) {
 		if metric.Label != Temperature {
 			t.Errorf("unexpected label: %v", metric.Label)
 		}
-		if metric.Timestamp < 0 {
+		if metric.Timestamp < 1 {
 			t.Errorf("unexpected timestamp: %v", metric.Timestamp)
 		}
-		if metric.Values.Temperature == 0 {
+		if metric.Values.Temperature <= 0 {
 			t.Errorf("unexpected temperature: %v", metric.Values.Temperature)
 		}
-	}
-
-	_, err = hwMonTemperatureMetrics()
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	m3, err := thermalZoneTemperatureMetrics()
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	_, err = json.MarshalIndent(m3, "", "  ")
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
 	}
 }

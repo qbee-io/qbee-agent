@@ -35,20 +35,25 @@ const hostTemperatureScale = 1000.0
 
 func CollectTemperature() ([]Metric, error) {
 
+	// Attempt to collect temperature metrics from hwmon
 	if metrics, err := hwMonTemperatureMetrics(); err == nil {
 		if len(metrics) > 0 {
 			return metrics, nil
 		}
 	}
 
+	// Attempt to collect temperature metrics from thermal zone
 	if metrics, err := thermalZoneTemperatureMetrics(); err == nil {
 		if len(metrics) > 0 {
 			return metrics, nil
 		}
 	}
+
+	// If no temperature metrics were found, return an error
 	return nil, fmt.Errorf("no temperature files found")
 }
 
+// hwMonTemperatureMetrics collects temperature metrics from /sys/class/hwmon/hwmon*/temp*_input
 func hwMonTemperatureMetrics() ([]Metric, error) {
 
 	var files []string
@@ -70,7 +75,7 @@ func hwMonTemperatureMetrics() ([]Metric, error) {
 	}
 
 	if len(files) == 0 {
-		return nil, fmt.Errorf("no temperature files found")
+		return nil, fmt.Errorf("no temperature metrics found")
 	}
 
 	// Collect temperature metrics
@@ -118,6 +123,11 @@ func hwMonTemperatureMetrics() ([]Metric, error) {
 			continue
 		}
 
+		// Skip temperatures below 0, assume they are invalid
+		if temperature <= 0 {
+			continue
+		}
+
 		metric := Metric{
 			Label:     Temperature,
 			Timestamp: time.Now().Unix(),
@@ -144,6 +154,10 @@ func thermalZoneTemperatureMetrics() ([]Metric, error) {
 		return nil, err
 	}
 
+	if len(files) == 0 {
+		return nil, fmt.Errorf("no thermal zone metrics found")
+	}
+
 	metrics := make([]Metric, 0)
 
 	for _, file := range files {
@@ -157,6 +171,7 @@ func thermalZoneTemperatureMetrics() ([]Metric, error) {
 		if err != nil {
 			continue
 		}
+
 		temperature, err := strconv.ParseInt(strings.TrimSpace(string(current)), 10, 64)
 		if err != nil {
 			continue
@@ -175,5 +190,6 @@ func thermalZoneTemperatureMetrics() ([]Metric, error) {
 
 		metrics = append(metrics, metric)
 	}
+
 	return metrics, nil
 }
