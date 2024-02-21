@@ -33,6 +33,18 @@ type TemperatureValues struct {
 	Temperature float64 `json:"temperature"`
 }
 
+var temperatureAllowedLabels = []string{
+	"x86_pkg_temp",
+	"coretemp",
+	"acpi",
+	"pch",
+	"cpu_thermal",
+	"cpu-thermal",
+}
+
+// Balena uses the following, only
+// Math.round(tempInfo.main)
+
 const hostTemperatureScale = 1000.0
 
 // CollectTemperature collects temperature metrics from from /sys/class/[hwmon|thermal]
@@ -135,6 +147,10 @@ func hwMonTemperatureMetrics() ([]Metric, error) {
 			name = name + "_" + label
 		}
 
+		if !stringHasPrefixInSlice(name, temperatureAllowedLabels) {
+			continue
+		}
+
 		// Get the temperature reading
 		if raw, err = os.ReadFile(file); err != nil {
 			continue
@@ -183,10 +199,17 @@ func thermalZoneTemperatureMetrics() ([]Metric, error) {
 
 	for _, file := range files {
 		// Get the name of the temperature you are reading
-		name, err := os.ReadFile(filepath.Join(file, "type"))
+		rawName, err := os.ReadFile(filepath.Join(file, "type"))
 		if err != nil {
 			continue
 		}
+
+		name := strings.TrimSpace(string(rawName))
+
+		if !stringHasPrefixInSlice(name, temperatureAllowedLabels) {
+			continue
+		}
+
 		// Get the temperature reading
 		current, err := os.ReadFile(filepath.Join(file, "temp"))
 		if err != nil {
@@ -201,7 +224,7 @@ func thermalZoneTemperatureMetrics() ([]Metric, error) {
 		metric := Metric{
 			Label:     Temperature,
 			Timestamp: time.Now().Unix(),
-			ID:        strings.TrimSpace(string(name)),
+			ID:        name,
 			Values: Values{
 				TemperatureValues: &TemperatureValues{
 					Temperature: float64(temperature) / hostTemperatureScale,
@@ -213,4 +236,13 @@ func thermalZoneTemperatureMetrics() ([]Metric, error) {
 	}
 
 	return metrics, nil
+}
+
+func stringHasPrefixInSlice(s string, list []string) bool {
+	for _, x := range list {
+		if strings.HasPrefix(s, x) {
+			return true
+		}
+	}
+	return false
 }

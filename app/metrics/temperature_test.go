@@ -17,6 +17,7 @@
 package metrics
 
 import (
+	"encoding/json"
 	"testing"
 )
 
@@ -45,4 +46,10 @@ func TestCollectTemperature(t *testing.T) {
 			t.Errorf("unexpected temperature: %v", metric.Values.Temperature)
 		}
 	}
+
+	b, err := json.MarshalIndent(metrics, "", "  ")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	t.Fatalf("metrics: %s", string(b))
 }
