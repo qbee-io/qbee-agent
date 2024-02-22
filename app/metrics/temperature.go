@@ -47,7 +47,7 @@ const hostTemperatureScale = 1000.0
 // CollectTemperature collects temperature metrics from from /sys/class/[hwmon|thermal]
 func CollectTemperature() ([]Metric, error) {
 
-	var cpuTemps *cpuTemperatures
+	cpuTemps := new(cpuTemperatures)
 	var errString string
 
 	// Attempt to collect temperature metrics from hwmon
