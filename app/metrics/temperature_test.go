@@ -18,6 +18,7 @@ package metrics
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 )
 
@@ -37,7 +38,7 @@ func TestCollectTemperature(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-
+	fmt.Printf("metrics: %v\n", metrics)
 	for _, metric := range metrics {
 		if metric.Label != Temperature {
 			t.Errorf("unexpected label: %v", metric.Label)

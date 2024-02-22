@@ -33,13 +33,12 @@ type TemperatureValues struct {
 	Temperature float64 `json:"temperature"`
 }
 
-var temperatureAllowedLabels = []string{
-	"x86_pkg_temp",
-	"coretemp",
-	"acpi",
-	"pch",
-	"cpu_thermal",
-	"cpu-thermal",
+// cpuTemperatures represents temperature metrics
+type cpuTemperatures struct {
+	main    float64
+	cores   []float64
+	socket  []float64
+	chipset float64
 }
 
 // Balena uses the following, only
@@ -50,22 +49,179 @@ const hostTemperatureScale = 1000.0
 // CollectTemperature collects temperature metrics from from /sys/class/[hwmon|thermal]
 func CollectTemperature() ([]Metric, error) {
 
+	var cpuTemps *cpuTemperatures
+	var errString string
+
 	// Attempt to collect temperature metrics from hwmon
-	if metrics, err := hwMonTemperatureMetrics(); err == nil {
-		if len(metrics) > 0 {
-			return metrics, nil
-		}
+	if err := cpuTemps.hwMonTemperatureMetrics(); err != nil {
+		errString += err.Error()
 	}
 
 	// Attempt to collect temperature metrics from thermal zone
-	if metrics, err := thermalZoneTemperatureMetrics(); err == nil {
-		if len(metrics) > 0 {
-			return metrics, nil
+	if err := cpuTemps.thermalZoneTemperatureMetrics(); err != nil {
+		errString += err.Error()
+	}
+
+	if cpuTemps.main > 0 {
+		return []Metric{
+			{
+				Label:     Temperature,
+				Timestamp: time.Now().Unix(),
+				ID:        "cpu_temp",
+				Values: Values{
+					TemperatureValues: &TemperatureValues{
+						Temperature: cpuTemps.main,
+					},
+				},
+			},
+		}, nil
+	}
+	return nil, fmt.Errorf("no temperature metrics found: %s", errString)
+}
+
+// hwMonTemperatureMetrics collects temperature metrics from /sys/class/hwmon/hwmon*/temp*_input
+func (c *cpuTemperatures) hwMonTemperatureMetrics() error {
+
+	files, err := getHwMonFiles()
+	if err != nil {
+		return err
+	}
+
+	if len(files) == 0 {
+		return fmt.Errorf("no hwmon temperature metrics found")
+	}
+
+	for _, file := range files {
+		var raw []byte
+		var temperature float64
+		// Get the base directory location
+		directory := filepath.Dir(file)
+		// Get the base filename prefix like temp1
+		basename := strings.Split(filepath.Base(file), "_")[0]
+		// Get the base path like <dir>/temp1
+		basepath := filepath.Join(directory, basename)
+		// Get the label of the temperature you are reading
+		label := ""
+
+		if raw, _ = os.ReadFile(basepath + "_label"); len(raw) != 0 {
+			// Format the label from "Core 0" to "core_0"
+			label = strings.Join(strings.Split(strings.TrimSpace(strings.ToLower(string(raw))), " "), "_")
+		}
+
+		// Some boards have a cpu_thermal zone
+		if strings.HasPrefix(label, "cpu_thermal") {
+			temperature, err = parseTemperatureFile(file)
+			if err != nil {
+				continue
+			}
+			c.main = temperature
+		}
+
+		// Capture all core temperatures
+		if strings.HasPrefix(label, "core") {
+			temperature, err = parseTemperatureFile(file)
+			if err != nil {
+				continue
+			}
+			c.cores = append(c.cores, temperature)
+		}
+
+		// Capture all socket temperatures
+		if strings.Contains(label, "package") || strings.Contains(label, "physical") || label == "tccd1" {
+			temperature, err = parseTemperatureFile(file)
+			if err != nil {
+				continue
+			}
+			c.socket = append(c.socket, temperature)
 		}
 	}
 
-	// If no temperature metrics were found, return an error
-	return nil, fmt.Errorf("no temperature files found")
+	// calculate the average core temperature
+	if len(c.cores) > 0 && c.main == 0 {
+		c.main = 0
+		for _, core := range c.cores {
+			c.main += core
+		}
+		c.main = c.main / float64(len(c.cores))
+	}
+
+	return nil
+}
+
+// thermalZoneTemperatureMetrics collects temperature metrics from /sys/class/thermal/thermal_zone*/temp
+func (c *cpuTemperatures) thermalZoneTemperatureMetrics() error {
+
+	files, err := getThermalZoneFiles()
+	if err != nil {
+		return err
+	}
+
+	if len(files) == 0 {
+		return fmt.Errorf("no thermal zone metrics found")
+	}
+
+	for _, file := range files {
+		// Get the name of the temperature you are reading
+		rawName, err := os.ReadFile(filepath.Join(file, "type"))
+		if err != nil {
+			continue
+		}
+
+		name := strings.ToLower(strings.TrimSpace(string(rawName)))
+
+		// Some boards have acpi_thermal zones
+		if strings.HasPrefix(name, "acpi") {
+			acpiTemp, err := parseTemperatureFile(filepath.Join(file, "temp"))
+			if err != nil {
+				continue
+			}
+			c.socket = append(c.socket, acpiTemp)
+		}
+
+		// Some boards have a pch_thermal zone
+		if strings.HasPrefix(name, "pch") {
+			chipsetTemp, err := parseTemperatureFile(filepath.Join(file, "temp"))
+			if err != nil {
+				continue
+			}
+			c.chipset = chipsetTemp
+		}
+		// ARM based boards have cpu-thermal zones
+		if strings.HasPrefix(name, "cpu-thermal") {
+			cpuTemp, err := parseTemperatureFile(filepath.Join(file, "temp"))
+			if err != nil {
+				continue
+			}
+			c.main = cpuTemp
+		}
+	}
+	return nil
+}
+
+// parseTemperatureFile reads a temperature file and returns the temperature in degrees Celsius
+func parseTemperatureFile(file string) (float64, error) {
+	raw, err := os.ReadFile(file)
+	if err != nil {
+		return 0, err
+	}
+
+	temperature, err := strconv.ParseFloat(strings.TrimSpace(string(raw)), 64)
+	if err != nil {
+		return 0, err
+	}
+
+	return temperature / hostTemperatureScale, nil
+}
+
+// getThermalZoneFiles returns a list of temperature files in /sys/class/thermal/thermal_zone*/temp
+func getThermalZoneFiles() ([]string, error) {
+	globPath := filepath.Join(linux.SysFS, "class", "thermal", "thermal_zone*")
+	files, err := filepath.Glob(globPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return files, nil
 }
 
 // getHwMonFiles returns a list of temperature files in /sys/class/hwmon/hwmon*/temp*_input
@@ -86,163 +242,4 @@ func getHwMonFiles() ([]string, error) {
 	}
 
 	return files, nil
-}
-
-// getThermalZoneFiles returns a list of temperature files in /sys/class/thermal/thermal_zone*/temp
-func getThermalZoneFiles() ([]string, error) {
-	globPath := filepath.Join(linux.SysFS, "class", "thermal", "thermal_zone*")
-	files, err := filepath.Glob(globPath)
-	if err != nil {
-		return nil, err
-	}
-
-	return files, nil
-}
-
-// hwMonTemperatureMetrics collects temperature metrics from /sys/class/hwmon/hwmon*/temp*_input
-func hwMonTemperatureMetrics() ([]Metric, error) {
-
-	files, err := getHwMonFiles()
-	if err != nil {
-		return nil, err
-	}
-
-	if len(files) == 0 {
-		return nil, fmt.Errorf("no hwmon temperature metrics found")
-	}
-
-	// Collect temperature metrics
-	metrics := make([]Metric, 0)
-
-	for _, file := range files {
-		var raw []byte
-
-		var temperature float64
-
-		// Get the base directory location
-		directory := filepath.Dir(file)
-
-		// Get the base filename prefix like temp1
-		basename := strings.Split(filepath.Base(file), "_")[0]
-
-		// Get the base path like <dir>/temp1
-		basepath := filepath.Join(directory, basename)
-
-		// Get the label of the temperature you are reading
-		label := ""
-
-		if raw, _ = os.ReadFile(basepath + "_label"); len(raw) != 0 {
-			// Format the label from "Core 0" to "core_0"
-			label = strings.Join(strings.Split(strings.TrimSpace(strings.ToLower(string(raw))), " "), "_")
-		}
-
-		// Get the name of the temperature you are reading
-		if raw, err = os.ReadFile(filepath.Join(directory, "name")); err != nil {
-			continue
-		}
-
-		name := strings.TrimSpace(string(raw))
-
-		if label != "" {
-			name = name + "_" + label
-		}
-
-		if !stringHasPrefixInSlice(name, temperatureAllowedLabels) {
-			continue
-		}
-
-		// Get the temperature reading
-		if raw, err = os.ReadFile(file); err != nil {
-			continue
-		}
-
-		if temperature, err = strconv.ParseFloat(strings.TrimSpace(string(raw)), 64); err != nil {
-			continue
-		}
-
-		// Skip temperatures below 0, assume they are invalid
-		if temperature <= 0 {
-			continue
-		}
-
-		metric := Metric{
-			Label:     Temperature,
-			Timestamp: time.Now().Unix(),
-			ID:        strings.TrimSpace(string(name)),
-			Values: Values{
-				TemperatureValues: &TemperatureValues{
-					Temperature: temperature / hostTemperatureScale,
-				},
-			},
-		}
-
-		metrics = append(metrics, metric)
-	}
-
-	return metrics, nil
-}
-
-// thermalZoneTemperatureMetrics collects temperature metrics from /sys/class/thermal/thermal_zone*/temp
-func thermalZoneTemperatureMetrics() ([]Metric, error) {
-
-	files, err := getThermalZoneFiles()
-
-	if err != nil {
-		return nil, err
-	}
-
-	if len(files) == 0 {
-		return nil, fmt.Errorf("no thermal zone metrics found")
-	}
-
-	metrics := make([]Metric, 0)
-
-	for _, file := range files {
-		// Get the name of the temperature you are reading
-		rawName, err := os.ReadFile(filepath.Join(file, "type"))
-		if err != nil {
-			continue
-		}
-
-		name := strings.TrimSpace(string(rawName))
-
-		if !stringHasPrefixInSlice(name, temperatureAllowedLabels) {
-			continue
-		}
-
-		// Get the temperature reading
-		current, err := os.ReadFile(filepath.Join(file, "temp"))
-		if err != nil {
-			continue
-		}
-
-		temperature, err := strconv.ParseInt(strings.TrimSpace(string(current)), 10, 64)
-		if err != nil {
-			continue
-		}
-
-		metric := Metric{
-			Label:     Temperature,
-			Timestamp: time.Now().Unix(),
-			ID:        name,
-			Values: Values{
-				TemperatureValues: &TemperatureValues{
-					Temperature: float64(temperature) / hostTemperatureScale,
-				},
-			},
-		}
-
-		metrics = append(metrics, metric)
-	}
-
-	return metrics, nil
-}
-
-func stringHasPrefixInSlice(s string, list []string) bool {
-	for _, x := range list {
-		if strings.HasPrefix(s, x) {
-			return true
-		}
-	}
-	return false
 }
