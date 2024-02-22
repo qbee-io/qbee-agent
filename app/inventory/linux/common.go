@@ -20,3 +20,6 @@ package linux
 
 // ProcFS defines the path to the proc filesystem.
 const ProcFS = "/proc"
+
+// SysFS defines the path to the sys filesystem.
+const SysFS = "/sys"
