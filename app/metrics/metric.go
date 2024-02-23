@@ -26,6 +26,7 @@ const (
 	Filesystem  Label = "filesystem"
 	LoadAverage Label = "loadavg_weighted"
 	Network     Label = "network"
+	Temperature Label = "temperature"
 )
 
 // Metric defines the base metric data structure.
@@ -51,4 +52,5 @@ type Values struct {
 	*FilesystemValues  `json:",omitempty"`
 	*LoadAverageValues `json:",omitempty"`
 	*NetworkValues     `json:",omitempty"`
+	*TemperatureValues `json:",omitempty"`
 }

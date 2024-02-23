@@ -1,4 +1,4 @@
-// Copyright 2023 qbee.io
+// Copyright 2024 qbee.io
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,12 +14,26 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-//go:build linux
+package metrics
 
-package linux
+import (
+	"testing"
+)
 
-// ProcFS defines the path to the proc filesystem.
-const ProcFS = "/proc"
+func TestCollectTemperature(t *testing.T) {
 
-// SysFS defines the path to the sys filesystem.
-const SysFS = "/sys"
+	metrics, _ := CollectTemperature()
+
+	if len(metrics) == 0 {
+		t.Skip("no temperature metrics available")
+	}
+
+	for _, metric := range metrics {
+		if metric.Label != Temperature {
+			t.Errorf("unexpected label: %v", metric.Label)
+		}
+		if metric.Values.Temperature <= 0 {
+			t.Errorf("unexpected temperature: %v", metric.Values.Temperature)
+		}
+	}
+}
