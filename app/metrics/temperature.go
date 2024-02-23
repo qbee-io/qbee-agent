@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"go.qbee.io/agent/app/inventory/linux"
+	"go.qbee.io/agent/app/log"
 )
 
 // TemperatureValues represents temperature metrics
@@ -74,7 +75,10 @@ func CollectTemperature() ([]Metric, error) {
 			},
 		}, nil
 	}
-	return nil, fmt.Errorf("no temperature metrics found: %s", errString)
+
+	log.Debugf("No temperature metrics found: %s", errString)
+
+	return nil, nil
 }
 
 // hwMonTemperatureMetrics collects temperature metrics from /sys/class/hwmon/hwmon*/temp*_input
