@@ -22,19 +22,10 @@ import (
 
 func TestCollectTemperature(t *testing.T) {
 
-	files, _ := getHwMonFiles()
-	if len(files) == 0 {
-		files, _ = getThermalZoneFiles()
-		if len(files) == 0 {
-			// No temperature files found, skip test. CI uses vms and they don't have temperature files.
-			t.Skip("no temperature files found")
-		}
-	}
+	metrics, _ := CollectTemperature()
 
-	metrics, err := CollectTemperature()
-
-	if err != nil {
-		t.Skip("Error collecting temperature metrics: ", err)
+	if len(metrics) == 0 {
+		t.Skip("no temperature metrics available")
 	}
 
 	for _, metric := range metrics {
