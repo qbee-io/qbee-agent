@@ -62,6 +62,9 @@ type SystemInfo struct {
 	// Example: "ubuntu_22"
 	Flavor string `json:"flavor"`
 
+	// OSVersion - The full version of the operating system (e.g. "Ubuntu 22.04.3 LTS (Jammy Jellyfish)").
+	OSVersion string `json:"os_version"`
+
 	// BootTime represents system boot time (as Unix timestamp string, e.g. "1586144402")
 	BootTime string `json:"boot_time"`
 

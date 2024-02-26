@@ -159,5 +159,10 @@ func (agent *Agent) doRaucInventory(ctx context.Context) error {
 		return err
 	}
 
+	// Do not send anything if rauc is not installed
+	if raucInventory == nil {
+		return nil
+	}
+
 	return agent.Inventory.Send(ctx, inventory.TypeRauc, raucInventory)
 }

@@ -58,6 +58,10 @@ var metricsCollectors = []metricsCollector{
 		name: "filesystem",
 		fn:   CollectFilesystem,
 	},
+	{
+		name: "temperature",
+		fn:   CollectTemperature,
+	},
 }
 
 // Collect system metrics.
