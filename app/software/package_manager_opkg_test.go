@@ -17,6 +17,7 @@
 package software
 
 import (
+	"context"
 	"reflect"
 	"testing"
 )
@@ -66,11 +67,54 @@ func TestOpkgPackageManager_parseUpdateAvailableLine(t *testing.T) {
 			want: nil,
 		},
 	}
+	opkg := &OpkgPackageManager{}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			opkg := &OpkgPackageManager{}
 			if got := opkg.parseUpdateAvailableLine(tt.line); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("parseUpdateAvailableLine() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestOpkgPackageManager_parsePackageFile(t *testing.T) {
+
+	tests := []struct {
+		name string
+		file string
+		want *Package
+	}{
+		{
+			name: "test-simple-architecture",
+			file: "/path/tp/package_1.1.1-1_ar71xx.ipk",
+			want: &Package{
+				Name:         "package",
+				Version:      "1.1.1-1",
+				Architecture: "ar71xx",
+			},
+		},
+		{
+			name: "test-underscore-in-architecture",
+			file: "/path/tp/package-with-long-name_1.1.1-1_x86_64.ipk",
+			want: &Package{
+				Name:         "package-with-long-name",
+				Version:      "1.1.1-1",
+				Architecture: "x86_64",
+			},
+		},
+		{
+			name: "test-invalid-file",
+			file: "/path/to/invalid_package_1.1.1-1_ar71xx.ipk",
+			want: nil,
+		},
+	}
+	ctx := context.Background()
+	opkg := &OpkgPackageManager{}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got, _ := opkg.ParsePackageFile(ctx, tt.file); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("parsePackageFile() = %v, want %v", got, tt.want)
 			}
 		})
 	}

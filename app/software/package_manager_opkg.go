@@ -35,6 +35,7 @@ import (
 )
 
 const PackageManagerTypeOpkg PackageManagerType = "opkg"
+const opkgFileSuffix string = ".ipk"
 
 const (
 	opkgLockPath = "/var/lock/opkg.lock"
@@ -44,13 +45,17 @@ const (
 
 // OpkgPackageManager implements PackageManager interface for Opkg based systems (OpenWRT etc.)
 type OpkgPackageManager struct {
-	supportsAllowDowngradesFlag bool
-	lock                        sync.Mutex
+	lock sync.Mutex
 }
 
 // Type returns type of the package manager.
 func (opkg *OpkgPackageManager) Type() PackageManagerType {
 	return PackageManagerTypeOpkg
+}
+
+// FileSuffix returns the file suffix for the package manager.
+func (opkg *OpkgPackageManager) FileSuffix() string {
+	return opkgFileSuffix
 }
 
 // IsSupported returns true if package manager is supported by the host system.
@@ -60,11 +65,7 @@ func (opkg *OpkgPackageManager) IsSupported() bool {
 	}
 
 	_, err := exec.LookPath(opkgCmd)
-	if err != nil {
-		return false
-	}
-
-	return true
+	return err == nil
 }
 
 // Busy returns true if opog is currently locked.
@@ -221,9 +222,10 @@ func (opkg *OpkgPackageManager) listInstalledPackages(ctx context.Context) ([]Pa
 
 // resolvePackageArchitecture returns the architecture of a package from control file
 // calling opkg info <package> is not efficient
-func (opkg *OpkgPackageManager) resolvePackageArchitecture(packageName string) (string, error) {
 
-	r, _ := regexp.Compile(`^Architecture:\s+(\S+)`)
+var opkgControlArchitectureRE = regexp.MustCompile(`^Architecture:\s+(\S+)`)
+
+func (opkg *OpkgPackageManager) resolvePackageArchitecture(packageName string) (string, error) {
 
 	pkgControlFile := filepath.Join(opkgControlPath, packageName+".control")
 
@@ -242,8 +244,8 @@ func (opkg *OpkgPackageManager) resolvePackageArchitecture(packageName string) (
 	scanner := bufio.NewScanner(controlFile)
 
 	for scanner.Scan() {
-		if r.MatchString(scanner.Text()) {
-			return r.FindStringSubmatch(scanner.Text())[1], nil
+		if opkgControlArchitectureRE.MatchString(scanner.Text()) {
+			return opkgControlArchitectureRE.FindStringSubmatch(scanner.Text())[1], nil
 		}
 	}
 
@@ -343,20 +345,22 @@ func (opkg *OpkgPackageManager) PackageArchitecture() (string, error) {
 }
 
 // ParseOpkgPackage parses an opkg package file and returns a Package struct.
-func ParseOpkgPackage(ctx context.Context, pkgFilePath string) (*Package, error) {
+
+var opkgParseOpkgPackageRE = regexp.MustCompile(`^([^_]+)_([^_]+)_(\S+).ipk$`)
+
+func (opkg *OpkgPackageManager) ParsePackageFile(ctx context.Context, pkgFilePath string) (*Package, error) {
 	// opkg does not support parsing local packages, we need to parse the package filename instead
 	// split the filename into parts
-	parts := strings.Split(filepath.Base(pkgFilePath), "_")
 
-	if len(parts) < 3 {
-		return nil, fmt.Errorf("invalid package filename: %s", pkgFilePath)
+	matches := opkgParseOpkgPackageRE.FindStringSubmatch(filepath.Base(pkgFilePath))
+
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("error parsing opkg package file: invalid filename")
 	}
-	// remove the .ipk extension
-	arch := strings.TrimSuffix(parts[2], ".ipk")
 
 	return &Package{
-		Name:         parts[0],
-		Version:      parts[1],
-		Architecture: arch,
+		Name:         matches[1],
+		Version:      matches[2],
+		Architecture: matches[3],
 	}, nil
 }
