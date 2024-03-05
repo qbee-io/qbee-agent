@@ -38,7 +38,7 @@ var UserAgent = "qbee-agent/" + app.Version
 
 // apiCallTimeout defines total request/response time we allow for any API call.
 // This timeout doesn't apply to file downloads.
-const apiCallTimeout = 10 * time.Second
+const apiCallTimeout = 60 * time.Second
 
 // Client is a device hub API client.
 type Client struct {
@@ -65,7 +65,7 @@ func NewClient(host, port string) *Client {
 				TLSHandshakeTimeout:   10 * time.Second,
 				ExpectContinueTimeout: 1 * time.Second,
 			},
-			Timeout: 60 * time.Second,
+			Timeout: 45 * time.Minute,
 		},
 	}
 }
