@@ -67,7 +67,7 @@ func (md *FileMetadata) SHA256() string {
 }
 
 // downloadFile and return true when file was created. In case the right file already existed, return false.
-func (srv *Service) downloadFile(ctx context.Context, src, dst string) (bool, error) {
+func (srv *Service) downloadFile(ctx context.Context, label, src, dst string) (bool, error) {
 	var err error
 
 	src = resolveParameters(ctx, src)
@@ -75,7 +75,7 @@ func (srv *Service) downloadFile(ctx context.Context, src, dst string) (bool, er
 
 	defer func() {
 		if err != nil {
-			ReportError(ctx, err, "Unable to download file %s to %s", src, dst)
+			ReportError(ctx, err, msgWithLabel(label, "Unable to download file %s to %s", src, dst))
 		}
 	}()
 
@@ -112,7 +112,7 @@ func (srv *Service) downloadFile(ctx context.Context, src, dst string) (bool, er
 		return false, fmt.Errorf("error writing file %s: %w", dst, err)
 	}
 
-	ReportInfo(ctx, nil, "Successfully downloaded file %s to %s", src, dst)
+	ReportInfo(ctx, nil, msgWithLabel(label, "Successfully downloaded file %s to %s", src, dst))
 
 	return true, nil
 }
@@ -174,7 +174,13 @@ func (srv *Service) getFileMetadata(ctx context.Context, src string) (*FileMetad
 }
 
 // downloadTemplateFile and execute - returns true if file template was executed and resulted in a new dst file.
-func (srv *Service) downloadTemplateFile(ctx context.Context, src, dst string, params map[string]string) (bool, error) {
+func (srv *Service) downloadTemplateFile(
+	ctx context.Context,
+	label string,
+	src string,
+	dst string,
+	params map[string]string,
+) (bool, error) {
 	var err error
 
 	src = resolveParameters(ctx, src)
@@ -186,7 +192,7 @@ func (srv *Service) downloadTemplateFile(ctx context.Context, src, dst string, p
 
 	defer func() {
 		if err != nil {
-			ReportError(ctx, err, "Unable to render template file %s to %s.", src, dst)
+			ReportError(ctx, err, msgWithLabel(label, "Unable to render template file %s to %s.", src, dst))
 		}
 	}()
 
@@ -197,7 +203,7 @@ func (srv *Service) downloadTemplateFile(ctx context.Context, src, dst string, p
 	} else {
 		cacheSrc = filepath.Join(srv.cacheDirectory, FileDistributionCacheDirectory, src)
 
-		if _, err = srv.downloadFile(ctx, src, cacheSrc); err != nil {
+		if _, err = srv.downloadFile(ctx, label, src, cacheSrc); err != nil {
 			return false, err
 		}
 	}
@@ -230,7 +236,7 @@ func (srv *Service) downloadTemplateFile(ctx context.Context, src, dst string, p
 		return false, err
 	}
 
-	ReportInfo(ctx, nil, "Successfully rendered template file %s to %s", src, dst)
+	ReportInfo(ctx, nil, msgWithLabel(label, "Successfully rendered template file %s to %s", src, dst))
 
 	return true, nil
 }

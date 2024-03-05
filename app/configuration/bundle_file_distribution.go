@@ -28,6 +28,7 @@ import (
 //	{
 //	 "files": [
 //	   {
+//	 	 "label": "my file set",
 //	     "templates": [
 //	       {
 //	         "source": "demo_file.json",
@@ -53,6 +54,9 @@ type FileDistributionBundle struct {
 
 // FileSet defines a file set to be maintained in the system.
 type FileSet struct {
+	// Label is an optional label for the file set.
+	Label string `json:"label"`
+
 	// Files defines files to be created in the filesystem.
 	Files []File `json:"templates"`
 
@@ -124,9 +128,9 @@ func (fd FileDistributionBundle) Execute(ctx context.Context, service *Service) 
 			var created bool
 
 			if file.IsTemplate {
-				created, err = service.downloadTemplateFile(ctx, fileSource, fileDestination, parameters)
+				created, err = service.downloadTemplateFile(ctx, fileSet.Label, fileSource, fileDestination, parameters)
 			} else {
-				created, err = service.downloadFile(ctx, fileSource, fileDestination)
+				created, err = service.downloadFile(ctx, fileSet.Label, fileSource, fileDestination)
 			}
 
 			if err != nil {
@@ -141,11 +145,11 @@ func (fd FileDistributionBundle) Execute(ctx context.Context, service *Service) 
 		if anythingChanged && fileSet.AfterCommand != "" {
 			output, err := RunCommand(ctx, fileSet.AfterCommand)
 			if err != nil {
-				ReportError(ctx, output, "After command failed: %v", err)
+				ReportError(ctx, output, msgWithLabel(fileSet.Label, "After command failed: %v", err))
 				return err
 			}
 
-			ReportInfo(ctx, output, "Successfully executed after command")
+			ReportInfo(ctx, output, msgWithLabel(fileSet.Label, "Successfully executed after command"))
 		}
 	}
 
