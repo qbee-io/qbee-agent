@@ -29,4 +29,23 @@ func TestCollectSoftwareInventory_Deb(t *testing.T) {
 	data := r.MustExec("qbee-agent", "inventory", "-t", "software", "-d")
 
 	fmt.Println(string(data))
+	t.Fatal("not implemented")
+}
+
+func TestCollectSoftwareInventory_Rpm(t *testing.T) {
+	r := runner.NewRHELRunner(t)
+
+	data := r.MustExec("qbee-agent", "inventory", "-t", "software", "-d")
+
+	fmt.Println(string(data))
+}
+
+func TestCollectSoftwareInventory_Opkg(t *testing.T) {
+	r := runner.NewOpenWRTRunner(t)
+
+	r.MustExec("mkdir", "-p", "/var/lock")
+
+	data := r.MustExec("qbee-agent", "inventory", "-t", "software", "-d")
+
+	fmt.Println(string(data))
 }

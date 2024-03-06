@@ -26,14 +26,7 @@ import (
 
 // RunCommand runs a command and returns its output.
 func RunCommand(ctx context.Context, cmd []string) ([]byte, error) {
-	command := exec.CommandContext(ctx, cmd[0], cmd[1:]...)
-
-	command.SysProcAttr = &syscall.SysProcAttr{
-		Setpgid:   true,
-		Pdeathsig: syscall.SIGINT,
-	}
-
-	command.Dir = "/"
+	command := NewCommand(ctx, cmd)
 
 	output, err := command.Output()
 	if err != nil {
@@ -45,4 +38,15 @@ func RunCommand(ctx context.Context, cmd []string) ([]byte, error) {
 		return nil, fmt.Errorf("error running command %v: %w", cmd, err)
 	}
 	return output, nil
+}
+
+// NewCommand creates a new exec.Cmd with the given context and command.
+func NewCommand(ctx context.Context, cmd []string) *exec.Cmd {
+	command := exec.CommandContext(ctx, cmd[0], cmd[1:]...)
+	command.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid:   true,
+		Pdeathsig: syscall.SIGINT,
+	}
+	command.Dir = "/"
+	return command
 }

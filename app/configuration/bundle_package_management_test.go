@@ -352,3 +352,19 @@ func Test_PackageManagement_InstallPackage_UpdateWithReboot_Opkg(t *testing.T) {
 	})
 	assert.Equal(t, reports, []string{"[ERR] Unable to install package 'jsonfilter'"})
 }
+
+func Test_PackageManagement_InstallPackage_UpdateWithReboot_rpm(t *testing.T) {
+
+	r := runner.NewRHELRunner(t)
+
+	reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
+		RebootMode: configuration.RebootNever,
+		Packages:   []configuration.Package{{Name: "squid"}},
+	})
+
+	expectedReports := []string{
+		"[INFO] Package 'squid' successfully installed.",
+	}
+
+	assert.Equal(t, reports, expectedReports)
+}

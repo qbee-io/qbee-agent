@@ -23,6 +23,11 @@ func NewOpenWRTRunner(t *testing.T) *Runner {
 	return NewWithImage(t, "openwrt:qbee")
 }
 
+// NewRHELRunner creates a new runner for the given test using the rhel:qbee image.
+func NewRHELRunner(t *testing.T) *Runner {
+	return NewWithImage(t, "rhel:qbee")
+}
+
 // NewWithImage creates a new runner for the given test using the given image.
 func NewWithImage(t *testing.T, image string) *Runner {
 	cmdArgs := []string{
