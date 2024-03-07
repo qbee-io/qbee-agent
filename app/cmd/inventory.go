@@ -60,11 +60,6 @@ var inventoryCommand = cmd.Command{
 			return err
 		}
 
-		var deviceAgent *agent.Agent
-		if deviceAgent, err = agent.New(cfg); err != nil {
-			return fmt.Errorf("error initializing the agent: %w", err)
-		}
-
 		var inventoryData any
 
 		switch inventoryType {
@@ -94,6 +89,11 @@ var inventoryCommand = cmd.Command{
 
 		if err != nil {
 			return err
+		}
+
+		var deviceAgent *agent.Agent
+		if deviceAgent, err = agent.New(cfg); err != nil {
+			return fmt.Errorf("error initializing the agent: %w", err)
 		}
 
 		if dryRun {
