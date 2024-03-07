@@ -64,7 +64,7 @@ var inventoryCommand = cmd.Command{
 
 		switch inventoryType {
 		case inventory.TypeSystem:
-			inventoryData, err = inventory.CollectSystemInventory(deviceAgent.IsTPMEnabled())
+			inventoryData, err = inventory.CollectSystemInventory(cfg.TPMDevice != "")
 		case inventory.TypePorts:
 			inventoryData, err = inventory.CollectPortsInventory()
 		case inventory.TypeProcesses:
