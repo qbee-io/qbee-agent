@@ -91,13 +91,13 @@ var inventoryCommand = cmd.Command{
 			return err
 		}
 
+		if dryRun {
+			return json.NewEncoder(os.Stdout).Encode(inventoryData)
+		}
+
 		var deviceAgent *agent.Agent
 		if deviceAgent, err = agent.New(cfg); err != nil {
 			return fmt.Errorf("error initializing the agent: %w", err)
-		}
-
-		if dryRun {
-			return json.NewEncoder(os.Stdout).Encode(inventoryData)
 		}
 
 		return deviceAgent.Inventory.Send(ctx, inventoryType, inventoryData)
