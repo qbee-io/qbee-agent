@@ -55,12 +55,21 @@ var inventoryCommand = cmd.Command{
 
 		ctx := context.Background()
 
-		var err error
+		cfg, err := loadConfig(opts)
+		if err != nil {
+			return err
+		}
+
+		var deviceAgent *agent.Agent
+		if deviceAgent, err = agent.New(cfg); err != nil {
+			return fmt.Errorf("error initializing the agent: %w", err)
+		}
+
 		var inventoryData any
 
 		switch inventoryType {
 		case inventory.TypeSystem:
-			inventoryData, err = inventory.CollectSystemInventory()
+			inventoryData, err = inventory.CollectSystemInventory(deviceAgent.IsTPMEnabled())
 		case inventory.TypePorts:
 			inventoryData, err = inventory.CollectPortsInventory()
 		case inventory.TypeProcesses:
@@ -89,16 +98,6 @@ var inventoryCommand = cmd.Command{
 
 		if dryRun {
 			return json.NewEncoder(os.Stdout).Encode(inventoryData)
-		}
-
-		var cfg *agent.Config
-		if cfg, err = loadConfig(opts); err != nil {
-			return err
-		}
-
-		var deviceAgent *agent.Agent
-		if deviceAgent, err = agent.New(cfg); err != nil {
-			return fmt.Errorf("error initializing the agent: %w", err)
 		}
 
 		return deviceAgent.Inventory.Send(ctx, inventoryType, inventoryData)
