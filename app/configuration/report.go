@@ -104,6 +104,15 @@ const (
 	severityError   = "ERR"
 )
 
+// msgWithLabel returns a message with a label (if provided).
+func msgWithLabel(label, msgFmt string, args ...any) string {
+	if label == "" {
+		return fmt.Sprintf(msgFmt, args...)
+	}
+
+	return fmt.Sprintf("[%s] %s", label, fmt.Sprintf(msgFmt, args...))
+}
+
 // ReportInfo adds an info message to the reporter instance set in context.
 func ReportInfo(ctx context.Context, extraLog any, msgFmt string, args ...any) {
 	addReport(ctx, severityInfo, extraLog, msgFmt, args...)

@@ -130,7 +130,7 @@ func (c DockerContainer) execute(ctx context.Context, srv *Service, dockerBin st
 
 	envFilePath := c.localEnvFilePath(srv)
 	if envFilePath != "" {
-		if needRestart, err = srv.downloadFile(ctx, c.EnvFile, envFilePath); err != nil {
+		if needRestart, err = srv.downloadFile(ctx, "", c.EnvFile, envFilePath); err != nil {
 			return err
 		}
 	}
