@@ -175,6 +175,9 @@ type SystemInfo struct {
 	// AgentVersion used to collect the inventory.
 	AgentVersion string `json:"cf_version"`
 
+	// TPMEnabled indicates if the agent uses TPM to seal its private key.
+	TPMEnabled bool `json:"tpm_enabled"`
+
 	// VPNIndex - defines numeric ID of the VPN server to which the device is connected.
 	// For now all devices are connected to the same VPN server, so this value is always 1.
 	VPNIndex string `json:"vpn_idx" bson:"vpn_idx"`

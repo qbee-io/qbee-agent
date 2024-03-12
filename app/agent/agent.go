@@ -252,6 +252,11 @@ func (agent *Agent) Wait() {
 	defer agent.lock.Unlock()
 }
 
+// IsTPMEnabled returns true if the agent uses TPM to seal its private key.
+func (agent *Agent) IsTPMEnabled() bool {
+	return agent.cfg.TPMDevice != ""
+}
+
 // NewWithoutCredentials returns a new instance of Agent without loaded credentials.
 func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 	if err := prepareDirectories(cfg.Directory, cfg.StateDirectory); err != nil {

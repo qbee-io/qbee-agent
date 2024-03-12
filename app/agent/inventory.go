@@ -50,7 +50,7 @@ func (agent *Agent) doInventories(ctx context.Context) error {
 
 // doSystemInventory collects system inventory and delivers it to the device hub API.
 func (agent *Agent) doSystemInventory(ctx context.Context) error {
-	systemInventory, err := inventory.CollectSystemInventory()
+	systemInventory, err := inventory.CollectSystemInventory(agent.IsTPMEnabled())
 	if err != nil {
 		return err
 	}

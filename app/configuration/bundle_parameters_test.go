@@ -54,7 +54,7 @@ func Test_resolveParameters(t *testing.T) {
 
 	pkgType := software.DefaultPackageManager.Type()
 
-	systemInventory, err := inventory.CollectSystemInventory()
+	systemInventory, err := inventory.CollectSystemInventory(false)
 	assert.NoError(t, err)
 
 	invSystem := systemInventory.System

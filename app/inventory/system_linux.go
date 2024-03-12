@@ -42,7 +42,7 @@ const (
 )
 
 // CollectSystemInventory returns populated System inventory based on current system status.
-func CollectSystemInventory() (*System, error) {
+func CollectSystemInventory(tpmEnabled bool) (*System, error) {
 
 	if cachedItem, ok := cache.Get(systemInventoryCacheKey); ok {
 		return cachedItem.(*System), nil
@@ -50,6 +50,7 @@ func CollectSystemInventory() (*System, error) {
 
 	systemInfo := &SystemInfo{
 		AgentVersion: app.Version,
+		TPMEnabled:   tpmEnabled,
 		Class:        systemClass,
 		OS:           systemOS,
 		VPNIndex:     "1",

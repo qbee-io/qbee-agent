@@ -27,11 +27,12 @@ import (
 
 func TestCollectSystemInventory(t *testing.T) {
 
-	systemInfo, err := inventory.CollectSystemInventory()
+	systemInfo, err := inventory.CollectSystemInventory(true)
 	if err != nil {
 		t.Fatalf("error collecting system info: %v", err)
 	}
 
+	assert.True(t, systemInfo.System.TPMEnabled)
 	assert.NotEmpty(t, systemInfo.System.OSType)
 	assert.NotEmpty(t, systemInfo.System.Flavor)
 	assert.Equal(t, systemInfo.System.OS, "linux")

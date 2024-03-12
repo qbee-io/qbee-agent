@@ -92,49 +92,49 @@ var systemParameters = map[string]func() (string, error){
 		return string(software.DefaultPackageManager.Type()), nil
 	},
 	"sys.os": func() (string, error) {
-		systemInventory, err := inventory.CollectSystemInventory()
+		systemInventory, err := inventory.CollectSystemInventory(false)
 		if err != nil {
 			return "", err
 		}
 		return systemInventory.System.OS, nil
 	},
 	"sys.arch": func() (string, error) {
-		systemInventory, err := inventory.CollectSystemInventory()
+		systemInventory, err := inventory.CollectSystemInventory(false)
 		if err != nil {
 			return "", err
 		}
 		return systemInventory.System.Architecture, nil
 	},
 	"sys.os_type": func() (string, error) {
-		systemInventory, err := inventory.CollectSystemInventory()
+		systemInventory, err := inventory.CollectSystemInventory(false)
 		if err != nil {
 			return "", err
 		}
 		return systemInventory.System.OSType, nil
 	},
 	"sys.flavor": func() (string, error) {
-		systemInventory, err := inventory.CollectSystemInventory()
+		systemInventory, err := inventory.CollectSystemInventory(false)
 		if err != nil {
 			return "", err
 		}
 		return systemInventory.System.Flavor, nil
 	},
 	"sys.agent_version": func() (string, error) {
-		systemInventory, err := inventory.CollectSystemInventory()
+		systemInventory, err := inventory.CollectSystemInventory(false)
 		if err != nil {
 			return "", err
 		}
 		return systemInventory.System.AgentVersion, nil
 	},
 	"sys.long_arch": func() (string, error) {
-		systemInventory, err := inventory.CollectSystemInventory()
+		systemInventory, err := inventory.CollectSystemInventory(false)
 		if err != nil {
 			return "", err
 		}
 		return systemInventory.System.LongArchitecture, nil
 	},
 	"sys.boot_time": func() (string, error) {
-		systemInventory, err := inventory.CollectSystemInventory()
+		systemInventory, err := inventory.CollectSystemInventory(false)
 		if err != nil {
 			return "", err
 		}
