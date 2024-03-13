@@ -9,7 +9,7 @@ require (
 	github.com/xtaci/smux v1.5.24
 	go.qbee.io/transport v1.24.8
 	golang.org/x/sys v0.16.0
-	google.golang.org/protobuf v1.32.0
+	google.golang.org/protobuf v1.33.0
 )
 
 require (
