@@ -88,6 +88,10 @@ func (srv *Service) downloadFile(ctx context.Context, label, src, dst string) (b
 	if fileMetadata, err = srv.getFileMetadata(ctx, src); err != nil {
 		return false, err
 	}
+	return srv.downloadMetadataCompare(ctx, label, src, dst, fileMetadata)
+}
+func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst string, fileMetadata *FileMetadata) (bool, error) {
+	var err error
 
 	var fileReady bool
 	if fileReady, err = isFileReady(dst, fileMetadata.SHA256(), fileMetadata.MD5); err != nil || fileReady {

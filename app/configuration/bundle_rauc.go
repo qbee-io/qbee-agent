@@ -20,7 +20,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"go.qbee.io/agent/app/image"
@@ -63,19 +66,20 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return err
 	}
 
-	filePath := path.Join(fileManagerPublicAPIPath, r.RaucBundle)
-	raucURL, err := service.urlSigner.SignURL(filePath)
+	raucBundle := resolveParameters(ctx, r.RaucBundle)
+
+	raucPath, err := resolveRaucPath(ctx, service, raucBundle)
 	if err != nil {
-		ReportError(ctx, err, "Failed to create authenticated url for rauc")
+		ReportError(ctx, err, "Failed to resolve RAUC bundle path")
 		return err
 	}
 
-	raucBundleInfo, err := r.getRaucBundleInfo(ctx, raucURL)
+	raucBundleInfo, err := r.getRaucBundleInfo(ctx, raucPath)
 	if err != nil {
 		ReportError(
 			ctx,
-			strings.ReplaceAll(err.Error(), raucURL, r.RaucBundle),
-			"Failed to get RAUC bundle info for '%s'", r.RaucBundle,
+			strings.ReplaceAll(err.Error(), raucPath, raucBundle),
+			"Failed to get RAUC bundle info for '%s'", raucBundle,
 		)
 		return err
 	}
@@ -85,7 +89,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return err
 	}
 
-	execInstall, err := doInstall(raucStatus, raucBundleInfo)
+	execInstall, err := shouldInstall(raucStatus, raucBundleInfo)
 
 	if err != nil {
 		ReportError(ctx, err, "Failed to install RAUC bundle")
@@ -96,13 +100,13 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return nil
 	}
 
-	raucInstallCmd := []string{"rauc", "install", raucURL}
+	raucInstallCmd := []string{"rauc", "install", raucPath}
 	output, err := utils.RunCommand(ctx, raucInstallCmd)
 
 	if err != nil {
 		ReportError(
 			ctx,
-			strings.ReplaceAll(err.Error(), raucURL, r.RaucBundle),
+			strings.ReplaceAll(err.Error(), raucPath, r.RaucBundle),
 			"Failed to install RAUC bundle",
 		)
 		return err
@@ -110,7 +114,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 
 	ReportInfo(
 		ctx,
-		strings.ReplaceAll(string(output), raucURL, r.RaucBundle),
+		strings.ReplaceAll(string(output), raucPath, r.RaucBundle),
 		"RAUC bundle successfully installed '%s'",
 		r.RaucBundle,
 	)
@@ -175,7 +179,7 @@ func (r RaucBundle) getRaucBundleInfo(ctx context.Context, url string) (*RaucBun
 	return &raucInfoBundle, nil
 }
 
-func doInstall(localRaucInfo *image.RaucStatus, remoteBundleData *RaucBundleInfo) (bool, error) {
+func shouldInstall(localRaucInfo *image.RaucStatus, remoteBundleData *RaucBundleInfo) (bool, error) {
 	if remoteBundleData.Compatible != localRaucInfo.Compatible {
 		return false, fmt.Errorf("RAUC bundle '%s' is not compatible with the system '%s'", remoteBundleData.Compatible, localRaucInfo.Compatible)
 	}
@@ -201,5 +205,91 @@ func getCurrentSlot(localRaucInfo *image.RaucStatus) (string, *image.SlotData, e
 			}
 		}
 	}
-	return "", nil, fmt.Errorf("No slot found in RAUC info")
+	return "", nil, fmt.Errorf("no slot found in RAUC info")
+}
+
+func supportsStreaming(ctx context.Context) bool {
+
+	var modinfoBin string
+	var err error
+
+	if modinfoBin, err = exec.LookPath("modinfo"); err != nil {
+		return false
+	}
+
+	if _, err = utils.RunCommand(ctx, []string{modinfoBin, "nbd"}); err != nil {
+		return false
+	}
+	return true
+}
+
+func resolveRaucPath(ctx context.Context, service *Service, raucBundle string) (string, error) {
+
+	if supportsStreaming(ctx) {
+		return generateStreamingURL(ctx, service, raucBundle)
+	}
+	return downloadRaucBundle(ctx, service, raucBundle)
+}
+
+func downloadRaucBundle(ctx context.Context, service *Service, raucPath string) (string, error) {
+	bundleMetadata, err := service.getFileMetadataFromAPI(ctx, raucPath)
+	if err != nil {
+		return "", err
+	}
+
+	raucStateDir := path.Join(service.cacheDirectory, "rauc")
+
+	if _, err := os.Stat(raucStateDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(raucStateDir, 0700); err != nil {
+			return "", err
+		}
+	}
+
+	raucStateFile := path.Join(raucStateDir, "state.json")
+
+	doDownload := false
+	if _, err := os.Stat(raucStateFile); os.IsNotExist(err) {
+		doDownload = true
+	} else {
+		stateBytes, err := os.ReadFile(raucStateFile)
+		if err != nil {
+			return "", err
+		}
+
+		var stateData FileMetadata
+		if err := json.Unmarshal(stateBytes, &stateData); err != nil {
+			return "", err
+		}
+
+		if stateData.SHA256() != bundleMetadata.SHA256() {
+			doDownload = true
+		}
+	}
+
+	raucDownloadPath := path.Join("/tmp", filepath.Base(raucPath))
+
+	if doDownload {
+
+		if _, err := service.downloadMetadataCompare(ctx, "", raucPath, raucDownloadPath, bundleMetadata); err != nil {
+			return "", err
+		}
+
+		stateBytes, err := json.Marshal(bundleMetadata)
+		if err != nil {
+			return "", err
+		}
+
+		if err := os.WriteFile(raucStateFile, stateBytes, 0600); err != nil {
+			return "", err
+		}
+	}
+	// TODO: This will continue even if the rauc bundle is not downloaded
+	// We need to shortcut the installation process if state.json is the same
+	// as the bundle we are comparing to
+	return raucDownloadPath, nil
+}
+
+func generateStreamingURL(ctx context.Context, service *Service, raucBundle string) (string, error) {
+	filePath := path.Join(fileManagerPublicAPIPath, raucBundle)
+	return service.urlSigner.SignURL(filePath)
 }
