@@ -74,6 +74,12 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return err
 	}
 
+	// if no errors where return, but raucPath is empty, we can assume that the bundle is already installed
+	// and we can return without doing anything. This only happens for non-streaming installations
+	if raucPath == "" {
+		return nil
+	}
+
 	raucBundleInfo, err := r.getRaucBundleInfo(ctx, raucPath)
 	if err != nil {
 		ReportError(
@@ -283,9 +289,12 @@ func downloadRaucBundle(ctx context.Context, service *Service, raucPath string) 
 			return "", err
 		}
 	}
-	// TODO: This will continue even if the rauc bundle is not downloaded
-	// We need to shortcut the installation process if state.json is the same
-	// as the bundle we are comparing to
+
+	// Check if the rauc bundle is available
+	if _, err := os.Stat(raucDownloadPath); os.IsNotExist(err) {
+		return "", nil
+	}
+
 	return raucDownloadPath, nil
 }
 
