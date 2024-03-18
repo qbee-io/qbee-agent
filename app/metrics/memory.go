@@ -31,23 +31,18 @@ import (
 // Example payload:
 //
 //	{
-//	 "memtot": 32521216,
-//	 "memused": 5729248,
 //	 "memfree": 26791968,
 //	 "memutil": 17,
-//	 "swaptot": 2002940,
-//	 "swapused": 0,
-//	 "swapfree": 2002940,
 //	 "swaputil": 0
 //	}
 type MemoryValues struct {
-	MemoryTotal       int `json:"memtot"`
-	MemoryUsed        int `json:"memused"`
+	MemoryTotal       int `json:"-"`
+	MemoryUsed        int `json:"-"`
 	MemoryFree        int `json:"memfree"`
 	MemoryUtilization int `json:"memutil"`
-	SwapTotal         int `json:"swaptot"`
-	SwapUsed          int `json:"swapused"`
-	SwapFree          int `json:"swapfree"`
+	SwapTotal         int `json:"-"`
+	SwapUsed          int `json:"-"`
+	SwapFree          int `json:"-"`
 	SwapUtilization   int `json:"swaputil"`
 }
 

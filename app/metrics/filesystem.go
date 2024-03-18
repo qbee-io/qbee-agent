@@ -31,24 +31,12 @@ import (
 // Example payload:
 //
 //	{
-//	 "size": 486903968,
-//	 "used": 62249152,
 //	 "avail": 399848008,
 //	 "use": 14,
-//	 "inodes": 30990336,
-//	 "iused": 844508,
-//	 "ifree": 30145828,
-//	 "iuse": 3
 //	}
 type FilesystemValues struct {
-	Size      uint64 `json:"size"`
-	Used      uint64 `json:"used"`
 	Available uint64 `json:"avail"`
 	Use       uint64 `json:"use"`
-	INodes    uint64 `json:"inodes"`
-	IUsed     uint64 `json:"iused"`
-	IFree     uint64 `json:"ifree"`
-	IUse      uint64 `json:"iuse"`
 }
 
 const fsBlockSize = 1024
@@ -69,17 +57,13 @@ func CollectFilesystem() ([]Metric, error) {
 			return nil, err
 		}
 
-		size := uint64(st.Blocks) * uint64(st.Bsize) / fsBlockSize
-		free := uint64(st.Bavail) * uint64(st.Bsize) / fsBlockSize
+		size := st.Blocks * uint64(st.Bsize) / fsBlockSize
+		free := st.Bavail * uint64(st.Bsize) / fsBlockSize
 
-		var iuse, use uint64
+		var use uint64
 
 		if size > 0 {
 			use = 100 - (100*free)/size
-		}
-
-		if st.Files > 0 {
-			iuse = 100 - uint64(st.Ffree*100/st.Files)
 		}
 
 		metrics[i] = Metric{
@@ -88,14 +72,8 @@ func CollectFilesystem() ([]Metric, error) {
 			ID:        mount,
 			Values: Values{
 				FilesystemValues: &FilesystemValues{
-					Size:      size,
-					Used:      size - free,
 					Available: free,
 					Use:       use,
-					INodes:    uint64(st.Files),
-					IUsed:     uint64(st.Files - st.Ffree),
-					IFree:     uint64(st.Ffree),
-					IUse:      iuse,
 				},
 			},
 		}
