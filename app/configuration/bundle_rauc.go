@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -34,6 +33,8 @@ import (
 // {
 //   "pre_condition": "true",
 //   "rauc_bundle": "/path/to/bundle.raucb",
+//   "download": true,
+//   "download_path": "/tmp"
 // }
 
 // RaucBundle configures the system to install a RAUC bundle.
@@ -45,7 +46,15 @@ type RaucBundle struct {
 
 	// RaucBundle is the path to the RAUC bundle file.
 	RaucBundle string `json:"rauc_bundle"`
+
+	// Download is a flag to indicate if the RAUC bundle should be downloaded.
+	Download bool `json:"download"`
+
+	// DownloadPath is the path where the RAUC bundle should be downloaded.
+	DownloadPath string `json:"download_path"`
 }
+
+const defaultDownloadPath = "/tmp"
 
 // Execute RAUC bundle configuration on the system.
 func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
@@ -60,15 +69,13 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return nil
 	}
 
-	raucStatus, err := image.GetRaucInfo(ctx)
+	raucStatus, err := image.GetRaucStatus(ctx)
 	if err != nil {
 		ReportError(ctx, err, "Failed to get RAUC status")
 		return err
 	}
 
-	raucBundle := resolveParameters(ctx, r.RaucBundle)
-
-	raucPath, err := resolveRaucPath(ctx, service, raucBundle)
+	raucPath, err := r.resolveRaucPath(ctx, service)
 	if err != nil {
 		ReportError(ctx, err, "Failed to resolve RAUC bundle path")
 		return err
@@ -84,8 +91,8 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	if err != nil {
 		ReportError(
 			ctx,
-			strings.ReplaceAll(err.Error(), raucPath, raucBundle),
-			"Failed to get RAUC bundle info for '%s'", raucBundle,
+			strings.ReplaceAll(err.Error(), raucPath, r.RaucBundle),
+			"Failed to get RAUC bundle info for '%s'", r.RaucBundle,
 		)
 		return err
 	}
@@ -214,30 +221,24 @@ func getCurrentSlot(localRaucInfo *image.RaucStatus) (string, *image.SlotData, e
 	return "", nil, fmt.Errorf("no slot found in RAUC info")
 }
 
-func supportsStreaming(ctx context.Context) bool {
+func (r *RaucBundle) resolveRaucPath(ctx context.Context, service *Service) (string, error) {
 
-	var modinfoBin string
-	var err error
+	raucBundle := resolveParameters(ctx, r.RaucBundle)
 
-	if modinfoBin, err = exec.LookPath("modinfo"); err != nil {
-		return false
+	if r.Download {
+		if r.DownloadPath == "" {
+			r.DownloadPath = defaultDownloadPath
+		}
+
+		raucDownloadPath := path.Join(r.DownloadPath, filepath.Base(raucBundle))
+		raucDownloadPath = resolveParameters(ctx, raucDownloadPath)
+
+		return downloadRaucBundle(ctx, service, raucBundle, raucDownloadPath)
 	}
-
-	if _, err = utils.RunCommand(ctx, []string{modinfoBin, "nbd"}); err != nil {
-		return false
-	}
-	return true
+	return generateStreamingURL(ctx, service, raucBundle)
 }
 
-func resolveRaucPath(ctx context.Context, service *Service, raucBundle string) (string, error) {
-
-	if supportsStreaming(ctx) {
-		return generateStreamingURL(ctx, service, raucBundle)
-	}
-	return downloadRaucBundle(ctx, service, raucBundle)
-}
-
-func downloadRaucBundle(ctx context.Context, service *Service, raucPath string) (string, error) {
+func downloadRaucBundle(ctx context.Context, service *Service, raucPath, raucDownloadPath string) (string, error) {
 	bundleMetadata, err := service.getFileMetadataFromAPI(ctx, raucPath)
 	if err != nil {
 		return "", err
@@ -272,8 +273,6 @@ func downloadRaucBundle(ctx context.Context, service *Service, raucPath string) 
 		}
 	}
 
-	raucDownloadPath := path.Join("/tmp", filepath.Base(raucPath))
-
 	if doDownload {
 
 		if _, err := service.downloadMetadataCompare(ctx, "", raucPath, raucDownloadPath, bundleMetadata); err != nil {
@@ -290,7 +289,7 @@ func downloadRaucBundle(ctx context.Context, service *Service, raucPath string) 
 		}
 	}
 
-	// Check if the rauc bundle is available
+	// Check if the rauc bundle is available, if not return an empty string
 	if _, err := os.Stat(raucDownloadPath); os.IsNotExist(err) {
 		return "", nil
 	}
