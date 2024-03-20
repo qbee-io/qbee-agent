@@ -33,7 +33,7 @@ import (
 //   "pre_condition": "true",
 //   "rauc_bundle": "/path/to/bundle.raucb",
 //   "download": true,
-//   "download_path": "/tmp"
+//   "download_path": "/tmp/bundle.raucb"
 // }
 
 // RaucBundle configures the system to install a RAUC bundle.
