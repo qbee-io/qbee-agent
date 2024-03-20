@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
 
 	"go.qbee.io/agent/app/image"
@@ -54,7 +53,8 @@ type RaucBundle struct {
 	DownloadPath string `json:"download_path"`
 }
 
-const defaultDownloadPath = "/tmp"
+// defaultDownloadPath is the default path where the RAUC bundle is downloaded.
+const defaultDownloadPath = "/tmp/bundle.raucb"
 
 // Execute RAUC bundle configuration on the system.
 func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
@@ -226,12 +226,11 @@ func (r *RaucBundle) resolveRaucPath(ctx context.Context, service *Service) (str
 	raucBundle := resolveParameters(ctx, r.RaucBundle)
 
 	if r.Download {
-		if r.DownloadPath == "" {
-			r.DownloadPath = defaultDownloadPath
-		}
 
-		raucDownloadPath := path.Join(r.DownloadPath, filepath.Base(raucBundle))
-		raucDownloadPath = resolveParameters(ctx, raucDownloadPath)
+		raucDownloadPath := defaultDownloadPath
+		if r.DownloadPath != "" {
+			raucDownloadPath = resolveParameters(ctx, r.DownloadPath)
+		}
 
 		return downloadRaucBundle(ctx, service, raucBundle, raucDownloadPath)
 	}
