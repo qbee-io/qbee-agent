@@ -17,41 +17,49 @@
 package software
 
 import (
-	"strings"
+	"reflect"
 	"testing"
 )
 
-func TestRpmPackageArchitecture(t *testing.T) {
-
-}
-
 func TestRpmUpdatesParse(t *testing.T) {
+	tests := []struct {
+		name string
+		line string
+		want *Package
+	}{
+		{
+			name: "empty line",
+			line: "",
+			want: nil,
+		},
+		{
+			name: "valid line",
+			line: "glibc.x86_64                        2.34-83.el9_3.12        ubi-9-baseos-rpms",
+			want: &Package{
+				Name:         "glibc",
+				Update:       "2.34-83.el9_3.12",
+				Architecture: "x86_64",
+			},
+		},
+		{
+			name: "incomplete line",
+			line: "glibc.x86_64                        2.34-83.el9_3.12",
+			want: nil,
+		},
+		{
+			name: "no architecture",
+			line: "glibc                           2.34-83.el9_3.12        ubi-9-baseos-rpms",
+			want: nil,
+		},
+	}
 
-	updateLines := `
-curl-minimal.x86_64                 7.76.1-26.el9_3.3       ubi-9-baseos-rpms   
-gdb-gdbserver.x86_64                10.2-11.1.el9_3         ubi-9-appstream-rpms
-glibc.x86_64                        2.34-83.el9_3.12        ubi-9-baseos-rpms   
-glibc-common.x86_64                 2.34-83.el9_3.12        ubi-9-baseos-rpms   
-glibc-minimal-langpack.x86_64       2.34-83.el9_3.12        ubi-9-baseos-rpms   
-gnutls.x86_64                       3.7.6-23.el9_3.3        ubi-9-baseos-rpms   
-libcurl-minimal.x86_64              7.76.1-26.el9_3.3       ubi-9-baseos-rpms   
-openssl.x86_64                      1:3.0.7-25.el9_3        ubi-9-baseos-rpms   
-openssl-libs.x86_64                 1:3.0.7-25.el9_3        ubi-9-baseos-rpms   
-python3-pip-wheel.noarch            21.2.3-7.el9_3.1        ubi-9-baseos-rpms   
-tzdata.noarch                       2024a-1.el9             ubi-9-baseos-rpms   
-`
-	pkgMgr := &RpmPackageManager{}
-
-	lines := strings.Split(updateLines, "\n")
-
-	for _, line := range lines {
-
-		pkg := pkgMgr.parseUpdateAvailableLine(line)
-		if pkg == nil {
-			t.Errorf("Failed to parse line: %s", line)
-		} else {
-			t.Errorf("Parsed package: %+v", pkg)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rpm := &RpmPackageManager{}
+			if got := rpm.parseUpdateAvailableLine(tt.line); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("parseUpdateAvailableLine() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 
 }
