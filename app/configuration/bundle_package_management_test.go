@@ -288,3 +288,19 @@ func checkInstalledVersionOfTestPackage(r *runner.Runner) string {
 
 	return string(output)
 }
+
+func Test_PackageManagement_InstallPackage_UpdateWithOutReboot_rpm(t *testing.T) {
+
+	r := runner.NewRHELRunner(t)
+
+	reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
+		RebootMode: configuration.RebootNever,
+		Packages:   []configuration.Package{{Name: "squid"}},
+	})
+
+	expectedReports := []string{
+		"[INFO] Package 'squid' successfully installed.",
+	}
+
+	assert.Equal(t, reports, expectedReports)
+}

@@ -15,6 +15,21 @@ const Debian = "debian:qbee"
 
 // New creates a new runner for the given test.
 func New(t *testing.T) *Runner {
+	return NewWithImage(t, Debian)
+}
+
+// NewOpenWRTRunner creates a new runner for the given test using the openwrt:qbee image.
+func NewOpenWRTRunner(t *testing.T) *Runner {
+	return NewWithImage(t, "openwrt:qbee")
+}
+
+// NewRHELRunner creates a new runner for the given test using the rhel:qbee image.
+func NewRHELRunner(t *testing.T) *Runner {
+	return NewWithImage(t, "rhel:qbee")
+}
+
+// NewWithImage creates a new runner for the given test using the given image.
+func NewWithImage(t *testing.T, image string) *Runner {
 	cmdArgs := []string{
 		"run",
 		"--rm",                                            // remove container after container exits
@@ -25,7 +40,7 @@ func New(t *testing.T) *Runner {
 		"--tmpfs", "/run/lock",
 		"--cap-add=NET_ADMIN", // allow control of firewall
 		"--detach",            // launch in background
-		Debian,
+		image,
 		"sleep", "600", // force exit container after 10 minutes
 	}
 

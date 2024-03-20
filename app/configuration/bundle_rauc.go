@@ -201,5 +201,5 @@ func getCurrentSlot(localRaucInfo *image.RaucStatus) (string, *image.SlotData, e
 			}
 		}
 	}
-	return "", nil, fmt.Errorf("No slot found in RAUC info")
+	return "", nil, fmt.Errorf("no slot found in RAUC info")
 }
