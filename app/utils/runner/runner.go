@@ -12,6 +12,8 @@ import (
 
 // Debian is the image used by the runner.
 const Debian = "debian:qbee"
+const OpenWRT = "openwrt:qbee"
+const RHEL = "rhel:qbee"
 
 // New creates a new runner for the given test.
 func New(t *testing.T) *Runner {
@@ -20,12 +22,12 @@ func New(t *testing.T) *Runner {
 
 // NewOpenWRTRunner creates a new runner for the given test using the openwrt:qbee image.
 func NewOpenWRTRunner(t *testing.T) *Runner {
-	return NewWithImage(t, "openwrt:qbee")
+	return NewWithImage(t, OpenWRT)
 }
 
 // NewRHELRunner creates a new runner for the given test using the rhel:qbee image.
 func NewRHELRunner(t *testing.T) *Runner {
-	return NewWithImage(t, "rhel:qbee")
+	return NewWithImage(t, RHEL)
 }
 
 // NewWithImage creates a new runner for the given test using the given image.
@@ -54,6 +56,7 @@ func NewWithImage(t *testing.T, image string) *Runner {
 	runner := &Runner{
 		t:         t,
 		container: container,
+		image:     image,
 	}
 
 	t.Cleanup(runner.Close)
@@ -65,6 +68,7 @@ func NewWithImage(t *testing.T, image string) *Runner {
 type Runner struct {
 	t         *testing.T
 	container string
+	image     string
 }
 
 // Close kills the container.
@@ -80,6 +84,54 @@ func (runner *Runner) Pause() {
 // Unpause processes within the runner container.
 func (runner *Runner) Unpause() {
 	_ = exec.Command("docker", "unpause", runner.container).Run()
+}
+
+// PackageInstallCommand returns the package manager install command for the runner image.
+func (runner *Runner) PackageInstallCommand(pkgName, version string) []string {
+	switch runner.image {
+	case Debian:
+		if version != "" {
+			pkgName = fmt.Sprintf("%s=%s", pkgName, version)
+		}
+
+		return []string{"apt-get", "install", "-y", pkgName}
+	case OpenWRT:
+		if version != "" {
+			pkgName = fmt.Sprintf("%s=%s", pkgName, version)
+		}
+
+		return []string{"opkg", "install", pkgName}
+	case RHEL:
+		if version != "" {
+			pkgName = fmt.Sprintf("%s-%s", pkgName, version)
+		}
+
+		return []string{"yum", "install", "-y", pkgName}
+	default:
+		panic("unsupported image")
+	}
+}
+
+// FullUpdateCommand returns the package manager full update command for the runner image.
+func (runner *Runner) FullUpdateCommand() [][]string {
+	switch runner.image {
+	case Debian:
+		return [][]string{
+			{"apt-get", "update"},
+			{"apt-get", "upgrade", "-y"},
+		}
+	case OpenWRT:
+		return [][]string{
+			{"opkg", "update"},
+			{"opkg", "upgrade"},
+		}
+	case RHEL:
+		return [][]string{
+			{"yum", "update", "-y"},
+		}
+	default:
+		panic("unsupported image")
+	}
 }
 
 // Exec executes the given command in the runner container.
