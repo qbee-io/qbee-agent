@@ -127,8 +127,8 @@ func HasRauc() bool {
 	return err == nil
 }
 
-// GetRaucInfo returns RAUC information.
-func GetRaucInfo(ctx context.Context) (*RaucStatus, error) {
+// GetRaucStatus returns RAUC information.
+func GetRaucStatus(ctx context.Context) (*RaucStatus, error) {
 
 	raucStatusCmd := []string{"rauc", "status", "--output-format", "json", "--detailed"}
 

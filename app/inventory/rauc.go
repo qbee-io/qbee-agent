@@ -31,5 +31,5 @@ func CollectRaucInventory(ctx context.Context) (*image.RaucStatus, error) {
 		return nil, nil
 	}
 
-	return image.GetRaucInfo(ctx)
+	return image.GetRaucStatus(ctx)
 }

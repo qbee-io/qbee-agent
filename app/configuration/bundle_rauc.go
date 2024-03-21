@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path"
 	"strings"
 
@@ -31,6 +32,8 @@ import (
 // {
 //   "pre_condition": "true",
 //   "rauc_bundle": "/path/to/bundle.raucb",
+//   "download": true,
+//   "download_path": "/tmp/bundle.raucb"
 // }
 
 // RaucBundle configures the system to install a RAUC bundle.
@@ -42,7 +45,16 @@ type RaucBundle struct {
 
 	// RaucBundle is the path to the RAUC bundle file.
 	RaucBundle string `json:"rauc_bundle"`
+
+	// Download is a flag to indicate if the RAUC bundle should be downloaded.
+	Download bool `json:"download"`
+
+	// DownloadPath is the path where the RAUC bundle should be downloaded.
+	DownloadPath string `json:"download_path"`
 }
+
+// defaultDownloadPath is the default path where the RAUC bundle is downloaded.
+const defaultDownloadPath = "/tmp/bundle.raucb"
 
 // Execute RAUC bundle configuration on the system.
 func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
@@ -57,24 +69,29 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return nil
 	}
 
-	raucStatus, err := image.GetRaucInfo(ctx)
+	raucStatus, err := image.GetRaucStatus(ctx)
 	if err != nil {
 		ReportError(ctx, err, "Failed to get RAUC status")
 		return err
 	}
 
-	filePath := path.Join(fileManagerPublicAPIPath, r.RaucBundle)
-	raucURL, err := service.urlSigner.SignURL(filePath)
+	raucPath, err := r.resolveRaucPath(ctx, service)
 	if err != nil {
-		ReportError(ctx, err, "Failed to create authenticated url for rauc")
+		ReportError(ctx, err, "Failed to resolve RAUC bundle path")
 		return err
 	}
 
-	raucBundleInfo, err := r.getRaucBundleInfo(ctx, raucURL)
+	// if no errors where return, but raucPath is empty, we can assume that the bundle is already installed
+	// and we can return without doing anything. This only happens for non-streaming installations
+	if raucPath == "" {
+		return nil
+	}
+
+	raucBundleInfo, err := r.getRaucBundleInfo(ctx, raucPath)
 	if err != nil {
 		ReportError(
 			ctx,
-			strings.ReplaceAll(err.Error(), raucURL, r.RaucBundle),
+			strings.ReplaceAll(err.Error(), raucPath, r.RaucBundle),
 			"Failed to get RAUC bundle info for '%s'", r.RaucBundle,
 		)
 		return err
@@ -85,7 +102,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return err
 	}
 
-	execInstall, err := doInstall(raucStatus, raucBundleInfo)
+	execInstall, err := shouldInstall(raucStatus, raucBundleInfo)
 
 	if err != nil {
 		ReportError(ctx, err, "Failed to install RAUC bundle")
@@ -96,13 +113,13 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return nil
 	}
 
-	raucInstallCmd := []string{"rauc", "install", raucURL}
+	raucInstallCmd := []string{"rauc", "install", raucPath}
 	output, err := utils.RunCommand(ctx, raucInstallCmd)
 
 	if err != nil {
 		ReportError(
 			ctx,
-			strings.ReplaceAll(err.Error(), raucURL, r.RaucBundle),
+			strings.ReplaceAll(err.Error(), raucPath, r.RaucBundle),
 			"Failed to install RAUC bundle",
 		)
 		return err
@@ -110,7 +127,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 
 	ReportInfo(
 		ctx,
-		strings.ReplaceAll(string(output), raucURL, r.RaucBundle),
+		strings.ReplaceAll(string(output), raucPath, r.RaucBundle),
 		"RAUC bundle successfully installed '%s'",
 		r.RaucBundle,
 	)
@@ -175,7 +192,7 @@ func (r RaucBundle) getRaucBundleInfo(ctx context.Context, url string) (*RaucBun
 	return &raucInfoBundle, nil
 }
 
-func doInstall(localRaucInfo *image.RaucStatus, remoteBundleData *RaucBundleInfo) (bool, error) {
+func shouldInstall(localRaucInfo *image.RaucStatus, remoteBundleData *RaucBundleInfo) (bool, error) {
 	if remoteBundleData.Compatible != localRaucInfo.Compatible {
 		return false, fmt.Errorf("RAUC bundle '%s' is not compatible with the system '%s'", remoteBundleData.Compatible, localRaucInfo.Compatible)
 	}
@@ -202,4 +219,84 @@ func getCurrentSlot(localRaucInfo *image.RaucStatus) (string, *image.SlotData, e
 		}
 	}
 	return "", nil, fmt.Errorf("no slot found in RAUC info")
+}
+
+func (r *RaucBundle) resolveRaucPath(ctx context.Context, service *Service) (string, error) {
+
+	raucBundle := resolveParameters(ctx, r.RaucBundle)
+
+	if r.Download {
+
+		raucDownloadPath := defaultDownloadPath
+		if r.DownloadPath != "" {
+			raucDownloadPath = resolveParameters(ctx, r.DownloadPath)
+		}
+
+		return downloadRaucBundle(ctx, service, raucBundle, raucDownloadPath)
+	}
+	return generateStreamingURL(ctx, service, raucBundle)
+}
+
+func downloadRaucBundle(ctx context.Context, service *Service, raucPath, raucDownloadPath string) (string, error) {
+	bundleMetadata, err := service.getFileMetadataFromAPI(ctx, raucPath)
+	if err != nil {
+		return "", err
+	}
+
+	raucStateDir := path.Join(service.cacheDirectory, "rauc")
+
+	if _, err := os.Stat(raucStateDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(raucStateDir, 0700); err != nil {
+			return "", err
+		}
+	}
+
+	raucStateFile := path.Join(raucStateDir, "state.json")
+
+	doDownload := false
+	if _, err := os.Stat(raucStateFile); os.IsNotExist(err) {
+		doDownload = true
+	} else {
+		stateBytes, err := os.ReadFile(raucStateFile)
+		if err != nil {
+			return "", err
+		}
+
+		var stateData FileMetadata
+		if err := json.Unmarshal(stateBytes, &stateData); err != nil {
+			return "", err
+		}
+
+		if stateData.SHA256() != bundleMetadata.SHA256() {
+			doDownload = true
+		}
+	}
+
+	if doDownload {
+
+		if _, err := service.downloadMetadataCompare(ctx, "", raucPath, raucDownloadPath, bundleMetadata); err != nil {
+			return "", err
+		}
+
+		stateBytes, err := json.Marshal(bundleMetadata)
+		if err != nil {
+			return "", err
+		}
+
+		if err := os.WriteFile(raucStateFile, stateBytes, 0600); err != nil {
+			return "", err
+		}
+	}
+
+	// Check if the rauc bundle is available, if not return an empty string
+	if _, err := os.Stat(raucDownloadPath); os.IsNotExist(err) {
+		return "", nil
+	}
+
+	return raucDownloadPath, nil
+}
+
+func generateStreamingURL(ctx context.Context, service *Service, raucBundle string) (string, error) {
+	filePath := path.Join(fileManagerPublicAPIPath, raucBundle)
+	return service.urlSigner.SignURL(filePath)
 }
