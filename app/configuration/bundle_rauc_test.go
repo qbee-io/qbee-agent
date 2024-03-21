@@ -23,7 +23,7 @@ func Test_Before_Install(t *testing.T) {
 
 	assert.Equal(t, bundleInfo.Compatible, "qemu86-64 demo platform")
 
-	doInstall, err := doInstall(&raucStatus, &bundleInfo)
+	doInstall, err := shouldInstall(&raucStatus, &bundleInfo)
 	assert.NoError(t, err)
 	assert.True(t, doInstall)
 }
@@ -43,7 +43,7 @@ func Test_After_Reboot(t *testing.T) {
 
 	assert.Equal(t, bundleInfo.Compatible, "qemu86-64 demo platform")
 
-	doInstall, err := doInstall(&raucStatus, &bundleInfo)
+	doInstall, err := shouldInstall(&raucStatus, &bundleInfo)
 	assert.NoError(t, err)
 	assert.False(t, doInstall)
 }
@@ -65,7 +65,7 @@ func Test_Incompatible_Bundle(t *testing.T) {
 
 	bundleInfo.Compatible = "qemu86-64 demo platform 2"
 
-	doInstall, err := doInstall(&raucStatus, &bundleInfo)
+	doInstall, err := shouldInstall(&raucStatus, &bundleInfo)
 
 	assert.True(t, err != nil)
 	assert.Equal(t, err.Error(), "RAUC bundle 'qemu86-64 demo platform 2' is not compatible with the system 'qemu86-64 demo platform'")
