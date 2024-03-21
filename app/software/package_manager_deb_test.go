@@ -94,7 +94,7 @@ func TestParseDebianPackage(t *testing.T) {
 	ctx := context.Background()
 
 	_, currentFile, _, _ := runtime.Caller(0)
-	testPkg := filepath.Join(filepath.Dir(currentFile), "test_repository", "debian", "test_1.0.1.deb")
+	testPkg := filepath.Join(filepath.Dir(currentFile), "test_repository", "debian", "qbee-test_1.0.1_all.deb")
 
 	deb := &DebianPackageManager{}
 	pkgInfo, err := deb.ParsePackageFile(ctx, testPkg)
