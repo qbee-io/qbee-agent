@@ -18,6 +18,7 @@ package configuration_test
 
 import (
 	"bytes"
+	"sync"
 	"testing"
 
 	"go.qbee.io/agent/app/configuration"
@@ -92,153 +93,238 @@ func Test_PackageManagement_InstallPackage_PreconditionSuccess(t *testing.T) {
 }
 
 func Test_PackageManagement_InstallPackage_Downgrade(t *testing.T) {
-	r := runner.New(t)
 
-	installNewestVersionOfTestPackage(r)
+	runners := []*runner.Runner{
+		runner.New(t),
+		runner.NewRHELRunner(t),
+	}
 
-	// when specifying lower version, we should expect a downgrade operation
-	reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
-		Packages: []configuration.Package{{Name: "qbee-test", Version: "1.0.1"}},
-	})
+	wg := sync.WaitGroup{}
 
-	// check if a correct report is recorded
-	expectedReports := []string{"[INFO] Package 'qbee-test' successfully installed."}
-	assert.Equal(t, reports, expectedReports)
+	for _, r := range runners {
+		wg.Add(1)
+		go func(r *runner.Runner) {
+			defer wg.Done()
 
-	// check that the newest version of test package is installed
-	installedVersion := checkInstalledVersionOfTestPackage(r)
-	assert.Equal(t, installedVersion, "1.0.1")
+			installNewestVersionOfTestPackage(r)
+
+			// when specifying lower version, we should expect a downgrade operation
+			reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
+				Packages: []configuration.Package{{Name: "qbee-test", Version: "1.0.1"}},
+			})
+
+			// check if a correct report is recorded
+			expectedReports := []string{"[INFO] Package 'qbee-test' successfully installed."}
+			assert.Equal(t, reports, expectedReports)
+
+			// check that the newest version of test package is installed
+			installedVersion := checkInstalledVersionOfTestPackage(r)
+			assert.Equal(t, installedVersion, "1.0.1")
+		}(r)
+	}
+	wg.Wait()
 }
 
 func Test_PackageManagement_InstallPackage_UpdateWithEmptyVersion(t *testing.T) {
-	r := runner.New(t)
 
-	installOlderVersionOfTestPackage(r)
+	runners := []*runner.Runner{
+		runner.New(t),
+		runner.NewRHELRunner(t),
+	}
 
-	// when package has no version string, we assume that the latest version should be installed
-	reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
-		Packages: []configuration.Package{{Name: "qbee-test"}},
-	})
+	wg := sync.WaitGroup{}
 
-	// check if a correct report is recorded
-	expectedReports := []string{"[INFO] Package 'qbee-test' successfully installed."}
-	assert.Equal(t, reports, expectedReports)
+	for _, r := range runners {
+		wg.Add(1)
+		go func(r *runner.Runner) {
+			defer wg.Done()
+			installOlderVersionOfTestPackage(r)
 
-	// check that the newest version of test package is installed
-	installedVersion := checkInstalledVersionOfTestPackage(r)
-	assert.Equal(t, installedVersion, "2.1.1")
+			// when package has no version string, we assume that the latest version should be installed
+			reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
+				Packages: []configuration.Package{{Name: "qbee-test"}},
+			})
+
+			// check if a correct report is recorded
+			expectedReports := []string{"[INFO] Package 'qbee-test' successfully installed."}
+			assert.Equal(t, reports, expectedReports)
+
+			// check that the newest version of test package is installed
+			installedVersion := checkInstalledVersionOfTestPackage(r)
+			assert.Equal(t, installedVersion, "2.1.1")
+		}(r)
+	}
+	wg.Wait()
 }
 
 func Test_PackageManagement_InstallPackage_UpdateWithLatestVersion(t *testing.T) {
-	r := runner.New(t)
 
-	installOlderVersionOfTestPackage(r)
+	runners := []*runner.Runner{
+		runner.New(t),
+		runner.NewRHELRunner(t),
+	}
 
-	// when package has the 'latest' version string we should always update to the latest available version
-	reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
-		Packages: []configuration.Package{{Name: "qbee-test", Version: "latest"}},
-	})
+	wg := sync.WaitGroup{}
 
-	// check if a correct report is recorded
-	expectedReports := []string{"[INFO] Package 'qbee-test' successfully installed."}
-	assert.Equal(t, reports, expectedReports)
+	for _, r := range runners {
+		wg.Add(1)
+		go func(r *runner.Runner) {
+			defer wg.Done()
+			installOlderVersionOfTestPackage(r)
 
-	// check that the newest version of test package is installed
-	installedVersion := checkInstalledVersionOfTestPackage(r)
-	assert.Equal(t, installedVersion, "2.1.1")
+			// when package has the 'latest' version string we should always update to the latest available version
+			reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
+				Packages: []configuration.Package{{Name: "qbee-test", Version: "latest"}},
+			})
+
+			// check if a correct report is recorded
+			expectedReports := []string{"[INFO] Package 'qbee-test' successfully installed."}
+			assert.Equal(t, reports, expectedReports)
+
+			// check that the newest version of test package is installed
+			installedVersion := checkInstalledVersionOfTestPackage(r)
+			assert.Equal(t, installedVersion, "2.1.1")
+		}(r)
+	}
+	wg.Wait()
 }
 
 func Test_PackageManagement_InstallPackage_UpdateWithReboot(t *testing.T) {
-	r := runner.New(t)
 
-	installOlderVersionOfTestPackage(r)
-
-	// when package has no version string, we assume that the latest version should be installed
-	reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
-		RebootMode: configuration.RebootAlways,
-		Packages:   []configuration.Package{{Name: "qbee-test"}},
-	})
-
-	// check if a correct reboot warning report is recorded
-	expectedReports := []string{
-		"[INFO] Package 'qbee-test' successfully installed.",
-		"[WARN] Scheduling system reboot.",
+	runners := []*runner.Runner{
+		runner.New(t),
+		runner.NewRHELRunner(t),
 	}
-	assert.Equal(t, reports, expectedReports)
 
-	// check that the newest version of test package is installed
-	installedVersion := checkInstalledVersionOfTestPackage(r)
-	assert.Equal(t, installedVersion, "2.1.1")
+	wg := sync.WaitGroup{}
+
+	for _, r := range runners {
+		wg.Add(1)
+		go func(r *runner.Runner) {
+			defer wg.Done()
+			installOlderVersionOfTestPackage(r)
+
+			// when package has no version string, we assume that the latest version should be installed
+			reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
+				RebootMode: configuration.RebootAlways,
+				Packages:   []configuration.Package{{Name: "qbee-test"}},
+			})
+
+			// check if a correct reboot warning report is recorded
+			expectedReports := []string{
+				"[INFO] Package 'qbee-test' successfully installed.",
+				"[WARN] Scheduling system reboot.",
+			}
+			assert.Equal(t, reports, expectedReports)
+
+			// check that the newest version of test package is installed
+			installedVersion := checkInstalledVersionOfTestPackage(r)
+			assert.Equal(t, installedVersion, "2.1.1")
+		}(r)
+	}
+	wg.Wait()
 }
 
 func Test_PackageManagement_UpgradeAll(t *testing.T) {
-	r := runner.New(t)
+	runners := []*runner.Runner{
+		runner.New(t),
+		runner.NewRHELRunner(t),
+	}
 
-	// ensure we have the latest updates
-	r.MustExec("apt-get", "update")
-	r.MustExec("apt-get", "upgrade", "-y")
+	wg := sync.WaitGroup{}
 
-	installOlderVersionOfTestPackage(r)
+	for _, r := range runners {
+		wg.Add(1)
+		go func(r *runner.Runner) {
+			defer wg.Done()
+			fullUpgrade(r)
 
-	reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
-		FullUpgrade: true,
-	})
+			installOlderVersionOfTestPackage(r)
 
-	// check if a correct report is recorded
-	expectedReports := []string{"[INFO] Full upgrade was successful - 1 packages updated."}
-	assert.Equal(t, reports, expectedReports)
+			reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
+				FullUpgrade: true,
+			})
 
-	// check that the newest version of test package is installed
-	installedVersion := checkInstalledVersionOfTestPackage(r)
-	assert.Equal(t, installedVersion, "2.1.1")
+			// check if a correct report is recorded
+			expectedReports := []string{"[INFO] Full upgrade was successful - 1 packages updated."}
+			assert.Equal(t, reports, expectedReports)
+
+			// check that the newest version of test package is installed
+			installedVersion := checkInstalledVersionOfTestPackage(r)
+			assert.Equal(t, installedVersion, "2.1.1")
+		}(r)
+	}
+	wg.Wait()
 }
 
 func Test_PackageManagement_UpgradeAll_WithReboot(t *testing.T) {
-	r := runner.New(t)
-
-	// ensure we have the latest updates
-	r.MustExec("apt-get", "update")
-	r.MustExec("apt-get", "upgrade", "-y")
-
-	installOlderVersionOfTestPackage(r)
-
-	reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
-		FullUpgrade: true,
-		RebootMode:  configuration.RebootAlways,
-	})
-
-	// check if a correct reboot warning report is recorded
-	expectedReports := []string{
-		"[INFO] Full upgrade was successful - 1 packages updated.",
-		"[WARN] Scheduling system reboot.",
+	runners := []*runner.Runner{
+		runner.New(t),
+		runner.NewRHELRunner(t),
 	}
-	assert.Equal(t, reports, expectedReports)
 
-	// check that the newest version of test package is installed
-	installedVersion := checkInstalledVersionOfTestPackage(r)
-	assert.Equal(t, installedVersion, "2.1.1")
+	wg := sync.WaitGroup{}
+
+	for _, r := range runners {
+		wg.Add(1)
+		go func(r *runner.Runner) {
+			defer wg.Done()
+			fullUpgrade(r)
+
+			installOlderVersionOfTestPackage(r)
+
+			reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
+				FullUpgrade: true,
+				RebootMode:  configuration.RebootAlways,
+			})
+
+			// check if a correct reboot warning report is recorded
+			expectedReports := []string{
+				"[INFO] Full upgrade was successful - 1 packages updated.",
+				"[WARN] Scheduling system reboot.",
+			}
+			assert.Equal(t, reports, expectedReports)
+
+			// check that the newest version of test package is installed
+			installedVersion := checkInstalledVersionOfTestPackage(r)
+			assert.Equal(t, installedVersion, "2.1.1")
+		}(r)
+	}
+	wg.Wait()
 }
 
 func Test_PackageManagement_UpgradeAll_WithRebootWithoutChanges(t *testing.T) {
-	r := runner.New(t)
+	runners := []*runner.Runner{
+		runner.New(t),
+		runner.NewRHELRunner(t),
+	}
 
-	// ensure we have the latest updates
-	r.MustExec("apt-get", "update")
-	r.MustExec("apt-get", "upgrade", "-y")
+	wg := sync.WaitGroup{}
 
-	reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
-		FullUpgrade: true,
-		RebootMode:  configuration.RebootAlways,
-	})
+	for _, r := range runners {
+		wg.Add(1)
+		go func(r *runner.Runner) {
+			defer wg.Done()
+			// ensure we have the latest updates
+			fullUpgrade(r)
 
-	assert.Empty(t, reports)
+			reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
+				FullUpgrade: true,
+				RebootMode:  configuration.RebootAlways,
+			})
+
+			assert.Empty(t, reports)
+		}(r)
+	}
+	wg.Wait()
 }
 
 // helper functions
 
 // installNewestVersionOfTestPackage makes sure that the newest version of the test package is installed
 func installNewestVersionOfTestPackage(r *runner.Runner) {
-	r.MustExec("apt", "install", "qbee-test")
+
+	r.MustExec(r.PackageInstallCommand("qbee-test", "")...)
 
 	// check that the newest version of test package is indeed installed
 	installedVersion := checkInstalledVersionOfTestPackage(r)
@@ -249,12 +335,20 @@ func installNewestVersionOfTestPackage(r *runner.Runner) {
 
 // installOlderVersionOfTestPackage makes sure that the older version of the test package is installed
 func installOlderVersionOfTestPackage(r *runner.Runner) {
-	r.MustExec("apt", "install", "qbee-test=1.0.1")
+	r.MustExec(r.PackageInstallCommand("qbee-test", "1.0.1")...)
 
 	// check that the newest version of test package is indeed installed
 	installedVersion := checkInstalledVersionOfTestPackage(r)
 	if installedVersion != "1.0.1" {
 		panic("expected older version, got " + installedVersion)
+	}
+}
+
+// fullUpgrade makes sure that the system is fully upgraded
+func fullUpgrade(r *runner.Runner) {
+	updateCommands := r.FullUpdateCommand()
+	for _, cmd := range updateCommands {
+		r.MustExec(cmd...)
 	}
 }
 
@@ -287,20 +381,4 @@ func checkInstalledVersionOfTestPackage(r *runner.Runner) string {
 	}
 
 	return string(output)
-}
-
-func Test_PackageManagement_InstallPackage_UpdateWithOutReboot_rpm(t *testing.T) {
-
-	r := runner.NewRHELRunner(t)
-
-	reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
-		RebootMode: configuration.RebootNever,
-		Packages:   []configuration.Package{{Name: "squid"}},
-	})
-
-	expectedReports := []string{
-		"[INFO] Package 'squid' successfully installed.",
-	}
-
-	assert.Equal(t, reports, expectedReports)
 }
