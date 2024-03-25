@@ -18,6 +18,9 @@ docker-image:
 	docker build -t debian:qbee \
 		--build-arg version=2023.01 \
 		.
+	docker build -t rhel:qbee \
+		--build-arg version=2023.01 \
+		-f Dockerfile.rhel9 .
 
 test:
 	go test ./app/...

@@ -124,12 +124,12 @@ func (s Software) serviceName(ctx context.Context, srv *Service) string {
 		return s.ServiceName
 	}
 
-	if strings.HasSuffix(s.Package, ".deb") {
+	if strings.HasSuffix(s.Package, software.DefaultPackageManager.FileSuffix()) {
 		// since this is executed after s.installFromFile, we can depend on the package being downloaded
 		// in the cache and parse correctly, so we are not too concerned about proper error handling here.
 		pkgFileCachePath := filepath.Join(srv.cacheDirectory, SoftwareCacheDirectory, s.Package)
 
-		pkgInfo, err := software.ParseDebianPackage(ctx, pkgFileCachePath)
+		pkgInfo, err := software.DefaultPackageManager.ParsePackageFile(ctx, pkgFileCachePath)
 		if err != nil {
 			return ""
 		}
@@ -153,7 +153,7 @@ func (s Software) Execute(ctx context.Context, srv *Service, pkgManager software
 	var shouldRestart bool
 
 	// install package
-	if strings.HasSuffix(s.Package, ".deb") {
+	if strings.HasSuffix(s.Package, software.DefaultPackageManager.FileSuffix()) {
 		shouldRestart, err = s.installFromFile(ctx, srv, pkgManager)
 	} else {
 		shouldRestart, err = s.installFromRepository(ctx, pkgManager)
@@ -200,7 +200,7 @@ func (s Software) installFromFile(ctx context.Context, srv *Service, pkgManager 
 	}
 
 	// get package info
-	pkgInfo, err := software.ParseDebianPackage(ctx, pkgFileCachePath)
+	pkgInfo, err := software.DefaultPackageManager.ParsePackageFile(ctx, pkgFileCachePath)
 	if err != nil {
 		return false, err
 	}

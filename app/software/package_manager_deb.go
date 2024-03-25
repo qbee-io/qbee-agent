@@ -34,6 +34,7 @@ import (
 
 // PackageManagerTypeDebian is the type of the Debian package manager.
 const PackageManagerTypeDebian PackageManagerType = "deb"
+const debianFileSuffix string = ".deb"
 
 var packagesCacheKey = fmt.Sprintf("%s:%s:packages", pkgCacheKeyPrefix, PackageManagerTypeDebian)
 var pkgArchCacheKey = fmt.Sprintf("%s:arch", packagesCacheKey)
@@ -55,6 +56,11 @@ type DebianPackageManager struct {
 // Type returns type of the package manager.
 func (deb *DebianPackageManager) Type() PackageManagerType {
 	return PackageManagerTypeDebian
+}
+
+// FileSuffix returns the file suffix for the package manager.
+func (deb *DebianPackageManager) FileSuffix() string {
+	return debianFileSuffix
 }
 
 // IsSupported returns true if package manager is supported by the host system.
@@ -336,8 +342,8 @@ func (deb *DebianPackageManager) PackageArchitecture() (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-// ParseDebianPackage and return Package information.
-func ParseDebianPackage(ctx context.Context, pkgFilePath string) (*Package, error) {
+// ParsePackageFile parses package and return Package information.
+func (deb *DebianPackageManager) ParsePackageFile(ctx context.Context, pkgFilePath string) (*Package, error) {
 	cmd := []string{dpkgPath, "-I", pkgFilePath}
 
 	pkg := new(Package)

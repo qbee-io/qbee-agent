@@ -31,6 +31,7 @@ const pkgCacheKeyPrefix = "packages"
 // PackageManagers provides a map of all package managers supported by the agent.
 var PackageManagers = map[PackageManagerType]PackageManager{
 	PackageManagerTypeDebian: new(DebianPackageManager),
+	PackageManagerTypeRpm:    new(RpmPackageManager),
 }
 
 func init() {
@@ -49,6 +50,9 @@ type PackageManagerType string
 // PackageManager defines package manager interface.
 type PackageManager interface {
 	Type() PackageManagerType
+
+	// FileSuffix returns the file suffix for the package manager.
+	FileSuffix() string
 
 	// IsSupported returns true if package manager is supported by the host system.
 	IsSupported() bool
@@ -71,4 +75,7 @@ type PackageManager interface {
 
 	// PackageArchitecture returns the architecture of the package manager
 	PackageArchitecture() (string, error)
+
+	// ParsePackageFile returns a package from a file path.
+	ParsePackageFile(ctx context.Context, filePath string) (*Package, error)
 }
