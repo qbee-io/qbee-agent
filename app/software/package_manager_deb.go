@@ -342,7 +342,7 @@ func (deb *DebianPackageManager) PackageArchitecture() (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-// ParseDebianPackage and return Package information.
+// ParsePackageFile parses package and return Package information.
 func (deb *DebianPackageManager) ParsePackageFile(ctx context.Context, pkgFilePath string) (*Package, error) {
 	cmd := []string{dpkgPath, "-I", pkgFilePath}
 

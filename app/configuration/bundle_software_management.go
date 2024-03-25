@@ -178,8 +178,6 @@ func (s Software) Execute(ctx context.Context, srv *Service, pkgManager software
 
 	// restart service if needed
 	if shouldRestart {
-
-		//TODO: We support systemctl and rc.scripts here (OpenWRT, RPM, DEB)
 		s.restart(ctx, srv)
 	}
 

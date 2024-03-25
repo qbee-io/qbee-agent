@@ -31,6 +31,7 @@ import (
 	"go.qbee.io/agent/app/utils/cache"
 )
 
+// PackageManagerTypeRpm is the type of the rpm package manager.
 const PackageManagerTypeRpm PackageManagerType = "rpm"
 const rpmFileSuffix string = ".rpm"
 
@@ -71,12 +72,10 @@ func (rpm *RpmPackageManager) IsSupported() bool {
 	return true
 }
 
-// Busy returns true if package manager is currently busy.
 const yumPidPath = "/var/run/yum.pid"
 
+// Busy returns true if package manager is currently busy.
 func (rpm *RpmPackageManager) Busy() (bool, error) {
-	// /var/run/yum.pid
-
 	rpm.lock.Lock()
 	defer rpm.lock.Unlock()
 

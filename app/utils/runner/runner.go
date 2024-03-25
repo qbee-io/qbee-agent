@@ -10,9 +10,13 @@ import (
 	"testing"
 )
 
-// Debian is the image used by the runner.
+// Debian is the debian based image used by the runner.
 const Debian = "debian:qbee"
+
+// OpenWRT is the OpenWRT based image used by the runner.
 const OpenWRT = "openwrt:qbee"
+
+// RHEL is the RHEL based image used by the runner.
 const RHEL = "rhel:qbee"
 
 // New creates a new runner for the given test.
