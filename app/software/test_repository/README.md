@@ -22,3 +22,17 @@ Rebuilding of Packages.gz and Packages.xz (repository index) can be done with th
 
     dpkg-scanpackages --multiversion . /dev/null | gzip -9c > Packages.gz
     dpkg-scanpackages --multiversion . /dev/null | xz > Packages.xz
+
+## RHEL
+
+    # build packages
+    fpm -s empty -n test-dep -d test -v 1.0.1 -a noarch -t rpm
+  
+    # create repo
+    cd rhel
+    docker run -it $(pwd):/repository --rm fedora:latest
+    yum install createrepo_c
+    createrepo /repository
+    exit
+
+    chown -R <user>:<group> repodata
