@@ -95,6 +95,8 @@ func (agent *Agent) Run(ctx context.Context) error {
 
 			// and return
 			return nil
+		case <-agent.reboot:
+			agent.RebootSystem(ctx)
 
 		case <-stopSignalCh:
 			log.Debugf("received interrupt signal")
@@ -118,9 +120,6 @@ func (agent *Agent) Run(ctx context.Context) error {
 			agent.loopTicker.Reset(agent.Configuration.RunInterval())
 
 			go agent.RunOnce(ctx, FullRun)
-
-		case <-agent.reboot:
-			agent.RebootSystem(ctx)
 		}
 	}
 }
