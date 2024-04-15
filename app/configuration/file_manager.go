@@ -267,7 +267,7 @@ func renderTemplate(src io.Reader, params map[string]string, dst io.Writer) erro
 
 		line := scanner.Bytes()
 
-		renderedLine, err := renderTemplateLine(line, params, lineNo)
+		renderedLine, err := renderTemplateLine(line, params)
 		if err != nil {
 			return fmt.Errorf("error rendering line %d: %w", lineNo, err)
 		}
@@ -286,7 +286,7 @@ const (
 )
 
 // renderTemplateLine renders a single line of a template based on provided parameters.
-func renderTemplateLine(line []byte, params map[string]string, lineNo int) ([]byte, error) {
+func renderTemplateLine(line []byte, params map[string]string) ([]byte, error) {
 	result := make([]byte, 0, len(line))
 
 	for len(line) > 0 {
