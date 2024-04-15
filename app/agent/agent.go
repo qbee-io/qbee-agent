@@ -95,6 +95,8 @@ func (agent *Agent) Run(ctx context.Context) error {
 
 			// and return
 			return nil
+		case <-agent.reboot:
+			agent.RebootSystem(ctx)
 
 		case <-stopSignalCh:
 			log.Debugf("received interrupt signal")
@@ -118,9 +120,6 @@ func (agent *Agent) Run(ctx context.Context) error {
 			agent.loopTicker.Reset(agent.Configuration.RunInterval())
 
 			go agent.RunOnce(ctx, FullRun)
-
-		case <-agent.reboot:
-			agent.RebootSystem(ctx)
 		}
 	}
 }
@@ -143,6 +142,13 @@ const (
 
 // RunOnce performs a single run of the agent routines.
 func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
+
+	// avoid running the agent if a reboot is scheduled
+	// this is to avoid a race condition where the agent would run again after a reboot is scheduled
+	if agent.Configuration.ShouldReboot() {
+		return
+	}
+
 	agent.lock.Lock()
 	defer func() {
 		agent.lock.Unlock()
