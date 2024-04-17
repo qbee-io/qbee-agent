@@ -21,11 +21,13 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"net/http"
 	"os/exec"
 	"runtime"
 	"strings"
 	"time"
 
+	"go.qbee.io/agent/app/api"
 	"go.qbee.io/agent/app/inventory"
 	"go.qbee.io/agent/app/log"
 )
@@ -37,6 +39,11 @@ func Bootstrap(ctx context.Context, cfg *Config) error {
 	agent, err := NewWithoutCredentials(cfg)
 	if err != nil {
 		return err
+	}
+
+	// we cannot perform bootstrap without a CA certificate
+	if agent.caCertPool.Equal(x509.NewCertPool()) {
+		return fmt.Errorf("CA certificate pool is empty, bootstrap not possible")
 	}
 
 	if err = agent.createPrivateKey(); err != nil {
@@ -56,11 +63,19 @@ func Bootstrap(ctx context.Context, cfg *Config) error {
 	for {
 
 		if response, err = agent.sendBootstrapRequest(ctx, cfg.BootstrapKey, bootstrapRequest); err != nil {
-			return fmt.Errorf("error sending bootstrap request: %w", err)
+			// We should only break the loop if the error is an unauthorized error
+			// There might be other errors that we can recover from, like network errors, clock skew, etc.
+			asErr, ok := err.(*api.Error)
+			if ok && asErr.ResponseCode == http.StatusUnauthorized {
+				return fmt.Errorf("bootstrap key is invalid: %w", err)
+			}
+			log.Errorf("error sending bootstrap request: %v", err)
 		}
 
-		if response.CertificateRequestsStatus == "authorized" {
-			break
+		if response != nil {
+			if response.CertificateRequestsStatus == "authorized" {
+				break
+			}
 		}
 
 		log.Infof("Awaiting to be approved.")
