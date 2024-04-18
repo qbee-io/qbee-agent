@@ -19,6 +19,7 @@ package api
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 const proxyEnvVar = "HTTPS_PROXY"
@@ -47,6 +48,11 @@ func UseProxy(proxy *Proxy) error {
 	proxyURL = "http://" + proxyURL
 
 	if err := os.Setenv(proxyEnvVar, proxyURL); err != nil {
+		return fmt.Errorf("error setting up HTTP proxy: %w", err)
+	}
+
+	// Set lowercase version of the proxy environment variable as well (curl based tools use lowercase, eg. rauc)
+	if err := os.Setenv(strings.ToLower(proxyEnvVar), proxyURL); err != nil {
 		return fmt.Errorf("error setting up HTTP proxy: %w", err)
 	}
 
