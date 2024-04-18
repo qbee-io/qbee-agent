@@ -234,7 +234,7 @@ func (r *RaucBundle) resolveRaucPath(ctx context.Context, service *Service) (str
 
 		return downloadRaucBundle(ctx, service, raucBundle, raucDownloadPath)
 	}
-	return generateStreamingURL(service, raucBundle)
+	return generateStreamingURL(ctx, service, raucBundle)
 }
 
 func downloadRaucBundle(ctx context.Context, service *Service, raucPath, raucDownloadPath string) (string, error) {
@@ -296,7 +296,7 @@ func downloadRaucBundle(ctx context.Context, service *Service, raucPath, raucDow
 	return raucDownloadPath, nil
 }
 
-func generateStreamingURL(service *Service, raucBundle string) (string, error) {
+func generateStreamingURL(ctx context.Context, service *Service, raucBundle string) (string, error) {
 	filePath := path.Join(fileManagerPublicAPIPath, raucBundle)
 	return service.urlSigner.SignURL(filePath)
 }
