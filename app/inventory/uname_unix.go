@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-//go:build linux
+//go:build unix
 
 package inventory
 
@@ -38,11 +38,11 @@ func (systemInfo *SystemInfo) parseUnameSyscall() error {
 	systemInfo.Release = unix.ByteSliceToString(utsname.Release[:])
 	systemInfo.Version = unix.ByteSliceToString(utsname.Version[:])
 	systemInfo.Architecture = unix.ByteSliceToString(utsname.Machine[:])
-
-	domainName := unix.ByteSliceToString(utsname.Domainname[:])
-	if domainName != "" && domainName != "(none)" {
-		systemInfo.FQHost = fmt.Sprintf("%s.%s", systemInfo.UQHost, domainName)
-	}
-
+	/*
+		domainName := unix.ByteSliceToString(utsname.Domainname[:])
+		if domainName != "" && domainName != "(none)" {
+			systemInfo.FQHost = fmt.Sprintf("%s.%s", systemInfo.UQHost, domainName)
+		}
+	*/
 	return nil
 }

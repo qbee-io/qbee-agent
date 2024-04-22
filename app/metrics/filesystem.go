@@ -57,8 +57,8 @@ func CollectFilesystem() ([]Metric, error) {
 			return nil, err
 		}
 
-		size := st.Blocks * uint64(st.Bsize) / fsBlockSize
-		free := st.Bavail * uint64(st.Bsize) / fsBlockSize
+		size := uint64(st.Blocks) * uint64(st.Bsize) / fsBlockSize
+		free := uint64(st.Bavail) * uint64(st.Bsize) / fsBlockSize
 
 		var use uint64
 

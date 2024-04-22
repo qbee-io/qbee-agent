@@ -14,12 +14,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-//go:build unix
+//go:build !linux
 
-package linux
+package agent
 
-// ProcFS defines the path to the proc filesystem.
-const ProcFS = "/proc"
+import "fmt"
 
-// SysFS defines the path to the sys filesystem.
-const SysFS = "/sys"
+func (agent *Agent) SealSecret(secret []byte) ([]byte, error) {
+	return nil, fmt.Errorf("TPM sealing is not supported on this platform")
+}
+
+func (agent *Agent) UnsealSecret(sealedSecret []byte) ([]byte, error) {
+	return nil, fmt.Errorf("TPM unsealing is not supported on this platform")
+}

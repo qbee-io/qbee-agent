@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -87,6 +88,7 @@ func getDefaultShell() string {
 
 // getCurrentUserShell returns the current user's shell.
 func getCurrentUserShell() string {
+
 	// Try to get the shell from the SHELL environment variable if set.
 	shell := os.Getenv("SHELL")
 	if shell != "" {
@@ -144,11 +146,13 @@ func NewConsole(ctx context.Context, rows, cols uint16) (*Console, error) {
 		return nil, fmt.Errorf("failed to start command: %v", err)
 	}
 
-	if err = unix.SetNonblock(int(console.pty.Fd()), true); err != nil {
-		console.Close()
-		return nil, fmt.Errorf("failed to set PTY to non-blocking mode: %v", err)
+	// This causes the console to be non-blocking on Linux. Causes the console fd to fail on freebsd.
+	if runtime.GOOS == "linux" {
+		if err = unix.SetNonblock(int(console.pty.Fd()), true); err != nil {
+			console.Close()
+			return nil, fmt.Errorf("failed to set PTY to non-blocking mode: %v", err)
+		}
 	}
-
 	return console, nil
 }
 

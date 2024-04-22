@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-//go:build linux
+//go:build unix
 
 package inventory
 
@@ -25,8 +25,6 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
-	"syscall"
-	"time"
 	"unicode"
 
 	"go.qbee.io/agent/app"
@@ -59,11 +57,11 @@ func CollectSystemInventory(tpmEnabled bool) (*System, error) {
 	if err := systemInfo.parseOSRelease(); err != nil {
 		return nil, err
 	}
-
-	if err := systemInfo.parseCPUInfo(); err != nil {
-		return nil, err
-	}
-
+	/*
+		if err := systemInfo.parseCPUInfo(); err != nil {
+			return nil, err
+		}
+	*/
 	if err := systemInfo.parseUnameSyscall(); err != nil {
 		return nil, err
 	}
@@ -71,11 +69,11 @@ func CollectSystemInventory(tpmEnabled bool) (*System, error) {
 	if err := systemInfo.parseSysinfoSyscall(); err != nil {
 		return nil, err
 	}
-
-	if err := systemInfo.gatherNetworkInfo(); err != nil {
-		return nil, err
-	}
-
+	/*
+		if err := systemInfo.gatherNetworkInfo(); err != nil {
+			return nil, err
+		}
+	*/
 	systemInfo.OSType = fmt.Sprintf("%s_%s", systemInfo.OS, systemInfo.Architecture)
 	systemInfo.LongArchitecture = canonify(fmt.Sprintf("%s_%s_%s_%s",
 		systemInfo.OS,
@@ -261,27 +259,30 @@ func (systemInfo *SystemInfo) parseCPUInfo() error {
 
 // parseSysinfoSyscall populates system info from sysinfo system call.
 func (systemInfo *SystemInfo) parseSysinfoSyscall() error {
-	now := time.Now()
-	sysinfo, err := getSysinfo()
-	if err != nil {
-		return err
-	}
-
-	systemInfo.BootTime = fmt.Sprintf("%d", now.Unix()-int64(sysinfo.Uptime))
+	/*
+		now := time.Now()
+		sysinfo, err := getSysinfo()
+		if err != nil {
+			return err
+		}
+	*/
+	systemInfo.BootTime = fmt.Sprintf("%d", 0)
 
 	return nil
 }
 
+/*
 // getSysinfo returns sysinfo struct.
-func getSysinfo() (*syscall.Sysinfo_t, error) {
-	sysinfo := new(syscall.Sysinfo_t)
-	if err := syscall.Sysinfo(sysinfo); err != nil {
-		return nil, fmt.Errorf("error calling sysinfo syscall: %w", err)
+
+	func getSysinfo() (*syscall.Sysinfo_t, error) {
+		sysinfo := new(syscall.Sysinfo_t)
+		if err := syscall.Sysinfo(sysinfo); err != nil {
+			return nil, fmt.Errorf("error calling sysinfo syscall: %w", err)
+		}
+
+		return sysinfo, nil
 	}
-
-	return sysinfo, nil
-}
-
+*/
 var nonAlphaNumRE = regexp.MustCompile("[^a-zA-Z0-9]")
 
 // canonify replaces all non-alphanumeric characters with underscore (_).
