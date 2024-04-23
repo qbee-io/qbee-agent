@@ -142,16 +142,18 @@ const (
 
 // RunOnce performs a single run of the agent routines.
 func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
-
-	// avoid running the agent if a reboot is scheduled
-	// this is to avoid a race condition where the agent would run again after a reboot is scheduled
-	if agent.Configuration.ShouldReboot() {
+	// lock the agent to prevent concurrent runs, but if the lock is already held, skip the run
+	// we do that, so we don't 'accumulate' runs if the agent is slow
+	if !agent.lock.TryLock() {
 		return
 	}
 
-	agent.lock.Lock()
 	defer func() {
 		agent.lock.Unlock()
+
+		if agent.Configuration.ShouldReboot() {
+			agent.reboot <- true
+		}
 
 		if err := recover(); err != nil {
 			log.Errorf("fatal agent error: %v", err)
