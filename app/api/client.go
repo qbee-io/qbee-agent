@@ -56,8 +56,8 @@ func NewClient(host, port string) *Client {
 			Transport: &http.Transport{
 				Proxy: http.ProxyFromEnvironment,
 				DialContext: (&net.Dialer{
-					Timeout:   60 * time.Second,
-					KeepAlive: 60 * time.Second,
+					Timeout:   15 * time.Second,
+					KeepAlive: 45 * time.Second,
 				}).DialContext,
 				ForceAttemptHTTP2:     true,
 				MaxIdleConns:          5,
