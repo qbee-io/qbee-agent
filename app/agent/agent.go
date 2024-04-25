@@ -152,6 +152,7 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 		agent.lock.Unlock()
 
 		if agent.Configuration.ShouldReboot() {
+			log.Warnf("reboot condition detected, scheduling system reboot")
 			agent.reboot <- true
 		}
 
@@ -211,13 +212,6 @@ func (agent *Agent) doConfig(configData *configuration.CommittedConfig) func(ctx
 		if err := agent.Configuration.Execute(ctx, configData); err != nil {
 			return fmt.Errorf("failed to apply configuration: %w", err)
 		}
-
-		// Send reboot command if it is scheduled
-		if agent.Configuration.ShouldReboot() {
-			log.Warnf("reboot condition detected, scheduling system reboot")
-			agent.reboot <- true
-		}
-
 		return nil
 	}
 }
