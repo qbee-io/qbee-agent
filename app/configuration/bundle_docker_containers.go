@@ -91,6 +91,7 @@ func (d DockerContainersBundle) Execute(ctx context.Context, service *Service) e
 		container.DockerArgs = resolveParameters(ctx, container.DockerArgs)
 		container.EnvFile = resolveParameters(ctx, container.EnvFile)
 		container.Command = resolveParameters(ctx, container.Command)
+		container.PreCondition = resolveParameters(ctx, container.PreCondition)
 
 		// for containers with empty name, use its index
 		if container.Name == "" {
@@ -121,12 +122,20 @@ type DockerContainer struct {
 
 	// Command to be executed in the container.
 	Command string `json:"command"`
+
+	// PreCondition is a shell command that needs to be true before starting the container.
+	PreCondition string `json:"pre_condition,omitempty"`
 }
 
 // execute ensures that configured container is running
 func (c DockerContainer) execute(ctx context.Context, srv *Service, dockerBin string) error {
 	var err error
 	var needRestart bool
+
+	if !CheckPreCondition(ctx, c.PreCondition) {
+		// skip container if pre-condition is not met
+		return nil
+	}
 
 	envFilePath := c.localEnvFilePath(srv)
 	if envFilePath != "" {
