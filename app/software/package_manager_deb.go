@@ -292,7 +292,7 @@ func (deb *DebianPackageManager) Install(ctx context.Context, pkgName, version s
 
 	shellCmd := []string{"sh", "-c", strings.Join(installCommand, " ")}
 
-	defer cache.Delete(pkgCacheKeyPrefix)
+	defer cache.Delete(packagesCacheKey)
 
 	return utils.RunCommand(ctx, shellCmd)
 }

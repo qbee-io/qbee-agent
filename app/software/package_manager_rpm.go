@@ -161,12 +161,10 @@ func (rpm *RpmPackageManager) listAvailableUpdates(ctx context.Context) (map[str
 		return nil, nil
 	}
 
-	if err != nil {
-		exitError := new(exec.ExitError)
-		if errors.As(err, &exitError) {
-			if exitError.ExitCode() != 100 {
-				return nil, fmt.Errorf("error running command %v: %w\n%s", cmd, err, exitError.Stderr)
-			}
+	exitError := new(exec.ExitError)
+	if errors.As(err, &exitError) {
+		if exitError.ExitCode() != 100 {
+			return nil, fmt.Errorf("error running command %v: %w\n%s", cmd, err, exitError.Stderr)
 		}
 	}
 
@@ -266,7 +264,7 @@ func (rpm *RpmPackageManager) Install(ctx context.Context, pkgName, version stri
 	rpm.lock.Lock()
 	defer rpm.lock.Unlock()
 
-	defer cache.Delete(pkgCacheKeyPrefix)
+	defer cache.Delete(packagesCacheKey)
 
 	if version != "" {
 		pkgName = fmt.Sprintf("%s-%s", pkgName, version)
