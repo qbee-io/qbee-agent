@@ -226,3 +226,5 @@ func (s *Service) HandleConsoleCommand(_ context.Context, stream *smux.Stream, p
 		return transport.WriteError(stream, fmt.Errorf("unsupported PTY command: %v", cmd.Type))
 	}
 }
+
+// Windows pty https://github.com/ActiveState/termtest/blob/master/conpty/conpty_windows.go
