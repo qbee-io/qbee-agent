@@ -132,6 +132,10 @@ func (c Container) localEnvFilePath(srv *Service) string {
 		return ""
 	}
 
+	if c.ContainerRuntime == podmanRuntimeType {
+		return filepath.Join(srv.cacheDirectory, PodmanContainerDirectory, fmt.Sprintf("%s.envfile", c.id()))
+	}
+
 	return filepath.Join(srv.cacheDirectory, DockerContainerDirectory, fmt.Sprintf("%s.envfile", c.id()))
 }
 
