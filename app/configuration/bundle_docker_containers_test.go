@@ -85,12 +85,12 @@ func Test_DockerContainers_Container_Start(t *testing.T) {
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
 	dockerBundle := configuration.DockerContainersBundle{
-		Containers: []configuration.DockerContainer{
+		Containers: []configuration.Container{
 			{
-				Name:       containerName,
-				Image:      runner.Debian,
-				DockerArgs: "--rm",
-				Command:    "sleep 5",
+				Name:    containerName,
+				Image:   runner.Debian,
+				Args:    "--rm",
+				Command: "sleep 5",
 			},
 		},
 	}
@@ -120,7 +120,7 @@ func Test_DockerContainers_Container_StartExited(t *testing.T) {
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
 	dockerBundle := configuration.DockerContainersBundle{
-		Containers: []configuration.DockerContainer{
+		Containers: []configuration.Container{
 			{
 				Name:    containerName,
 				Image:   runner.Debian,
@@ -140,12 +140,12 @@ func Test_DockerContainers_Container_StartExited(t *testing.T) {
 
 	// running it the second time re-starts exited container
 	dockerBundle = configuration.DockerContainersBundle{
-		Containers: []configuration.DockerContainer{
+		Containers: []configuration.Container{
 			{
-				Name:       containerName,
-				Image:      runner.Debian,
-				DockerArgs: "--rm",
-				Command:    "sleep 5",
+				Name:    containerName,
+				Image:   runner.Debian,
+				Args:    "--rm",
+				Command: "sleep 5",
 			},
 		},
 	}
@@ -169,7 +169,7 @@ func Test_DockerContainers_Container_RestartOnConfigChange(t *testing.T) {
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
 	dockerBundle := configuration.DockerContainersBundle{
-		Containers: []configuration.DockerContainer{
+		Containers: []configuration.Container{
 			{
 				Name:    containerName,
 				Image:   runner.Debian,
@@ -187,12 +187,12 @@ func Test_DockerContainers_Container_RestartOnConfigChange(t *testing.T) {
 
 	// running it the second time re-starts running container
 	dockerBundle = configuration.DockerContainersBundle{
-		Containers: []configuration.DockerContainer{
+		Containers: []configuration.Container{
 			{
-				Name:       containerName,
-				Image:      runner.Debian,
-				DockerArgs: "--rm",
-				Command:    "sleep 5",
+				Name:    containerName,
+				Image:   runner.Debian,
+				Args:    "--rm",
+				Command: "sleep 5",
 			},
 		},
 	}
@@ -216,12 +216,12 @@ func Test_DockerContainers_Container_PreCondition(t *testing.T) {
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
 	dockerBundleTrue := configuration.DockerContainersBundle{
-		Containers: []configuration.DockerContainer{
+		Containers: []configuration.Container{
 			{
 				Name:         containerName,
 				Image:        runner.Debian,
 				Command:      "sleep 5",
-				DockerArgs:   "--rm",
+				Args:         "--rm",
 				PreCondition: "/bin/true",
 			},
 		},
@@ -240,12 +240,12 @@ func Test_DockerContainers_Container_PreCondition(t *testing.T) {
 	containerName = fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
 	dockerBundleFalse := configuration.DockerContainersBundle{
-		Containers: []configuration.DockerContainer{
+		Containers: []configuration.Container{
 			{
 				Name:         containerName,
 				Image:        runner.Debian,
 				Command:      "sleep 5",
-				DockerArgs:   "--rm",
+				Args:         "--rm",
 				PreCondition: "/bin/false",
 			},
 		},

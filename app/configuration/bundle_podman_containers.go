@@ -1,4 +1,4 @@
-// Copyright 2023 qbee.io
+// Copyright 2024 qbee.io
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,61 +22,39 @@ import (
 	"os/exec"
 )
 
-// DockerContainersBundle controls docker containers running in the system.
-//
-// Example payload:
-//
-//	{
-//		"items": [
-//		  {
-//	     "name": "container-a",
-//	     "image": "debian:stable",
-//	     "docker_args": "-v /path/to/data-volume:/data --hostname my-hostname",
-//	     "env_file": "/my-directory/my-envfile",
-//	     "command": "echo 'hello world!'"
-//		  }
-//		],
-//	 "registry_auths": [
-//	   {
-//	      "server": "gcr.io",
-//	      "username": "user",
-//	      "password": "seCre7"
-//	   }
-//	 ]
-//	}
-type DockerContainersBundle struct {
+type PodmanContainerBundle struct {
 	Metadata
 
-	// Containers to be running in the system.
+	// Containers is a list of containers to be managed.
 	Containers []Container `json:"items"`
 
-	// RegistryAuths contains credentials to private docker registries.
+	// RegistryAuths is a list of registry authentication credentials.
 	RegistryAuths []RegistryAuth `json:"registry_auths"`
 }
 
-// Execute docker containers configuration bundle on the system.
-func (d DockerContainersBundle) Execute(ctx context.Context, service *Service) error {
-	dockerBin, err := exec.LookPath("docker")
+// Execute ensures that the specified containers are in the desired state.
+func (p PodmanContainerBundle) Execute(ctx context.Context, service *Service) error {
+	podmanBin, err := exec.LookPath("podman")
 	if err != nil {
-		ReportError(ctx, nil, "Docker container configuration configured, but no docker executable found on system")
-		return fmt.Errorf("docker not supported: %v", err)
+		ReportError(ctx, nil, "Podman container configuration configured, but no podman executable found on system")
+		return fmt.Errorf("cannot find podman binary: %w", err)
 	}
 
 	// populate all registry credentials
-	for _, auth := range d.RegistryAuths {
-		auth.ContainerRuntime = dockerRuntimeType
+	for _, auth := range p.RegistryAuths {
+		auth.ContainerRuntime = podmanRuntimeType
 		auth.Server = resolveParameters(ctx, auth.Server)
 		auth.Username = resolveParameters(ctx, auth.Username)
 		auth.Password = resolveParameters(ctx, auth.Password)
 
-		if err = auth.execute(ctx, dockerBin); err != nil {
+		if err = auth.execute(ctx, podmanBin); err != nil {
 			ReportError(ctx, err, "Unable to authenticate with %s repository.", auth.URL())
 			return err
 		}
 	}
 
-	for containerIndex, container := range d.Containers {
-		container.ContainerRuntime = dockerRuntimeType
+	for containerIndex, container := range p.Containers {
+		container.ContainerRuntime = podmanRuntimeType
 		container.Name = resolveParameters(ctx, container.Name)
 		container.Image = resolveParameters(ctx, container.Image)
 		container.Args = resolveParameters(ctx, container.Args)
@@ -89,7 +67,7 @@ func (d DockerContainersBundle) Execute(ctx context.Context, service *Service) e
 			container.Name = fmt.Sprintf("%d", containerIndex)
 		}
 
-		if err = container.execute(ctx, service, dockerBin); err != nil {
+		if err = container.execute(ctx, service, podmanBin); err != nil {
 			return err
 		}
 	}
