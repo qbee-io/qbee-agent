@@ -19,6 +19,7 @@ package inventory
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 )
 
@@ -30,6 +31,5 @@ func TestCollectPodmanImagesInventory(t *testing.T) {
 
 	data, _ := json.MarshalIndent(podmanImages, " ", " ")
 
-	//fmt.Println(string(data))
-	t.Fatalf(string(data))
+	fmt.Println(string(data))
 }
