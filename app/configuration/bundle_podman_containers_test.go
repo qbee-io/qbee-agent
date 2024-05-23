@@ -29,6 +29,8 @@ import (
 func Test_PodmanContainers_Container_Start(t *testing.T) {
 	r := runner.NewPodmanRunner(t)
 
+	r.MustExec("apt-get", "install", "-y", "podman")
+
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
 	podmanBundle := configuration.PodmanContainerBundle{
@@ -62,6 +64,8 @@ func Test_PodmanContainers_Container_Start(t *testing.T) {
 
 func Test_PodmanContainers_Container_Change(t *testing.T) {
 	r := runner.NewPodmanRunner(t)
+
+	r.MustExec("apt-get", "install", "-y", "podman")
 
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
@@ -97,6 +101,8 @@ func Test_PodmanContainers_Container_Change(t *testing.T) {
 
 func Test_PodmanContainers_Container_StartExited(t *testing.T) {
 	r := runner.NewPodmanRunner(t)
+
+	r.MustExec("apt-get", "install", "-y", "podman")
 
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
