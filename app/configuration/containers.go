@@ -57,9 +57,6 @@ type Container struct {
 
 	// PreCondition is a shell command that needs to be true before starting the container.
 	PreCondition string `json:"pre_condition,omitempty"`
-
-	// RunAsUser defines the user to run the container as.
-	RunAsUser string `json:"run_as_user,omitempty"`
 }
 
 // execute ensures that configured container is running
