@@ -17,10 +17,8 @@
 package configuration
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -307,42 +305,25 @@ func (s Software) restart(ctx context.Context, srv *Service) {
 		}
 	}()
 
-	var systemctlBin string
-	if systemctlBin, err = exec.LookPath("systemctl"); err != nil {
-		return
-	}
-
 	serviceName := s.serviceName(ctx, srv)
 	if serviceName == "" {
 		err = fmt.Errorf("cannot determine service name")
 		return
 	}
 
-	// append ".service" postfix to be explicit about unit type
-	serviceUnit := fmt.Sprintf("%s.service", serviceName)
+	cmd, err := utils.GenerateServiceCommand(ctx, serviceName, "restart")
+	if err != nil {
+		ReportError(ctx, err, "Unable to check service state '%s'.", serviceName)
+	}
 
-	// check service status
-	cmd := []string{systemctlBin, "show", "--property=LoadState", serviceUnit}
+	if cmd == nil {
+		// no restart command was found, we do not have a service
+		return
+	}
 
 	var output []byte
 	if output, err = utils.RunCommand(ctx, cmd); err != nil {
-		return
-	}
-
-	// if service is not loaded, there isn't anything to restart
-	if !bytes.Equal(bytes.TrimSpace(output), []byte("LoadState=loaded")) {
-		return
-	}
-
-	// restart the service
-	cmd = []string{systemctlBin, "restart", serviceUnit}
-
-	// Make sure that qbee-agent is never restarted in blocking mode.
-	if serviceName == "qbee-agent" {
-		cmd = []string{systemctlBin, "--no-block", "restart", serviceUnit}
-	}
-
-	if output, err = utils.RunCommand(ctx, cmd); err != nil {
+		ReportError(ctx, err, "Unable to restart service '%s'.", serviceName)
 		return
 	}
 

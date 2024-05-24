@@ -17,10 +17,12 @@
 package utils
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"os/exec"
+	"runtime"
 	"syscall"
 )
 
@@ -49,4 +51,89 @@ func NewCommand(ctx context.Context, cmd []string) *exec.Cmd {
 	}
 	command.Dir = "/"
 	return command
+}
+
+// GenerateServiceCommand generates a service command based on the service name and command
+func GenerateServiceCommand(ctx context.Context, serviceName, command string) ([]string, error) {
+	// up%s is only used on linux
+	if runtime.GOOS != "linux" {
+		return nil, fmt.Errorf("unsupported OS: %s", runtime.GOOS)
+	}
+	// first check for systemd
+	if _, err := exec.LookPath("systemctl"); err == nil {
+		return generateSystemctlCommand(ctx, serviceName, command)
+	}
+	// then check for sysvinit
+	if _, err := exec.LookPath("service"); err == nil {
+		return []string{"service", serviceName, command}, nil
+	}
+	// then check for openrc
+	if _, err := exec.LookPath("rc-service"); err == nil {
+		return []string{"rc-service", serviceName, command}, nil
+	}
+	// then check for upstart
+	if _, err := exec.LookPath("initctl"); err == nil {
+		return []string{"initctl", command, serviceName}, nil
+	}
+	// then check for runit
+	if _, err := exec.LookPath("sv"); err == nil {
+		return []string{"sv", command, serviceName}, nil
+	}
+	// then check for launchctl
+	if _, err := exec.LookPath("launchctl"); err == nil {
+		return []string{"launchctl", command, serviceName}, nil
+	}
+	// then check for rcctl
+	if _, err := exec.LookPath("rcctl"); err == nil {
+		return []string{"rcctl", command, serviceName}, nil
+	}
+	// then check existence of /etc/init.d/qbee-agent
+	if _, err := exec.LookPath(fmt.Sprintf("/etc/init.d/%s", serviceName)); err == nil {
+		return []string{fmt.Sprintf("/etc/init.d/%s", serviceName), command}, nil
+	}
+	return nil, fmt.Errorf("unsupported service manager")
+}
+
+// generateSystemctlCommand generates a systemctl command based on the service name and command
+func generateSystemctlCommand(ctx context.Context, serviceName, command string) ([]string, error) {
+	serviceUnit := fmt.Sprintf("%s.service", serviceName)
+
+	cmd := []string{"systemctl", "show", "--property=LoadState", serviceUnit}
+
+	var output []byte
+	var err error
+	if output, err = RunCommand(ctx, cmd); err != nil {
+		return nil, fmt.Errorf("error checking service status: %w", err)
+	}
+
+	// if service is not loaded, there isn't anything to restart
+	if !bytes.Equal(bytes.TrimSpace(output), []byte("LoadState=loaded")) {
+		return nil, nil
+	}
+
+	if command == "start" {
+		return []string{"systemctl", command, serviceUnit}, nil
+	}
+
+	if serviceName == "qbee-agent" {
+		return []string{"systemctl", "--no-block", command, serviceUnit}, nil
+	}
+
+	return []string{"systemctl", command, serviceUnit}, nil
+}
+
+const shutdownBinPath = "/sbin/shutdown"
+const rebootBinPath = "/sbin/reboot"
+
+// RebootCommand returns the command to reboot the system
+func RebootCommand() ([]string, error) {
+	if _, err := exec.LookPath(shutdownBinPath); err == nil {
+		return []string{shutdownBinPath, "-r", "+1"}, nil
+	}
+
+	if _, err := exec.LookPath(rebootBinPath); err == nil {
+		return []string{rebootBinPath}, nil
+	}
+
+	return nil, fmt.Errorf("cannot reboot: %s or %s not found", shutdownBinPath, rebootBinPath)
 }
