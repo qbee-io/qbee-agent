@@ -44,6 +44,11 @@ func Test_SoftwareManagementBundle_InstallPackageFromFile(t *testing.T) {
 			filename: "file:///yum-repo/qbee-test-2.1.1-1.noarch.rpm",
 			runner:   runner.NewRHELRunner(t),
 		},
+		{
+			name:     "opkg",
+			filename: "file:///opkg-repo/qbee-test_2.1.1_all.ipk",
+			runner:   runner.NewOpenWRTRunner(t),
+		},
 	}
 
 	wg := sync.WaitGroup{}
@@ -61,10 +66,11 @@ func Test_SoftwareManagementBundle_InstallPackageFromFile(t *testing.T) {
 			}
 
 			reports := executeSoftwareManagementBundle(r, packages)
+
 			expectedReports := []string{
 				fmt.Sprintf("[INFO] Successfully installed '%s'", filename),
 				// since we are not installing systemctl on the test docker image, we will get the following warning
-				fmt.Sprintf("[WARN] Required restart of '%s' cannot be performed.", filename),
+				fmt.Sprintf("[WARN] Required restart of '%s' cannot be performed", filename),
 			}
 			assert.Equal(t, reports, expectedReports)
 
@@ -133,6 +139,11 @@ func Test_SoftwareManagementBundle_InstallPackageFromFile_WithDependencies(t *te
 			filename: "file:///yum-repo/qbee-test-dep-1.0.0-1.noarch.rpm",
 			runner:   runner.NewRHELRunner(t),
 		},
+		{
+			name:     "opkg",
+			filename: "file:///opkg-repo/qbee-test-dep_1.0.0_all.ipk",
+			runner:   runner.NewOpenWRTRunner(t),
+		},
 	}
 
 	wg := sync.WaitGroup{}
@@ -153,7 +164,7 @@ func Test_SoftwareManagementBundle_InstallPackageFromFile_WithDependencies(t *te
 			expectedReports := []string{
 				fmt.Sprintf("[INFO] Successfully installed '%s'", filename),
 				// since we are not installing systemctl on the test docker image, we will get the following warning
-				fmt.Sprintf("[WARN] Required restart of '%s' cannot be performed.", filename),
+				fmt.Sprintf("[WARN] Required restart of '%s' cannot be performed", filename),
 			}
 			assert.Equal(t, reports, expectedReports)
 
@@ -209,7 +220,7 @@ func Test_SoftwareManagementBundle_InstallPackage_WithConfigFileTemplate(t *test
 		"[INFO] Successfully installed 'qbee-test'",
 		fmt.Sprintf("[INFO] Successfully rendered template file file:///%s to /etc/config.test", filename),
 		// since we are not installing systemctl on the test docker image, we will get the following warning
-		"[WARN] Required restart of 'qbee-test' cannot be performed.",
+		"[WARN] Required restart of 'qbee-test' cannot be performed",
 	}
 	assert.Equal(t, reports, expectedReports)
 
@@ -233,7 +244,7 @@ func Test_SoftwareManagementBundle_InstallPackage_RestartService_WithoutSystemct
 
 	expectedReports := []string{
 		"[INFO] Successfully installed 'qbee-test'",
-		"[WARN] Required restart of 'qbee-test' cannot be performed.",
+		"[WARN] Required restart of 'qbee-test' cannot be performed",
 	}
 	assert.Equal(t, reports, expectedReports)
 }
@@ -290,7 +301,7 @@ func Test_SoftwareManagementBundle_InstallPackage_RestartService_WithServiceName
 
 	expectedReports := []string{
 		"[INFO] Successfully installed 'qbee-test-service'",
-		"[INFO] Restarted service 'test'.",
+		"[INFO] Restarted service 'test'",
 	}
 	assert.Equal(t, reports, expectedReports)
 }

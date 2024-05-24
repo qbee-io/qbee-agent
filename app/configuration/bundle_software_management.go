@@ -301,7 +301,7 @@ func (s Software) restart(ctx context.Context, srv *Service) {
 
 	defer func() {
 		if err != nil {
-			ReportWarning(ctx, err, "Required restart of '%s' cannot be performed.", s.Package)
+			ReportWarning(ctx, err, "Required restart of '%s' cannot be performed", s.Package)
 		}
 	}()
 
@@ -313,7 +313,7 @@ func (s Software) restart(ctx context.Context, srv *Service) {
 
 	cmd, err := utils.GenerateServiceCommand(ctx, serviceName, "restart")
 	if err != nil {
-		ReportError(ctx, err, "Unable to check service state '%s'.", serviceName)
+		return
 	}
 
 	if cmd == nil {
@@ -323,9 +323,8 @@ func (s Software) restart(ctx context.Context, srv *Service) {
 
 	var output []byte
 	if output, err = utils.RunCommand(ctx, cmd); err != nil {
-		ReportError(ctx, err, "Unable to restart service '%s'.", serviceName)
 		return
 	}
 
-	ReportInfo(ctx, output, "Restarted service '%s'.", serviceName)
+	ReportInfo(ctx, output, "Restarted service '%s'", serviceName)
 }
