@@ -89,6 +89,11 @@ func (srv *Service) downloadFile(ctx context.Context, label, src, dst string) (b
 		return false, err
 	}
 
+	// We don't have metadata for the file and err is nil, so we do not have a http error
+	if fileMetadata == nil {
+		return false, nil
+	}
+
 	var fileReady bool
 	fileReady, err = srv.downloadMetadataCompare(ctx, label, src, dst, fileMetadata)
 

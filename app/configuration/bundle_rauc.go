@@ -243,6 +243,10 @@ func downloadRaucBundle(ctx context.Context, service *Service, raucPath, raucDow
 		return "", err
 	}
 
+	if bundleMetadata == nil {
+		return "", nil
+	}
+
 	raucStateDir := path.Join(service.cacheDirectory, "rauc")
 
 	if _, err := os.Stat(raucStateDir); os.IsNotExist(err) {
