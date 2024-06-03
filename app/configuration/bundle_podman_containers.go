@@ -22,6 +22,28 @@ import (
 	"os/exec"
 )
 
+// PodmanContainerBundle controls docker containers running in the system.
+//
+// Example payload:
+//
+//	{
+//		"items": [
+//		  {
+//	     "name": "container-a",
+//	     "image": "debian:stable",
+//	     "docker_args": "-v /path/to/data-volume:/data --hostname my-hostname",
+//	     "env_file": "/my-directory/my-envfile",
+//	     "command": "echo 'hello world!'"
+//		  }
+//		],
+//	 "registry_auths": [
+//	   {
+//	      "server": "gcr.io",
+//	      "username": "user",
+//	      "password": "seCre7"
+//	   }
+//	 ]
+//	}
 type PodmanContainerBundle struct {
 	Metadata
 

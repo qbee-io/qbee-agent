@@ -69,7 +69,7 @@ type PodmanContainer struct {
 	Networks string `json:"networks"`
 }
 
-const PodmanContainersFormat = `{"id":"{{.ID}}","names":"{{.Names}}","image":"{{.Image}}","command":"{{.Command}}",` +
+const podmanContainersFormat = `{"id":"{{.ID}}","names":"{{.Names}}","image":"{{.Image}}","command":"{{.Command}}",` +
 	`"created_at":"{{.CreatedAt}}","status":"{{.Status}}","ports":"{{.Ports}}","size":"{{.Size}}",` +
 	`"mounts":"{{.Mounts}}", "networks":"{{.Networks}}"}`
 
@@ -79,7 +79,7 @@ func CollectPodmanContainersInventory(ctx context.Context) (*PodmanContainers, e
 		return nil, nil
 	}
 
-	cmd := []string{"podman", "container", "ls", "--no-trunc", "--all", "--size", "--format", PodmanContainersFormat}
+	cmd := []string{"podman", "container", "ls", "--no-trunc", "--all", "--size", "--format", podmanContainersFormat}
 
 	containers := make([]PodmanContainer, 0)
 

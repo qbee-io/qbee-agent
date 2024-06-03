@@ -24,7 +24,7 @@ import (
 	"go.qbee.io/agent/app/utils"
 )
 
-// TypeDockerImages is the inventory type for Podman images.
+// TypePodmanImages is the inventory type for Podman images.
 const TypePodmanImages Type = "podman_images"
 
 // PodmanImages represents a list of Podman images.
