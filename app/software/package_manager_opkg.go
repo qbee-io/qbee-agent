@@ -34,6 +34,7 @@ import (
 	"go.qbee.io/agent/app/utils/cache"
 )
 
+// PackageManagerTypeOpkg is the type of the opkg package manager.
 const PackageManagerTypeOpkg PackageManagerType = "opkg"
 const opkgFileSuffix string = ".ipk"
 
@@ -353,10 +354,9 @@ func (opkg *OpkgPackageManager) PackageArchitecture() (string, error) {
 	return arch, nil
 }
 
-// ParseOpkgPackage parses an opkg package file and returns a Package struct.
-
 var opkgParseOpkgPackageRE = regexp.MustCompile(`^([^_]+)_(\d[^_]+)_(\S+).ipk$`)
 
+// ParsePackageFile parses an opkg package file and returns a Package struct.
 func (opkg *OpkgPackageManager) ParsePackageFile(ctx context.Context, pkgFilePath string) (*Package, error) {
 	// opkg does not support parsing local packages, we need to parse the package filename instead
 	// split the filename into parts
