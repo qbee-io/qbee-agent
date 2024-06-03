@@ -35,6 +35,9 @@ import (
 const PackageManagerTypeRpm PackageManagerType = "rpm"
 const rpmFileSuffix string = ".rpm"
 
+var rpmPackagesCacheKey = fmt.Sprintf("%s:%s:packages", pkgCacheKeyPrefix, PackageManagerTypeRpm)
+var rpmPkgArchCacheKey = fmt.Sprintf("%s:%s:arch", pkgCacheKeyPrefix, PackageManagerTypeRpm)
+
 const (
 	rpmPath = "rpm"
 	yumPath = "yum"
@@ -95,7 +98,7 @@ func (rpm *RpmPackageManager) ListPackages(ctx context.Context) ([]Package, erro
 	rpm.lock.Lock()
 	defer rpm.lock.Unlock()
 
-	if cachedPackages, ok := cache.Get(packagesCacheKey); ok {
+	if cachedPackages, ok := cache.Get(rpmPackagesCacheKey); ok {
 		return cachedPackages.([]Package), nil
 	}
 
@@ -113,7 +116,7 @@ func (rpm *RpmPackageManager) ListPackages(ctx context.Context) ([]Package, erro
 	for i, pkg := range installedPackages {
 		installedPackages[i].Update = availableUpdates[pkg.ID()]
 	}
-	cache.Set(packagesCacheKey, installedPackages, pkgCacheTTL)
+	cache.Set(rpmPackagesCacheKey, installedPackages, pkgCacheTTL)
 
 	return installedPackages, nil
 }
@@ -254,7 +257,7 @@ func (rpm *RpmPackageManager) UpgradeAll(ctx context.Context) (int, []byte, erro
 		return 0, output, err
 	}
 
-	cache.Delete(packagesCacheKey)
+	cache.Delete(rpmPackagesCacheKey)
 
 	return updatesAvailable, output, err
 }
@@ -264,7 +267,7 @@ func (rpm *RpmPackageManager) Install(ctx context.Context, pkgName, version stri
 	rpm.lock.Lock()
 	defer rpm.lock.Unlock()
 
-	defer cache.Delete(packagesCacheKey)
+	defer cache.Delete(rpmPackagesCacheKey)
 
 	if version != "" {
 		pkgName = fmt.Sprintf("%s-%s", pkgName, version)
@@ -286,7 +289,7 @@ func (rpm *RpmPackageManager) InstallLocal(ctx context.Context, pkgFilePath stri
 	rpm.lock.Lock()
 	defer rpm.lock.Unlock()
 
-	defer cache.Delete(packagesCacheKey)
+	defer cache.Delete(rpmPackagesCacheKey)
 
 	installCmd := []string{
 		yumPath,
@@ -301,7 +304,7 @@ func (rpm *RpmPackageManager) InstallLocal(ctx context.Context, pkgFilePath stri
 
 // PackageArchitecture returns the architecture of the package manager
 func (rpm *RpmPackageManager) PackageArchitecture() (string, error) {
-	if cachedArch, ok := cache.Get(pkgArchCacheKey); ok {
+	if cachedArch, ok := cache.Get(rpmPkgArchCacheKey); ok {
 		return cachedArch.(string), nil
 	}
 
@@ -312,7 +315,7 @@ func (rpm *RpmPackageManager) PackageArchitecture() (string, error) {
 		return "", err
 	}
 
-	cache.Set(pkgArchCacheKey, strings.TrimSpace(string(output)), pkgCacheTTL)
+	cache.Set(rpmPkgArchCacheKey, strings.TrimSpace(string(output)), pkgCacheTTL)
 
 	return strings.TrimSpace(string(output)), nil
 }
