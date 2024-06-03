@@ -22,14 +22,13 @@ import (
 	"encoding/pem"
 	"fmt"
 	"net/http"
-	"os/exec"
-	"runtime"
 	"strings"
 	"time"
 
 	"go.qbee.io/agent/app/api"
 	"go.qbee.io/agent/app/inventory"
 	"go.qbee.io/agent/app/log"
+	"go.qbee.io/agent/app/utils"
 )
 
 const bootstrapWaitTime = 5 * time.Second
@@ -102,54 +101,15 @@ func Bootstrap(ctx context.Context, cfg *Config) error {
 	agent.Wait()
 
 	log.Infof("Bootstrap successfully completed")
-
-	upstartCmd := guessUpstartCommand("qbee-agent", "start")
 	log.Infof("Please remember to start the qbee-agent service as administrative user")
-	log.Infof("Detected start command based on OS attributes is: $ %s", upstartCmd)
 
+	upstartCmd, err := utils.GenerateServiceCommand(ctx, "qbee-agent", "start")
+	if err != nil {
+		log.Infof("Could not detect start command based on OS attributes: %v", err)
+	} else {
+		log.Infof("Detected start command based on OS attributes is: $ %s", strings.Join(upstartCmd, " "))
+	}
 	return nil
-}
-
-// guesssUpstartCommand guesses the upstart system based on available binaries
-func guessUpstartCommand(progName, command string) string {
-	// up%s is only used on linux
-	if runtime.GOOS != "linux" {
-		return "unknown"
-	}
-	// first check for systemd
-	if _, err := exec.LookPath("systemctl"); err == nil {
-		return fmt.Sprintf("systemctl %s %s", command, progName)
-	}
-	// then check for sysvinit
-	if _, err := exec.LookPath("service"); err == nil {
-		return fmt.Sprintf("service %s %s", progName, command)
-	}
-	// then check for openrc
-	if _, err := exec.LookPath("rc-service"); err == nil {
-		return fmt.Sprintf("rc-service %s %s", progName, command)
-	}
-	// then check for upstart
-	if _, err := exec.LookPath("initctl"); err == nil {
-		return fmt.Sprintf("initctl %s %s", command, progName)
-	}
-	// then check for runit
-	if _, err := exec.LookPath("sv"); err == nil {
-		return fmt.Sprintf("sv %s %s", command, progName)
-	}
-	// then check for launchctl
-	if _, err := exec.LookPath("launchctl"); err == nil {
-		return fmt.Sprintf("launchctl %s %s", command, progName)
-	}
-	// then check for rcctl
-	if _, err := exec.LookPath("rcctl"); err == nil {
-		return fmt.Sprintf("rcctl %s %s", command, progName)
-	}
-	// then check existence of /etc/init.d/qbee-agent
-	if _, err := exec.LookPath(fmt.Sprintf("/etc/init.d/%s", progName)); err == nil {
-		return fmt.Sprintf("/etc/init.d/%s %s", progName, command)
-	}
-
-	return "unknown"
 }
 
 // getRawPublicKey returns a slice of PEM-encoded public key lines.

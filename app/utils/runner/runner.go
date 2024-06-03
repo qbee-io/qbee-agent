@@ -26,7 +26,9 @@ func New(t *testing.T) *Runner {
 
 // NewOpenWRTRunner creates a new runner for the given test using the openwrt:qbee image.
 func NewOpenWRTRunner(t *testing.T) *Runner {
-	return NewWithImage(t, OpenWRT)
+	runner := NewWithImage(t, OpenWRT)
+	runner.MustExec("mkdir", "-p", "/var/lock")
+	return runner
 }
 
 // NewRHELRunner creates a new runner for the given test using the rhel:qbee image.

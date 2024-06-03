@@ -22,6 +22,10 @@ docker-image:
 		--build-arg version=2023.01 \
 		-f Dockerfile.rhel9 .
 
+	docker build -t openwrt:qbee \
+		--build-arg version=2023.01 \
+		-f Dockerfile.openwrt .
+
 test:
 	go test ./app/...
 
