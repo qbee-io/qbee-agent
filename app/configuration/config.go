@@ -31,6 +31,7 @@ const (
 	BundleFirewall             = "firewall"
 	BundlePassword             = "password"
 	BundleDockerContainers     = "docker_containers"
+	BundlePodmanContainers     = "podman_containers"
 	BundleRauc                 = "rauc"
 )
 
@@ -87,6 +88,8 @@ func (cc *CommittedConfig) selectBundleByName(bundleName string) Bundle {
 		return cc.BundleData.Password
 	case BundleDockerContainers:
 		return cc.BundleData.DockerContainers
+	case BundlePodmanContainers:
+		return cc.BundleData.PodmanContainers
 	case BundleRauc:
 		return cc.BundleData.Rauc
 	default:
@@ -113,6 +116,7 @@ type BundleData struct {
 	// Software
 	SoftwareManagement *SoftwareManagementBundle `json:"software_management,omitempty"`
 	DockerContainers   *DockerContainersBundle   `json:"docker_containers,omitempty"`
+	PodmanContainers   *PodmanContainerBundle    `json:"podman_containers,omitempty"`
 
 	// Security
 	Password *PasswordBundle `json:"password,omitempty"`

@@ -21,36 +21,51 @@ const RHEL = "rhel:qbee"
 
 // New creates a new runner for the given test.
 func New(t *testing.T) *Runner {
-	return NewWithImage(t, Debian)
+	return NewWithImage(t, Debian, false)
 }
 
 // NewOpenWRTRunner creates a new runner for the given test using the openwrt:qbee image.
 func NewOpenWRTRunner(t *testing.T) *Runner {
-	runner := NewWithImage(t, OpenWRT)
+	runner := NewWithImage(t, OpenWRT, false)
 	runner.MustExec("mkdir", "-p", "/var/lock")
 	return runner
 }
 
 // NewRHELRunner creates a new runner for the given test using the rhel:qbee image.
 func NewRHELRunner(t *testing.T) *Runner {
-	return NewWithImage(t, RHEL)
+	return NewWithImage(t, RHEL, false)
+}
+
+// NewPodmanRunner creates a new runner for the given test using the debian:qbee-podman image.
+func NewPodmanRunner(t *testing.T) *Runner {
+	return NewWithImage(t, Debian, true)
 }
 
 // NewWithImage creates a new runner for the given test using the given image.
-func NewWithImage(t *testing.T, image string) *Runner {
+func NewWithImage(t *testing.T, image string, privileged bool) *Runner {
 	cmdArgs := []string{
 		"run",
-		"--rm",                                            // remove container after container exits
-		"-v", "/var/run/docker.sock:/var/run/docker.sock", // mount docker socket
-		"-v", "/sys/fs/cgroup:/sys/fs/cgroup:ro", // mount cgroup for docker
-		"--tmpfs", "/tmp",
-		"--tmpfs", "/run",
-		"--tmpfs", "/run/lock",
-		"--cap-add=NET_ADMIN", // allow control of firewall
-		"--detach",            // launch in background
+		"--rm",
+	}
+
+	if privileged {
+		cmdArgs = append(cmdArgs, "--privileged")
+	} else {
+		cmdArgs = append(cmdArgs, []string{
+			"-v", "/var/run/docker.sock:/var/run/docker.sock", // mount docker socket
+			"-v", "/sys/fs/cgroup:/sys/fs/cgroup:ro", // mount cgroup for docker
+			"--tmpfs", "/tmp",
+			"--tmpfs", "/run",
+			"--tmpfs", "/run/lock",
+			"--cap-add=NET_ADMIN", // allow control of firewall
+		}...)
+	}
+
+	cmdArgs = append(cmdArgs, []string{
+		"--detach", // launch in background
 		image,
 		"sleep", "600", // force exit container after 10 minutes
-	}
+	}...)
 
 	output, err := exec.Command("docker", cmdArgs...).Output()
 	if err != nil {
