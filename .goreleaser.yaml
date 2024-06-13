@@ -6,7 +6,7 @@ before:
 builds:
   - env:
       - CGO_ENABLED=0
-
+      - GOARM=5
     gcflags:
       - -trimpath
     ldflags:
@@ -27,7 +27,7 @@ builds:
       - linux_ppc64
       - linux_ppc64le
       - linux_riscv64
-      - linux_s390x 
+      - linux_s390x
 
 archives:
   - format: tar.gz
@@ -93,3 +93,11 @@ nfpms:
       preinstall: package/install-scripts/preinst
       postinstall: package/install-scripts/postinst
       preremove: package/install-scripts/prerm
+    
+    overrides:
+      rpm:
+        scripts:
+          preremove: package/install-scripts/prerm-rpm
+      deb: 
+        scripts:
+          preremove: package/install-scripts/prerm-deb
