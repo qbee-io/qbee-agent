@@ -1,3 +1,4 @@
+version: 2
 before:
   hooks:
     - go mod tidy
@@ -5,7 +6,6 @@ before:
 builds:
   - env:
       - CGO_ENABLED=0
-      - PUBLIC_SIGNING_KEY={{ if index .Env "PUBLIC_SIGNING_KEY"  }}{{ .Env.PUBLIC_SIGNING_KEY }}{{ else }}xSHbUBG7LTuNfXd3zod4EX8_Es8FTCINgrjvx1WXFE4.plCHzlDAeb3IWW1wK6P6paMRYO4f8qceV3lrNCqNpWo{{ end }}
 
     gcflags:
       - -trimpath
@@ -13,13 +13,21 @@ builds:
       - -s 
       - -w 
       - -X github.com/qbee-io/qbee-agent/app.Version={{.Version}}
-      - -X github.com/qbee-io/qbee-agent/app/binary.PublicSigningKey={{.Env.PUBLIC_SIGNING_KEY}}
       - -X github.com/qbee-io/qbee-agent/app.Commit={{.FullCommit}}
     targets:
-      - "linux_amd64"
-      - "linux_386"
-      - "linux_arm"
-      - "linux_arm64"
+      - linux_amd64
+      - linux_386
+      - linux_arm
+      - linux_arm64
+      - linux_loong64
+      - linux_mips
+      - linux_mips64
+      - linux_mips64le
+      - linux_mipsle
+      - linux_ppc64
+      - linux_ppc64le
+      - linux_riscv64
+      - linux_s390x 
 
 archives:
   - format: tar.gz
