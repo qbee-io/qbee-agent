@@ -30,13 +30,13 @@ builds:
       - linux_s390x
 
 archives:
-  - format: tar.gz
-    name_template: >-
-      {{ .ProjectName }}_
-      {{- title .Os }}_
-      {{- if eq .Arch "amd64" }}x86_64
-      {{- else if eq .Arch "386" }}i386
-      {{- else }}{{ .Arch }}{{ end }}
+   - format: tar.gz
+     name_template: >-
+       {{ .ProjectName }}_
+       {{- title .Os | tolower }}_
+       {{- if eq .Arch "amd64" }}x86_64
+       {{- else if eq .Arch "386" }}i386
+       {{- else }}{{ .Arch }}{{ end }}
       
 changelog:
   sort: asc
@@ -45,15 +45,21 @@ changelog:
       - "^docs:"
       - "^test:"
 
+checksum:
+#  name_template: "{{ .ProjectName }}_checksums.txt"
+#  name_template: "{{ .Algorithm | toupper }}SUMS"
+  algorithm: sha256
+  split: true
+
 nfpms:
   - vendor: qbee.io
     homepage: https://qbee.io/
     maintainer: The Qbee Team <support@qbee.io>
+    license: Apache-2.0
 
     description: |-
       Qbee agent
-      Qbee is a lightweight system management platform for IoT devices.
-    license: Apache 2.0
+      Qbee is a lightweight system management platform for IoT devices
 
     file_name_template: "{{.ConventionalFileName }}"
 
@@ -63,13 +69,15 @@ nfpms:
     formats:
       - deb
       - rpm
+#      - apk
+#      - archlinux
     
     contents:
       - src: package/share/
         dst: /opt/qbee/share/
         type: tree
         file_info:
-          mode: 0600
+          mode: 0644
           owner: root
           group: root
       
@@ -92,7 +100,7 @@ nfpms:
     scripts:
       preinstall: package/install-scripts/preinst
       postinstall: package/install-scripts/postinst
-      preremove: package/install-scripts/prerm
+#      preremove: package/install-scripts/prerm
     
     overrides:
       rpm:
