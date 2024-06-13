@@ -14,26 +14,22 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package remoteaccess
+package inventory
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"testing"
 )
 
-const vpnCertPath = "/v1/org/device/auth/vpncert"
-
-// getCredentials retrieves the remote access credentials from the device hub.
-func (s *Service) getCredentials(ctx context.Context) (*Credentials, error) {
-	credentials := new(Credentials)
-
-	if err := s.api.Get(ctx, vpnCertPath, &credentials); err != nil {
-		return nil, err
+func TestCollectPodmanContainersInventory(t *testing.T) {
+	podmanContainers, err := CollectPodmanContainersInventory(context.Background())
+	if err != nil {
+		t.Fatalf("error collecting podman containers: %v", err)
 	}
 
-	if credentials.Status != "OK" {
-		return nil, fmt.Errorf("failed to get remote access credentials")
-	}
+	data, _ := json.MarshalIndent(podmanContainers, " ", " ")
 
-	return credentials, nil
+	fmt.Println(string(data))
 }

@@ -21,13 +21,14 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"os/exec"
-	"runtime"
+	"net/http"
 	"strings"
 	"time"
 
-	"github.com/qbee-io/qbee-agent/app/inventory"
-	"github.com/qbee-io/qbee-agent/app/log"
+	"go.qbee.io/agent/app/api"
+	"go.qbee.io/agent/app/inventory"
+	"go.qbee.io/agent/app/log"
+	"go.qbee.io/agent/app/utils"
 )
 
 const bootstrapWaitTime = 5 * time.Second
@@ -37,6 +38,11 @@ func Bootstrap(ctx context.Context, cfg *Config) error {
 	agent, err := NewWithoutCredentials(cfg)
 	if err != nil {
 		return err
+	}
+
+	// we cannot perform bootstrap without a CA certificate
+	if agent.caCertPool.Equal(x509.NewCertPool()) {
+		return fmt.Errorf("CA certificate pool is empty, bootstrap not possible")
 	}
 
 	if err = agent.createPrivateKey(); err != nil {
@@ -56,11 +62,19 @@ func Bootstrap(ctx context.Context, cfg *Config) error {
 	for {
 
 		if response, err = agent.sendBootstrapRequest(ctx, cfg.BootstrapKey, bootstrapRequest); err != nil {
-			return fmt.Errorf("error sending bootstrap request: %w", err)
+			// We should only break the loop if the error is an unauthorized error
+			// There might be other errors that we can recover from, like network errors, clock skew, etc.
+			asErr, ok := err.(*api.Error)
+			if ok && asErr.ResponseCode == http.StatusUnauthorized {
+				return fmt.Errorf("bootstrap key is invalid: %w", err)
+			}
+			log.Errorf("error sending bootstrap request: %v", err)
 		}
 
-		if response.CertificateRequestsStatus == "authorized" {
-			break
+		if response != nil {
+			if response.CertificateRequestsStatus == "authorized" {
+				break
+			}
 		}
 
 		log.Infof("Awaiting to be approved.")
@@ -84,57 +98,18 @@ func Bootstrap(ctx context.Context, cfg *Config) error {
 	}
 
 	agent.RunOnce(ctx, QuickRun)
-	agent.inProgress.Wait()
+	agent.Wait()
 
 	log.Infof("Bootstrap successfully completed")
-
-	upstartCmd := guessUpstartCommand("qbee-agent", "start")
 	log.Infof("Please remember to start the qbee-agent service as administrative user")
-	log.Infof("Detected start command based on OS attributes is: $ %s", upstartCmd)
 
+	upstartCmd, err := utils.GenerateServiceCommand(ctx, "qbee-agent", "start")
+	if err != nil {
+		log.Infof("Could not detect start command based on OS attributes: %v", err)
+	} else {
+		log.Infof("Detected start command based on OS attributes is: $ %s", strings.Join(upstartCmd, " "))
+	}
 	return nil
-}
-
-// guesssUpstartCommand guesses the upstart system based on available binaries
-func guessUpstartCommand(progName, command string) string {
-	// up%s is only used on linux
-	if runtime.GOOS != "linux" {
-		return "unknown"
-	}
-	// first check for systemd
-	if _, err := exec.LookPath("systemctl"); err == nil {
-		return fmt.Sprintf("systemctl %s %s", command, progName)
-	}
-	// then check for sysvinit
-	if _, err := exec.LookPath("service"); err == nil {
-		return fmt.Sprintf("service %s %s", progName, command)
-	}
-	// then check for openrc
-	if _, err := exec.LookPath("rc-service"); err == nil {
-		return fmt.Sprintf("rc-service %s %s", progName, command)
-	}
-	// then check for upstart
-	if _, err := exec.LookPath("initctl"); err == nil {
-		return fmt.Sprintf("initctl %s %s", command, progName)
-	}
-	// then check for runit
-	if _, err := exec.LookPath("sv"); err == nil {
-		return fmt.Sprintf("sv %s %s", command, progName)
-	}
-	// then check for launchctl
-	if _, err := exec.LookPath("launchctl"); err == nil {
-		return fmt.Sprintf("launchctl %s %s", command, progName)
-	}
-	// then check for rcctl
-	if _, err := exec.LookPath("rcctl"); err == nil {
-		return fmt.Sprintf("rcctl %s %s", command, progName)
-	}
-	// then check existence of /etc/init.d/qbee-agent
-	if _, err := exec.LookPath(fmt.Sprintf("/etc/init.d/%s", progName)); err == nil {
-		return fmt.Sprintf("/etc/init.d/%s %s", progName, command)
-	}
-
-	return "unknown"
 }
 
 // getRawPublicKey returns a slice of PEM-encoded public key lines.
@@ -162,7 +137,7 @@ func (agent *Agent) getRawPublicKey() ([]string, error) {
 func (agent *Agent) newBootstrapRequest() (*BootstrapRequest, error) {
 	log.Infof("Gathering system information")
 
-	systemInventory, err := inventory.CollectSystemInventory()
+	systemInventory, err := inventory.CollectSystemInventory(agent.IsTPMEnabled())
 	if err != nil {
 		return nil, fmt.Errorf("error collecting system info: %w", err)
 	}

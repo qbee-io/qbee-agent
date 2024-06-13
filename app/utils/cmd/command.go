@@ -78,7 +78,7 @@ func (cmd Command) renderOptions() {
 		line := "  "
 
 		if opt.Short == "" {
-			line += fmt.Sprintf("    ")
+			line += "    "
 		} else {
 			line += fmt.Sprintf("-%s, ", opt.Short)
 		}
@@ -126,7 +126,7 @@ func (cmd Command) renderSubCommands() {
 
 	writer := tabwriter.NewWriter(os.Stdout, 0, 1, 1, ' ', 0)
 	for _, subCmdName := range subCommands {
-		_, _ = fmt.Fprintln(writer, fmt.Sprintf("  %s\t- %s\t", subCmdName, cmd.SubCommands[subCmdName].Description))
+		_, _ = fmt.Fprintf(writer, "  %s\t- %s\t\n", subCmdName, cmd.SubCommands[subCmdName].Description)
 	}
 	_ = writer.Flush()
 

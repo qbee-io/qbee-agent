@@ -1,9 +1,0 @@
-#!/usr/bin/env bash
-
-SYSTEMCTL=$(command -v systemctl)
-
-if [[ -n $SYSTEMCTL ]]; then
-  if [[ -d /run/systemd/system ]]; then
-    systemctl stop qbee-agent
-  fi
-fi

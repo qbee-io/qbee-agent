@@ -16,6 +16,8 @@
 
 package inventory
 
+import "time"
+
 // TypeSystem is the inventory type for system information.
 const TypeSystem Type = "system"
 
@@ -23,6 +25,9 @@ const TypeSystem Type = "system"
 type System struct {
 	System SystemInfo `json:"system"`
 }
+
+const systemInventoryCacheKey = "inventory:system"
+const systemInventoryCacheTTL = time.Minute
 
 // SystemInfo contains system information.
 type SystemInfo struct {
@@ -56,6 +61,9 @@ type SystemInfo struct {
 	// This is used, for instance, to detect which package name to choose when updating software binaries for CFEngine.
 	// Example: "ubuntu_22"
 	Flavor string `json:"flavor"`
+
+	// OSVersion - The full version of the operating system (e.g. "Ubuntu 22.04.3 LTS (Jammy Jellyfish)").
+	OSVersion string `json:"os_version"`
 
 	// BootTime represents system boot time (as Unix timestamp string, e.g. "1586144402")
 	BootTime string `json:"boot_time"`
@@ -167,8 +175,8 @@ type SystemInfo struct {
 	// AgentVersion used to collect the inventory.
 	AgentVersion string `json:"cf_version"`
 
-	// AutoUpdateEnabled - flags whether auto update is enabled or not.
-	AutoUpdateEnabled bool `json:"auto_update_enabled"`
+	// TPMEnabled indicates if the agent uses TPM to seal its private key.
+	TPMEnabled bool `json:"tpm_enabled"`
 
 	// VPNIndex - defines numeric ID of the VPN server to which the device is connected.
 	// For now all devices are connected to the same VPN server, so this value is always 1.

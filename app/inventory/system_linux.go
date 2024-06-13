@@ -27,11 +27,13 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 
-	"github.com/qbee-io/qbee-agent/app"
-	"github.com/qbee-io/qbee-agent/app/inventory/linux"
-	"github.com/qbee-io/qbee-agent/app/log"
-	"github.com/qbee-io/qbee-agent/app/utils"
+	"go.qbee.io/agent/app"
+	"go.qbee.io/agent/app/inventory/linux"
+	"go.qbee.io/agent/app/log"
+	"go.qbee.io/agent/app/utils"
+	"go.qbee.io/agent/app/utils/cache"
 )
 
 const (
@@ -40,9 +42,15 @@ const (
 )
 
 // CollectSystemInventory returns populated System inventory based on current system status.
-func CollectSystemInventory() (*System, error) {
+func CollectSystemInventory(tpmEnabled bool) (*System, error) {
+
+	if cachedItem, ok := cache.Get(systemInventoryCacheKey); ok {
+		return cachedItem.(*System), nil
+	}
+
 	systemInfo := &SystemInfo{
 		AgentVersion: app.Version,
+		TPMEnabled:   tpmEnabled,
 		Class:        systemClass,
 		OS:           systemOS,
 		VPNIndex:     "1",
@@ -78,6 +86,8 @@ func CollectSystemInventory() (*System, error) {
 	systemInfo.CPUs = fmt.Sprintf("%d", runtime.NumCPU())
 
 	systemInventory := &System{System: *systemInfo}
+
+	cache.Set(systemInventoryCacheKey, systemInventory, systemInventoryCacheTTL)
 
 	return systemInventory, nil
 }
@@ -178,11 +188,14 @@ func (systemInfo *SystemInfo) gatherNetworkInfo() error {
 	return nil
 }
 
-// parseOSRelease extracts flavor information from os-release file.
+// parseOSRelease extracts flavor and os_version information from os-release file.
 func (systemInfo *SystemInfo) parseOSRelease() error {
-	// Set default to unknown
+	// Set defaults to unknown
 	systemInfo.Flavor = "unknown"
+	systemInfo.OSVersion = "unknown"
+
 	data, err := utils.ParseEnvFile("/etc/os-release")
+
 	if err != nil {
 		data, err = utils.ParseEnvFile("/usr/lib/os-release")
 	}
@@ -192,12 +205,28 @@ func (systemInfo *SystemInfo) parseOSRelease() error {
 		return nil
 	}
 
+	if _, ok := data["ID"]; !ok {
+		return nil
+	}
+
+	if _, ok := data["VERSION_ID"]; !ok {
+		return nil
+	}
+
 	id := canonify(strings.ToLower(data["ID"]))
 	versionID := canonify(data["VERSION_ID"])
-
 	version := strings.Split(versionID, "_")
-
 	systemInfo.Flavor = fmt.Sprintf("%s_%s", id, version[0])
+
+	if _, ok := data["VERSION"]; ok {
+
+		idUppercaseFirst := []rune(data["ID"])
+		idUppercaseFirst[0] = unicode.ToUpper(idUppercaseFirst[0])
+		systemInfo.OSVersion = fmt.Sprintf("%s %s", string(idUppercaseFirst), data["VERSION"])
+		return nil
+	}
+
+	systemInfo.OSVersion = fmt.Sprintf("%s %s", strings.ToTitle(data["ID"]), data["VERSION_ID"])
 	return nil
 }
 

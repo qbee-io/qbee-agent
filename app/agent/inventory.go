@@ -20,17 +20,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/qbee-io/qbee-agent/app"
-	"github.com/qbee-io/qbee-agent/app/inventory"
+	"go.qbee.io/agent/app"
+	"go.qbee.io/agent/app/inventory"
 )
 
 // doInventories collects all inventories and delivers them to the device hub API.
 func (agent *Agent) doInventories(ctx context.Context) error {
-	if !agent.inventoryLock.TryLock() {
-		return nil
-	}
-	defer agent.inventoryLock.Unlock()
-
 	inventories := map[string]func(ctx context.Context) error{
 		"system":            agent.doSystemInventory,
 		"users":             agent.doUsersInventory,
@@ -39,29 +34,13 @@ func (agent *Agent) doInventories(ctx context.Context) error {
 		"docker-images":     agent.doDockerImagesInventory,
 		"docker-volumes":    agent.doDockerVolumesInventory,
 		"docker-networks":   agent.doDockerNetworksInventory,
+		"podman-containers": agent.doPodmanContainersInventory,
+		"podman-images":     agent.doPodmanImagesInventory,
+		"podman-volumes":    agent.doPodmanVolumesInventory,
+		"podman-networks":   agent.doPodmanNetworksInventory,
 		"software":          agent.doSoftwareInventory,
 		"process":           agent.doProcessInventory,
-	}
-
-	for name, fn := range inventories {
-		if err := fn(ctx); err != nil {
-			return fmt.Errorf("failed to do %s inventory: %w", name, err)
-		}
-	}
-
-	return nil
-}
-
-// doInventoriesSimple collects lightweight inventories and delivers them to the device hub API.
-func (agent *Agent) doInventoriesSimple(ctx context.Context) error {
-	agent.inventoryLock.Lock()
-	defer agent.inventoryLock.Unlock()
-
-	inventories := map[string]func(ctx context.Context) error{
-		"system":  agent.doSystemInventory,
-		"users":   agent.doUsersInventory,
-		"ports":   agent.doPortsInventory,
-		"process": agent.doProcessInventory,
+		"rauc":              agent.doRaucInventory,
 	}
 
 	for name, fn := range inventories {
@@ -75,7 +54,7 @@ func (agent *Agent) doInventoriesSimple(ctx context.Context) error {
 
 // doSystemInventory collects system inventory and delivers it to the device hub API.
 func (agent *Agent) doSystemInventory(ctx context.Context) error {
-	systemInventory, err := inventory.CollectSystemInventory()
+	systemInventory, err := inventory.CollectSystemInventory(agent.IsTPMEnabled())
 	if err != nil {
 		return err
 	}
@@ -84,7 +63,6 @@ func (agent *Agent) doSystemInventory(ctx context.Context) error {
 	systemInventory.System.LastConfigUpdate = fmt.Sprintf("%d", agent.Configuration.ConfigChangeTimestamp())
 	systemInventory.System.LastPolicyUpdate = systemInventory.System.LastConfigUpdate
 	systemInventory.System.AgentVersion = app.Version
-	systemInventory.System.AutoUpdateEnabled = agent.cfg.AutoUpdate
 
 	return agent.Inventory.Send(ctx, inventory.TypeSystem, systemInventory)
 }
@@ -150,6 +128,46 @@ func (agent *Agent) doDockerNetworksInventory(ctx context.Context) error {
 	return agent.Inventory.Send(ctx, inventory.TypeDockerNetworks, dockerNetworksInventory)
 }
 
+// doPodmanContainersInventory collects podman containers inventory and delivers it to the device hub API.
+func (agent *Agent) doPodmanContainersInventory(ctx context.Context) error {
+	podmanContainersInventory, err := inventory.CollectPodmanContainersInventory(ctx)
+	if err != nil {
+		return err
+	}
+
+	return agent.Inventory.Send(ctx, inventory.TypePodmanContainers, podmanContainersInventory)
+}
+
+// doPodmanImagesInventory collects podman images inventory and delivers it to the device hub API.
+func (agent *Agent) doPodmanImagesInventory(ctx context.Context) error {
+	podmanImagesInventory, err := inventory.CollectPodmanImagesInventory(ctx)
+	if err != nil {
+		return err
+	}
+
+	return agent.Inventory.Send(ctx, inventory.TypePodmanImages, podmanImagesInventory)
+}
+
+// doPodmanVolumesInventory collects podman volumes inventory and delivers it to the device hub API.
+func (agent *Agent) doPodmanVolumesInventory(ctx context.Context) error {
+	podmanVolumesInventory, err := inventory.CollectPodmanVolumesInventory(ctx)
+	if err != nil {
+		return err
+	}
+
+	return agent.Inventory.Send(ctx, inventory.TypePodmanVolumes, podmanVolumesInventory)
+}
+
+// doPodmanNetworksInventory collects podman networks inventory and delivers it to the device hub API.
+func (agent *Agent) doPodmanNetworksInventory(ctx context.Context) error {
+	podmanNetworksInventory, err := inventory.CollectPodmanNetworksInventory(ctx)
+	if err != nil {
+		return err
+	}
+
+	return agent.Inventory.Send(ctx, inventory.TypePodmanNetworks, podmanNetworksInventory)
+}
+
 // doSoftwareInventory collects software inventory - if enabled - and delivers it to the device hub API.
 func (agent *Agent) doSoftwareInventory(ctx context.Context) error {
 	if !agent.Configuration.CollectSoftwareInventory() {
@@ -176,4 +194,19 @@ func (agent *Agent) doProcessInventory(ctx context.Context) error {
 	}
 
 	return agent.Inventory.Send(ctx, inventory.TypeProcesses, processesInventory)
+}
+
+// doRaucInventory collects RAUC inventory - if enabled - and delivers it to the device hub API.
+func (agent *Agent) doRaucInventory(ctx context.Context) error {
+	raucInventory, err := inventory.CollectRaucInventory(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Do not send anything if rauc is not installed
+	if raucInventory == nil {
+		return nil
+	}
+
+	return agent.Inventory.Send(ctx, inventory.TypeRauc, raucInventory)
 }

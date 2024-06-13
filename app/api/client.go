@@ -20,9 +20,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"crypto/ecdsa"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,7 +29,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/qbee-io/qbee-agent/app"
+	"go.qbee.io/agent/app"
 )
 
 // UserAgent is the user agent string used for all API calls.
@@ -40,7 +38,7 @@ var UserAgent = "qbee-agent/" + app.Version
 
 // apiCallTimeout defines total request/response time we allow for any API call.
 // This timeout doesn't apply to file downloads.
-const apiCallTimeout = 10 * time.Second
+const apiCallTimeout = 60 * time.Second
 
 // Client is a device hub API client.
 type Client struct {
@@ -50,7 +48,7 @@ type Client struct {
 }
 
 // NewClient returns a new device hub client.
-func NewClient(host, port string, rootCAPool *x509.CertPool) *Client {
+func NewClient(host, port string) *Client {
 	return &Client{
 		host: host,
 		port: port,
@@ -58,36 +56,24 @@ func NewClient(host, port string, rootCAPool *x509.CertPool) *Client {
 			Transport: &http.Transport{
 				Proxy: http.ProxyFromEnvironment,
 				DialContext: (&net.Dialer{
-					Timeout:   60 * time.Second,
-					KeepAlive: 60 * time.Second,
+					Timeout:   15 * time.Second,
+					KeepAlive: 45 * time.Second,
 				}).DialContext,
 				ForceAttemptHTTP2:     true,
 				MaxIdleConns:          5,
 				IdleConnTimeout:       60 * time.Second,
 				TLSHandshakeTimeout:   10 * time.Second,
 				ExpectContinueTimeout: 1 * time.Second,
-				TLSClientConfig: &tls.Config{
-					RootCAs: rootCAPool,
-				},
 			},
-			Timeout: 60 * time.Second,
+			Timeout: 45 * time.Minute,
 		},
 	}
 }
 
-// SkipCAVerification makes the client accept untrusted certificates.
-func (cli *Client) SkipCAVerification() {
-	cli.httpClient.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify = true
-}
-
-// UseTLSCredentials adds TLS certificate to TLSClientConfig.
-func (cli *Client) UseTLSCredentials(privateKey *ecdsa.PrivateKey, certificate *x509.Certificate) {
-	cli.httpClient.Transport.(*http.Transport).TLSClientConfig.Certificates = []tls.Certificate{
-		{
-			Certificate: [][]byte{certificate.Raw},
-			PrivateKey:  privateKey,
-		},
-	}
+// WithTLSConfig sets the TLS config used by the HTTP client.
+func (cli *Client) WithTLSConfig(config *tls.Config) *Client {
+	cli.httpClient.Transport.(*http.Transport).TLSClientConfig = config
+	return cli
 }
 
 // NewRequest returns a new HTTP request for provided method, path and src.

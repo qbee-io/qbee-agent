@@ -24,7 +24,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/qbee-io/qbee-agent/app/utils"
+	"go.qbee.io/agent/app/utils"
 )
 
 // ListRunningProcesses returns a list of PIDs of currently running processes.

@@ -1,13 +1,13 @@
 [Unit]
 Description=The Qbee fleet management agent
-After=syslog.target
+After=network.target
 ConditionPathExists=/etc/qbee/qbee-agent.json
 
 [Service]
 ExecStart=/usr/bin/qbee-agent start
 ExecReload=/bin/kill -HUP $MAINPID
 KillMode=process
-Restart=always
+Restart=on-failure
 #EnvironmentFile=-/etc/default/qbee-agent
 # Since systemd 229, should be in [Unit] but in order to support systemd <229,
 # it is also supported to have it here.

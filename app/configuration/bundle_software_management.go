@@ -17,15 +17,13 @@
 package configuration
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
-	"github.com/qbee-io/qbee-agent/app/software"
-	"github.com/qbee-io/qbee-agent/app/utils"
+	"go.qbee.io/agent/app/software"
+	"go.qbee.io/agent/app/utils"
 )
 
 // SoftwareManagementBundle controls software in the system.
@@ -124,12 +122,12 @@ func (s Software) serviceName(ctx context.Context, srv *Service) string {
 		return s.ServiceName
 	}
 
-	if strings.HasSuffix(s.Package, ".deb") {
+	if strings.HasSuffix(s.Package, software.DefaultPackageManager.FileSuffix()) {
 		// since this is executed after s.installFromFile, we can depend on the package being downloaded
 		// in the cache and parse correctly, so we are not too concerned about proper error handling here.
 		pkgFileCachePath := filepath.Join(srv.cacheDirectory, SoftwareCacheDirectory, s.Package)
 
-		pkgInfo, err := software.ParseDebianPackage(ctx, pkgFileCachePath)
+		pkgInfo, err := software.DefaultPackageManager.ParsePackageFile(ctx, pkgFileCachePath)
 		if err != nil {
 			return ""
 		}
@@ -153,7 +151,7 @@ func (s Software) Execute(ctx context.Context, srv *Service, pkgManager software
 	var shouldRestart bool
 
 	// install package
-	if strings.HasSuffix(s.Package, ".deb") {
+	if strings.HasSuffix(s.Package, software.DefaultPackageManager.FileSuffix()) {
 		shouldRestart, err = s.installFromFile(ctx, srv, pkgManager)
 	} else {
 		shouldRestart, err = s.installFromRepository(ctx, pkgManager)
@@ -166,7 +164,7 @@ func (s Software) Execute(ctx context.Context, srv *Service, pkgManager software
 	for _, cfgFile := range s.ConfigFiles {
 		var created bool
 
-		created, err = srv.downloadTemplateFile(ctx, cfgFile.ConfigTemplate, cfgFile.ConfigLocation, s.parametersMap())
+		created, err = srv.downloadTemplateFile(ctx, "", cfgFile.ConfigTemplate, cfgFile.ConfigLocation, s.parametersMap())
 		if err != nil {
 			return err
 		}
@@ -194,36 +192,22 @@ func (s Software) installFromFile(ctx context.Context, srv *Service, pkgManager 
 	} else {
 		pkgFileCachePath = filepath.Join(srv.cacheDirectory, SoftwareCacheDirectory, s.Package)
 
-		if _, err := srv.downloadFile(ctx, s.Package, pkgFileCachePath); err != nil {
+		if _, err := srv.downloadFile(ctx, "", s.Package, pkgFileCachePath); err != nil {
 			return false, err
 		}
 	}
 
 	// get package info
-	pkgInfo, err := software.ParseDebianPackage(ctx, pkgFileCachePath)
+	pkgInfo, err := software.DefaultPackageManager.ParsePackageFile(ctx, pkgFileCachePath)
 	if err != nil {
 		return false, err
 	}
 
-	// check if package is already installed
-	var installedPackages []software.Package
-	if installedPackages, err = pkgManager.ListPackages(ctx); err != nil {
+	// Check whether package is installed
+	if isInstalled, err := s.isPackageInstalled(ctx, pkgInfo, pkgManager); err != nil {
 		return false, err
-	}
-
-	for _, pkg := range installedPackages {
-		// continue if name do not match
-		if pkg.Name != pkgInfo.Name {
-			continue
-		}
-		// name matches, continue if versions do not match
-		if pkg.Version != pkgInfo.Version {
-			continue
-		}
-		// name and version match, return if architecture is the same
-		if pkg.Architecture == pkgInfo.Architecture {
-			return false, nil
-		}
+	} else if isInstalled {
+		return false, nil
 	}
 
 	// install package using the package manager
@@ -233,13 +217,21 @@ func (s Software) installFromFile(ctx context.Context, srv *Service, pkgManager 
 		return false, err
 	}
 
+	// Verify that package was installed
+	if isInstalled, err := s.isPackageInstalled(ctx, pkgInfo, pkgManager); err != nil {
+		ReportError(ctx, err, "Unable to verify installation of '%s'", s.Package)
+		return false, err
+	} else if !isInstalled {
+		ReportError(ctx, output, "Unable to install '%s'", s.Package)
+		return false, fmt.Errorf("unable to install '%s'", s.Package)
+	}
+
 	ReportInfo(ctx, output, "Successfully installed '%s'", s.Package)
 
 	return true, nil
 }
 
-// installFromRepository install package from package repository.
-func (s Software) installFromRepository(ctx context.Context, pkgManager software.PackageManager) (bool, error) {
+func (s Software) isPackageInstalled(ctx context.Context, pkgInfo *software.Package, pkgManager software.PackageManager) (bool, error) {
 	// check if package is already installed
 	installedPackages, err := pkgManager.ListPackages(ctx)
 	if err != nil {
@@ -247,13 +239,41 @@ func (s Software) installFromRepository(ctx context.Context, pkgManager software
 	}
 
 	for _, pkg := range installedPackages {
-		if pkg.Name == s.Package {
-			return false, nil
+		// continue if name do not match
+		if pkg.Name != pkgInfo.Name {
+			continue
 		}
+		// name matches and we do not have version information
+		if pkgInfo.Version == "" {
+			return true, nil
+		}
+		// name matches, continue if versions do not match
+		if pkg.Version != pkgInfo.Version {
+			continue
+		}
+		// name and version match, return if architecture is the same
+		if pkg.Architecture == pkgInfo.Architecture {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// installFromRepository install package from package repository.
+func (s Software) installFromRepository(ctx context.Context, pkgManager software.PackageManager) (bool, error) {
+	// Check whether package is installed
+	pkgInfo := &software.Package{
+		Name: s.Package,
+	}
+	if isInstalled, err := s.isPackageInstalled(ctx, pkgInfo, pkgManager); err != nil {
+		return false, err
+	} else if isInstalled {
+		return false, nil
 	}
 
 	// install package
 	var output []byte
+	var err error
 	if output, err = pkgManager.Install(ctx, s.Package, ""); err != nil {
 		ReportError(ctx, err, "Unable to install '%s'", s.Package)
 		return false, err
@@ -281,14 +301,9 @@ func (s Software) restart(ctx context.Context, srv *Service) {
 
 	defer func() {
 		if err != nil {
-			ReportWarning(ctx, err, "Required restart of '%s' cannot be performed.", s.Package)
+			ReportWarning(ctx, err, "Required restart of '%s' cannot be performed", s.Package)
 		}
 	}()
-
-	var systemctlBin string
-	if systemctlBin, err = exec.LookPath("systemctl"); err != nil {
-		return
-	}
 
 	serviceName := s.serviceName(ctx, srv)
 	if serviceName == "" {
@@ -296,29 +311,20 @@ func (s Software) restart(ctx context.Context, srv *Service) {
 		return
 	}
 
-	// append ".service" postfix to be explicit about unit type
-	serviceUnit := fmt.Sprintf("%s.service", serviceName)
+	cmd, err := utils.GenerateServiceCommand(ctx, serviceName, "restart")
+	if err != nil {
+		return
+	}
 
-	// check service status
-	cmd := []string{systemctlBin, "show", "--property=LoadState", serviceUnit}
+	if cmd == nil {
+		// no restart command was found, we do not have a service
+		return
+	}
 
 	var output []byte
 	if output, err = utils.RunCommand(ctx, cmd); err != nil {
 		return
 	}
 
-	// if service is not loaded, there isn't anything to restart
-	if !bytes.Equal(bytes.TrimSpace(output), []byte("LoadState=loaded")) {
-		return
-	}
-
-	// restart the service
-	cmd = []string{systemctlBin, "restart", serviceUnit}
-	if output, err = utils.RunCommand(ctx, cmd); err != nil {
-		return
-	}
-
-	ReportInfo(ctx, output, "Restarted service '%s'.", serviceName)
-
-	return
+	ReportInfo(ctx, output, "Restarted service '%s'", serviceName)
 }

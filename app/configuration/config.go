@@ -31,13 +31,23 @@ const (
 	BundleFirewall             = "firewall"
 	BundlePassword             = "password"
 	BundleDockerContainers     = "docker_containers"
+	BundlePodmanContainers     = "podman_containers"
+	BundleRauc                 = "rauc"
 )
 
 // CommittedConfig contains the configuration that is committed.
 type CommittedConfig struct {
-	CommitID   string     `json:"commit_id"`
-	Bundles    []string   `json:"bundles"`
+	// CommitID represents commit ID of the most recent commit affecting the device.
+	CommitID string `json:"commit_id"`
+
+	// Bundles contains a list of strings representing configuration bundles
+	Bundles []string `json:"bundles"`
+
+	// BundleData contain configuration data for bundles in the Bundles list
 	BundleData BundleData `json:"bundle_data"`
+
+	// EdgeURL is the URL of the edge server the agent should connect to enable remote access.
+	EdgeURL string `json:"edge_url"`
 }
 
 // HasBundle returns true if bundleName is set in the Bundles list.
@@ -78,6 +88,10 @@ func (cc *CommittedConfig) selectBundleByName(bundleName string) Bundle {
 		return cc.BundleData.Password
 	case BundleDockerContainers:
 		return cc.BundleData.DockerContainers
+	case BundlePodmanContainers:
+		return cc.BundleData.PodmanContainers
+	case BundleRauc:
+		return cc.BundleData.Rauc
 	default:
 		return nil
 	}
@@ -102,8 +116,12 @@ type BundleData struct {
 	// Software
 	SoftwareManagement *SoftwareManagementBundle `json:"software_management,omitempty"`
 	DockerContainers   *DockerContainersBundle   `json:"docker_containers,omitempty"`
+	PodmanContainers   *PodmanContainerBundle    `json:"podman_containers,omitempty"`
 
 	// Security
 	Password *PasswordBundle `json:"password,omitempty"`
 	Firewall *FirewallBundle `json:"firewall,omitempty"`
+
+	//Image OTA
+	Rauc *RaucBundle `json:"rauc,omitempty"`
 }

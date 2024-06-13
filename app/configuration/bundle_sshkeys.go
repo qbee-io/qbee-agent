@@ -26,7 +26,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/qbee-io/qbee-agent/app/inventory"
+	"go.qbee.io/agent/app/inventory"
 )
 
 // SSHKeysBundle adds or removes authorized SSH keys for users.

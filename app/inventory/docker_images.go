@@ -21,7 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/qbee-io/qbee-agent/app/utils"
+	"go.qbee.io/agent/app/utils"
 )
 
 // TypeDockerImages is the inventory type for Docker images.

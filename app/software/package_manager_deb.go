@@ -28,11 +28,16 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/qbee-io/qbee-agent/app/utils"
+	"go.qbee.io/agent/app/utils"
+	"go.qbee.io/agent/app/utils/cache"
 )
 
 // PackageManagerTypeDebian is the type of the Debian package manager.
 const PackageManagerTypeDebian PackageManagerType = "deb"
+const debianFileSuffix string = ".deb"
+
+var debianPackagesCacheKey = fmt.Sprintf("%s:%s:packages", pkgCacheKeyPrefix, PackageManagerTypeDebian)
+var debianPkgArchCacheKey = fmt.Sprintf("%s:%s:arch", pkgCacheKeyPrefix, PackageManagerTypeDebian)
 
 const (
 	aptGetPath = "/usr/bin/apt-get"
@@ -51,6 +56,11 @@ type DebianPackageManager struct {
 // Type returns type of the package manager.
 func (deb *DebianPackageManager) Type() PackageManagerType {
 	return PackageManagerTypeDebian
+}
+
+// FileSuffix returns the file suffix for the package manager.
+func (deb *DebianPackageManager) FileSuffix() string {
+	return debianFileSuffix
 }
 
 // IsSupported returns true if package manager is supported by the host system.
@@ -102,8 +112,8 @@ func (deb *DebianPackageManager) ListPackages(ctx context.Context) ([]Package, e
 	deb.lock.Lock()
 	defer deb.lock.Unlock()
 
-	if installedPackages, cached := getCachedPackages(PackageManagerTypeDebian); cached {
-		return installedPackages, nil
+	if cachedPackages, ok := cache.Get(debianPackagesCacheKey); ok {
+		return cachedPackages.([]Package), nil
 	}
 
 	installedPackages, err := deb.listInstalledPackages(ctx)
@@ -121,7 +131,7 @@ func (deb *DebianPackageManager) ListPackages(ctx context.Context) ([]Package, e
 		installedPackages[i].Update = availableUpdates[pkg.ID()]
 	}
 
-	setCachedPackages(PackageManagerTypeDebian, installedPackages)
+	cache.Set(debianPackagesCacheKey, installedPackages, pkgCacheTTL)
 
 	return installedPackages, nil
 }
@@ -189,7 +199,7 @@ func (deb *DebianPackageManager) listAvailableUpdates(ctx context.Context) (map[
 	return updates, nil
 }
 
-var debPkgUpdateRE = regexp.MustCompile("^Inst (\\S+) (?:\\[(.+)] )?\\((\\S+) .* \\[(.*)]\\)")
+var debPkgUpdateRE = regexp.MustCompile(`^Inst (\S+) (?:\[(.+)] )?\((\S+) .* \[(.*)]\)`)
 
 // parseUpdateAvailableLine parses a line from `apt-get --just-print upgrade` output into a Package.
 // If line doesn't match the expected format, nil is returned.
@@ -255,7 +265,7 @@ func (deb *DebianPackageManager) UpgradeAll(ctx context.Context) (int, []byte, e
 		return 0, output, err
 	}
 
-	InvalidateCache(PackageManagerTypeDebian)
+	cache.Delete(debianPackagesCacheKey)
 
 	return updatesAvailable, output, err
 }
@@ -282,7 +292,7 @@ func (deb *DebianPackageManager) Install(ctx context.Context, pkgName, version s
 
 	shellCmd := []string{"sh", "-c", strings.Join(installCommand, " ")}
 
-	defer InvalidateCache(PackageManagerTypeDebian)
+	defer cache.Delete(debianPackagesCacheKey)
 
 	return utils.RunCommand(ctx, shellCmd)
 }
@@ -292,21 +302,48 @@ func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath s
 	deb.lock.Lock()
 	defer deb.lock.Unlock()
 
-	installCommand := append(
-		// install package using dpkg,
-		[]string{dpkgPath, "-i", pkgFilePath, "||"},
-		// but if install fails, it might be missing dependencies, so we need "apt-get install -f" to correct that
-		append(aptGetBaseCommand, "install")...)
+	defer cache.Delete(debianPackagesCacheKey)
 
+	installCommand := []string{dpkgPath, "-i", pkgFilePath}
 	cmd := []string{"sh", "-c", strings.Join(installCommand, " ")}
+	dpkgOutput, err := utils.RunCommand(ctx, cmd)
 
-	defer InvalidateCache(PackageManagerTypeDebian)
+	// dpkg succeeded, return
+	if err == nil {
+		return dpkgOutput, nil
+	}
 
-	return utils.RunCommand(ctx, cmd)
+	// dpkg fails, so we need to run "apt-get install -f" to install any possible dependencies
+	dpkgOutput = []byte(err.Error())
+
+	installCommand = append(aptGetBaseCommand, "install")
+	cmd = []string{"sh", "-c", strings.Join(installCommand, " ")}
+	aptOutput, err := utils.RunCommand(ctx, cmd)
+
+	return append(dpkgOutput, aptOutput...), err
 }
 
-// ParseDebianPackage and return Package information.
-func ParseDebianPackage(ctx context.Context, pkgFilePath string) (*Package, error) {
+// PackageArchitecture returns the architecture of the package manager
+func (deb *DebianPackageManager) PackageArchitecture() (string, error) {
+
+	if cachedArch, ok := cache.Get(debianPkgArchCacheKey); ok {
+		return cachedArch.(string), nil
+	}
+
+	cmd := []string{dpkgPath, "--print-architecture"}
+
+	output, err := utils.RunCommand(context.Background(), cmd)
+	if err != nil {
+		return "", err
+	}
+
+	cache.Set(debianPkgArchCacheKey, strings.TrimSpace(string(output)), pkgCacheTTL)
+
+	return strings.TrimSpace(string(output)), nil
+}
+
+// ParsePackageFile parses package and return Package information.
+func (deb *DebianPackageManager) ParsePackageFile(ctx context.Context, pkgFilePath string) (*Package, error) {
 	cmd := []string{dpkgPath, "-I", pkgFilePath}
 
 	pkg := new(Package)

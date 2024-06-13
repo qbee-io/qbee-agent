@@ -13,20 +13,17 @@ GOOS=${GOOS:-linux}
 rm $PKG_OUTPUT/* -f
 mkdir -p "$PKG_OUTPUT"
 
-SIGNING_KEY_PATH=$1
-
-if [[ -z $SIGNING_KEY_PATH ]] || [[ ! -f $SIGNING_KEY_PATH ]]; then
-  echo "ERROR: Need to provide path to private signing key"
-  exit 1
-fi
-
-PUBLIC_SIGNING_KEY=$(cd $BASEDIR && go run app/utils/get-public-signing-key/main.go -signingKey $SIGNING_KEY_PATH | awk '{print $NF}')
-
 function build_agent() {
   local arch
   arch=$1
   cd $BASEDIR
-  make VERSION=$VERSION GOOS=$GOOS GOARCH=$arch PUBLIC_SIGNING_KEY=$PUBLIC_SIGNING_KEY
+
+  if [[ $arch == "arm" ]]; then
+    make VERSION=$VERSION GOOS=$GOOS GOARCH=$arch GOARM=5
+  else
+    make VERSION=$VERSION GOOS=$GOOS GOARCH=$arch
+  fi
+
   mv ./bin/qbee-agent ./bin/qbee-agent-$arch
 }
 
@@ -49,14 +46,14 @@ function build_package() {
     --version "$VERSION" \
     -m "The Qbee Team <support@qbee.io>" \
     --url "https://qbee.io" \
-    --license "Qbee Proprietary License" \
+    --license "Apache-2.0" \
     --description "Qbee agent
 Qbee is a lightweight system management platform for IoT devices" \
     -p $PKG_OUTPUT \
     -C $build_dir \
     --after-install $build_dir/postinst \
     --before-install $build_dir/preinst \
-    --before-remove $build_dir/prerm \
+    --before-remove $build_dir/prerm-${pkg_type} \
     usr lib opt
 }
 

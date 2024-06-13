@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/qbee-io/qbee-agent/app/api"
-	"github.com/qbee-io/qbee-agent/app/utils/assert"
+	"go.qbee.io/agent/app/api"
+	"go.qbee.io/agent/app/utils/assert"
 )
 
 func TestService_reportsBuffer(t *testing.T) {
@@ -100,7 +100,7 @@ func TestService_reportsBuffer(t *testing.T) {
 }
 
 func TestService_persistConfig(t *testing.T) {
-	apiClient := api.NewClient("invalid-host.example", "12345", nil)
+	apiClient := api.NewClient("invalid-host.example", "12345")
 	srv := New(apiClient, t.TempDir(), "")
 
 	cfg := &CommittedConfig{

@@ -48,6 +48,9 @@ const SoftwareCacheDirectory = "software"
 // DockerContainerDirectory is where the agent will download docker related files.
 const DockerContainerDirectory = "docker_containers"
 
+// PodmanContainerDirectory is where the agent will download podman related files.
+const PodmanContainerDirectory = "podman_containers"
+
 // FileMetadata is the metadata of a file.
 type FileMetadata struct {
 	MD5          string            `json:"md5"`
@@ -67,7 +70,7 @@ func (md *FileMetadata) SHA256() string {
 }
 
 // downloadFile and return true when file was created. In case the right file already existed, return false.
-func (srv *Service) downloadFile(ctx context.Context, src, dst string) (bool, error) {
+func (srv *Service) downloadFile(ctx context.Context, label, src, dst string) (bool, error) {
 	var err error
 
 	src = resolveParameters(ctx, src)
@@ -75,7 +78,7 @@ func (srv *Service) downloadFile(ctx context.Context, src, dst string) (bool, er
 
 	defer func() {
 		if err != nil {
-			ReportError(ctx, err, "Unable to download file %s to %s", src, dst)
+			ReportError(ctx, err, msgWithLabel(label, "Unable to download file %s to %s", src, dst))
 		}
 	}()
 
@@ -88,6 +91,14 @@ func (srv *Service) downloadFile(ctx context.Context, src, dst string) (bool, er
 	if fileMetadata, err = srv.getFileMetadata(ctx, src); err != nil {
 		return false, err
 	}
+
+	var fileReady bool
+	fileReady, err = srv.downloadMetadataCompare(ctx, label, src, dst, fileMetadata)
+
+	return fileReady, err
+}
+func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst string, fileMetadata *FileMetadata) (bool, error) {
+	var err error
 
 	var fileReady bool
 	if fileReady, err = isFileReady(dst, fileMetadata.SHA256(), fileMetadata.MD5); err != nil || fileReady {
@@ -112,7 +123,7 @@ func (srv *Service) downloadFile(ctx context.Context, src, dst string) (bool, er
 		return false, fmt.Errorf("error writing file %s: %w", dst, err)
 	}
 
-	ReportInfo(ctx, nil, "Successfully downloaded file %s to %s", src, dst)
+	ReportInfo(ctx, nil, msgWithLabel(label, "Successfully downloaded file %s to %s", src, dst))
 
 	return true, nil
 }
@@ -174,7 +185,13 @@ func (srv *Service) getFileMetadata(ctx context.Context, src string) (*FileMetad
 }
 
 // downloadTemplateFile and execute - returns true if file template was executed and resulted in a new dst file.
-func (srv *Service) downloadTemplateFile(ctx context.Context, src, dst string, params map[string]string) (bool, error) {
+func (srv *Service) downloadTemplateFile(
+	ctx context.Context,
+	label string,
+	src string,
+	dst string,
+	params map[string]string,
+) (bool, error) {
 	var err error
 
 	src = resolveParameters(ctx, src)
@@ -186,7 +203,7 @@ func (srv *Service) downloadTemplateFile(ctx context.Context, src, dst string, p
 
 	defer func() {
 		if err != nil {
-			ReportError(ctx, err, "Unable to render template file %s to %s.", src, dst)
+			ReportError(ctx, err, msgWithLabel(label, "Unable to render template file %s to %s.", src, dst))
 		}
 	}()
 
@@ -197,7 +214,7 @@ func (srv *Service) downloadTemplateFile(ctx context.Context, src, dst string, p
 	} else {
 		cacheSrc = filepath.Join(srv.cacheDirectory, FileDistributionCacheDirectory, src)
 
-		if _, err = srv.downloadFile(ctx, src, cacheSrc); err != nil {
+		if _, err = srv.downloadFile(ctx, label, src, cacheSrc); err != nil {
 			return false, err
 		}
 	}
@@ -230,7 +247,7 @@ func (srv *Service) downloadTemplateFile(ctx context.Context, src, dst string, p
 		return false, err
 	}
 
-	ReportInfo(ctx, nil, "Successfully rendered template file %s to %s", src, dst)
+	ReportInfo(ctx, nil, msgWithLabel(label, "Successfully rendered template file %s to %s", src, dst))
 
 	return true, nil
 }
@@ -253,7 +270,7 @@ func renderTemplate(src io.Reader, params map[string]string, dst io.Writer) erro
 
 		line := scanner.Bytes()
 
-		renderedLine, err := renderTemplateLine(line, params, lineNo)
+		renderedLine, err := renderTemplateLine(line, params)
 		if err != nil {
 			return fmt.Errorf("error rendering line %d: %w", lineNo, err)
 		}
@@ -272,7 +289,7 @@ const (
 )
 
 // renderTemplateLine renders a single line of a template based on provided parameters.
-func renderTemplateLine(line []byte, params map[string]string, lineNo int) ([]byte, error) {
+func renderTemplateLine(line []byte, params map[string]string) ([]byte, error) {
 	result := make([]byte, 0, len(line))
 
 	for len(line) > 0 {

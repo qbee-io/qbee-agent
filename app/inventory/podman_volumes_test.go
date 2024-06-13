@@ -14,12 +14,22 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package binary
+package inventory
 
-// Metadata defines metadata of a binary used by the agent.
-// This is used to verify the integrity of the binary.
-type Metadata struct {
-	Version   string `json:"version"`
-	Digest    string `json:"digest"`
-	Signature string `json:"signature"`
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"testing"
+)
+
+func TestCollectPodmanVolumesInventory(t *testing.T) {
+	podmanVolumes, err := CollectPodmanVolumesInventory(context.Background())
+	if err != nil {
+		t.Fatalf("error collecting Podman volumes: %v", err)
+	}
+
+	data, _ := json.MarshalIndent(podmanVolumes, " ", " ")
+
+	fmt.Println(string(data))
 }

@@ -18,7 +18,7 @@ package inventory
 import (
 	"testing"
 
-	"github.com/qbee-io/qbee-agent/app/utils/assert"
+	"go.qbee.io/agent/app/utils/assert"
 )
 
 func TestCollectProcessesInventory(t *testing.T) {

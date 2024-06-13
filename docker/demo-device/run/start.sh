@@ -19,7 +19,6 @@ export QBEE_DEMO_PASSWORD="qbee"
 export QBEE_DEMO_BOOTSTRAP_KEY="${BOOTSTRAP_KEY}"
 export QBEE_DEMO_PASSWORD_HASH=$(echo $QBEE_DEMO_PASSWORD | mkpasswd --method=SHA-512 --stdin)
 export QBEE_DEMO_DEVICE_HUB_HOST=${QBEE_DEMO_DEVICE_HUB_HOST:-device.app.qbee.io}
-export QBEE_DEMO_VPN_SERVER=${QBEE_DEMO_VPN_SERVER:-vpn.app.qbee.io}
 
 envsubst > $BASEDIR/cloud-init/user-data < $BASEDIR/cloud-init/user-data.template
 

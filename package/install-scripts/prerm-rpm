@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+SYSTEMCTL=$(command -v systemctl)
+
+# Check if systemctl is present on the system
+[[ -z $SYSTEMCTL ]] && exit 0
+
+# Check if system is running init
+[[ ! -d /run/systemd/system ]] && exit 0
+
+# Check if this is an upgrade or remove
+# $1 is the number of packages left on the system
+if [[ $1 -lt 1 ]]; then
+  systemctl stop qbee-agent
+fi

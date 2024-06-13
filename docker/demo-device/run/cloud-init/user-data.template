@@ -25,7 +25,6 @@ bootcmd:
   - |
     if [ ! -f /etc/qbee/qbee-agent.json ]; then
       qbee-agent bootstrap -k $QBEE_DEMO_BOOTSTRAP_KEY \
-        --device-hub-host $QBEE_DEMO_DEVICE_HUB_HOST \
-        --vpn-server $QBEE_DEMO_VPN_SERVER 2>&1 > /dev/null
+        --device-hub-host $QBEE_DEMO_DEVICE_HUB_HOST 2>&1 > /dev/null
     fi
 

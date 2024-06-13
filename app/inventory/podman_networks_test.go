@@ -14,39 +14,22 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package main
+package inventory
 
 import (
-	"crypto/ecdsa"
-	"crypto/x509"
-	"encoding/base64"
-	"flag"
+	"context"
+	"encoding/json"
 	"fmt"
-	"os"
+	"testing"
 )
 
-func main() {
-	// only keys with curve P256 are supported
-	signingKeyPath := flag.String("signingKey", "", "Private signing EC key DER-encoded")
-	flag.Parse()
-
-	if *signingKeyPath == "" {
-		flag.PrintDefaults()
-		os.Exit(1)
-	}
-
-	keyBytes, err := os.ReadFile(*signingKeyPath)
+func TestCollectPodmanNetworksInventory(t *testing.T) {
+	podmanNetworks, err := CollectPodmanNetworksInventory(context.Background())
 	if err != nil {
-		panic(err)
+		t.Fatalf("error collecting podman networks: %v", err)
 	}
 
-	var key *ecdsa.PrivateKey
-	if key, err = x509.ParseECPrivateKey(keyBytes); err != nil {
-		panic(err)
-	}
+	data, _ := json.MarshalIndent(podmanNetworks, " ", " ")
 
-	x := base64.RawURLEncoding.EncodeToString(key.X.Bytes())
-	y := base64.RawURLEncoding.EncodeToString(key.Y.Bytes())
-
-	fmt.Printf("Public Signing Key: %s.%s\n", x, y)
+	fmt.Println(string(data))
 }

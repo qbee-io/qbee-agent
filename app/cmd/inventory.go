@@ -22,9 +22,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/qbee-io/qbee-agent/app/agent"
-	"github.com/qbee-io/qbee-agent/app/inventory"
-	"github.com/qbee-io/qbee-agent/app/utils/cmd"
+	"go.qbee.io/agent/app/agent"
+	"go.qbee.io/agent/app/inventory"
+	"go.qbee.io/agent/app/utils/cmd"
 )
 
 const (
@@ -55,12 +55,16 @@ var inventoryCommand = cmd.Command{
 
 		ctx := context.Background()
 
-		var err error
+		cfg, err := loadConfig(opts)
+		if err != nil {
+			return err
+		}
+
 		var inventoryData any
 
 		switch inventoryType {
 		case inventory.TypeSystem:
-			inventoryData, err = inventory.CollectSystemInventory()
+			inventoryData, err = inventory.CollectSystemInventory(cfg.TPMDevice != "")
 		case inventory.TypePorts:
 			inventoryData, err = inventory.CollectPortsInventory()
 		case inventory.TypeProcesses:
@@ -77,6 +81,8 @@ var inventoryCommand = cmd.Command{
 			inventoryData, err = inventory.CollectDockerNetworksInventory(ctx)
 		case inventory.TypeDockerVolumes:
 			inventoryData, err = inventory.CollectDockerVolumesInventory(ctx)
+		case inventory.TypeRauc:
+			inventoryData, err = inventory.CollectRaucInventory(ctx)
 		default:
 			return fmt.Errorf("unsupported inventory type")
 		}
@@ -87,11 +93,6 @@ var inventoryCommand = cmd.Command{
 
 		if dryRun {
 			return json.NewEncoder(os.Stdout).Encode(inventoryData)
-		}
-
-		var cfg *agent.Config
-		if cfg, err = loadConfig(opts); err != nil {
-			return err
 		}
 
 		var deviceAgent *agent.Agent

@@ -20,7 +20,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/qbee-io/qbee-agent/app/utils"
+	"go.qbee.io/agent/app/utils"
 )
 
 // CheckPreCondition checks if the provided pre-condition is met.

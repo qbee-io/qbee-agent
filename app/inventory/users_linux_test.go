@@ -24,7 +24,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/qbee-io/qbee-agent/app/inventory"
+	"go.qbee.io/agent/app/inventory"
 )
 
 func TestCollectUsersInventory(t *testing.T) {

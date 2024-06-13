@@ -18,16 +18,46 @@ package configuration
 
 import (
 	"context"
+	"net/url"
 	"os"
 	"testing"
 
-	"github.com/qbee-io/qbee-agent/app/utils/assert"
-	"github.com/qbee-io/qbee-agent/app/utils/runner"
+	"go.qbee.io/agent/app/inventory"
+	"go.qbee.io/agent/app/software"
+	"go.qbee.io/agent/app/utils/assert"
+	"go.qbee.io/agent/app/utils/runner"
 )
+
+// mockURLSigner is a mock implementation of the URLSigner interface.
+type mockURLSigner struct{}
+
+// SignURL returns a signed URL for the given source URL.
+func (m *mockURLSigner) SignURL(src string) (string, error) {
+	parsedURL, err := url.Parse(src)
+	if err != nil {
+		return "", err
+	}
+
+	parsedURL.Scheme = "https"
+	parsedURL.Host = "example.com"
+	parsedURL.RawQuery = "signed=true"
+
+	return parsedURL.String(), nil
+}
 
 func Test_resolveParameters(t *testing.T) {
 	hostname, err := os.Hostname()
 	assert.NoError(t, err)
+
+	pkgArch, err := software.DefaultPackageManager.PackageArchitecture()
+	assert.NoError(t, err)
+
+	pkgType := software.DefaultPackageManager.Type()
+
+	systemInventory, err := inventory.CollectSystemInventory(false)
+	assert.NoError(t, err)
+
+	invSystem := systemInventory.System
 
 	tests := []struct {
 		name       string
@@ -105,6 +135,24 @@ func Test_resolveParameters(t *testing.T) {
 			value:      "example $(sys.host)",
 			want:       "example " + hostname,
 		},
+		{
+			name:       "more than one system variable",
+			parameters: []Parameter{},
+			value:      "example $(sys.host) $(sys.pkg_arch) $(sys.pkg_type)",
+			want:       "example " + hostname + " " + pkgArch + " " + string(pkgType),
+		},
+		{
+			name:       "inventory related sys variables",
+			parameters: []Parameter{},
+			value:      "example $(sys.os) $(sys.os_type) $(sys.flavor) $(sys.boot_time)",
+			want:       "example " + invSystem.OS + " " + invSystem.OSType + " " + invSystem.Flavor + " " + invSystem.BootTime,
+		},
+		{
+			name:       "signed file manager url",
+			parameters: []Parameter{},
+			value:      "example $(file://test.cfg)",
+			want:       "example https://example.com/v1/org/device/public/files/test.cfg?signed=true",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -113,7 +161,7 @@ func Test_resolveParameters(t *testing.T) {
 				Secrets:    tt.secrets,
 			}
 
-			ctx := parametersBundle.Context(context.Background())
+			ctx := parametersBundle.Context(context.Background(), new(mockURLSigner))
 
 			got := resolveParameters(ctx, tt.value)
 

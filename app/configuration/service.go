@@ -26,8 +26,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/qbee-io/qbee-agent/app/api"
-	"github.com/qbee-io/qbee-agent/app/log"
+	"go.qbee.io/agent/app/api"
+	"go.qbee.io/agent/app/log"
 )
 
 const defaultAgentInterval = 5 // minutes
@@ -48,11 +48,13 @@ type Service struct {
 	// configChangeTime represents a time when the currentCommitID changed last time
 	configChangeTime time.Time
 
+	// urlSigner is used to sign URLs for the device hub
+	urlSigner URLSigner
+
 	rebootAfterRun           bool
 	reportToConsole          bool
 	reportingEnabled         bool
 	metricsEnabled           bool
-	remoteConsoleEnabled     bool
 	softwareInventoryEnabled bool
 	processInventoryEnabled  bool
 
@@ -79,14 +81,15 @@ func New(apiClient *api.Client, appDirectory, cacheDirectory string) *Service {
 	}
 }
 
+// WithURLSigner sets the URL signer for the service.
+func (srv *Service) WithURLSigner(urlSigner URLSigner) *Service {
+	srv.urlSigner = urlSigner
+	return srv
+}
+
 // MetricsEnabled returns true if metrics collection is enabled.
 func (srv *Service) MetricsEnabled() bool {
 	return srv.metricsEnabled
-}
-
-// RemoteAccessEnabled returns true if remote access is enabled.
-func (srv *Service) RemoteAccessEnabled() bool {
-	return srv.remoteConsoleEnabled
 }
 
 // CollectSoftwareInventory returns true if software inventory collection is enabled.
@@ -124,7 +127,6 @@ func (srv *Service) applyDefaultSettings() {
 	srv.reportToConsole = true
 	srv.reportingEnabled = true
 	srv.metricsEnabled = true
-	srv.remoteConsoleEnabled = true
 	srv.softwareInventoryEnabled = true
 	srv.processInventoryEnabled = false
 	srv.runInterval = defaultAgentInterval
@@ -151,7 +153,7 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 	if parametersBundle == nil {
 		parametersBundle = new(ParametersBundle)
 	}
-	ctxWithParameters := parametersBundle.Context(ctx)
+	ctxWithParameters := parametersBundle.Context(ctx, srv.urlSigner)
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctxWithParameters, executeTimeout)
 	defer cancel()
@@ -160,7 +162,11 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 		log.Infof("failed to acquire execution lock - %v", err)
 		return nil
 	}
-	defer srv.releaseLock()
+	defer func() {
+		if err := srv.releaseLock(); err != nil {
+			log.Errorf("failed to release execution lock - %v", err)
+		}
+	}()
 
 	// disable connectivity watchdog if not set in the configData
 	if !configData.HasBundle(BundleConnectivityWatchdog) {

@@ -24,7 +24,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/qbee-io/qbee-agent/app/utils"
+	"go.qbee.io/agent/app/utils"
 )
 
 // MemInfo provides basic information about system memory.

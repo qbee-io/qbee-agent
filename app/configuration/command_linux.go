@@ -25,7 +25,7 @@ import (
 	"os/exec"
 	"syscall"
 
-	"github.com/qbee-io/qbee-agent/app/utils"
+	"go.qbee.io/agent/app/utils"
 )
 
 var supportedShells = []string{"bash", "zsh", "sh"}

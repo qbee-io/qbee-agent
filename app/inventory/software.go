@@ -20,8 +20,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/qbee-io/qbee-agent/app/log"
-	"github.com/qbee-io/qbee-agent/app/software"
+	"go.qbee.io/agent/app/log"
+	"go.qbee.io/agent/app/software"
 )
 
 // TypeSoftware is the inventory type for software information.

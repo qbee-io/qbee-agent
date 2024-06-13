@@ -1,4 +1,4 @@
-// Copyright 2023 qbee.io
+// Copyright 2024 qbee.io
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,25 +14,22 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd
+package inventory
 
 import (
 	"context"
 
-	"github.com/qbee-io/qbee-agent/app/agent"
-	"github.com/qbee-io/qbee-agent/app/utils/cmd"
+	"go.qbee.io/agent/app/image"
 )
 
-var updateCommand = cmd.Command{
-	Description: "Update the agent.",
-	Target: func(opts cmd.Options) error {
-		ctx := context.Background()
+// TypeRauc is the inventory type of the RAUC inventory.
+const TypeRauc Type = "rauc"
 
-		cfg, err := loadConfig(opts)
-		if err != nil {
-			return err
-		}
+// CollectRaucInventory collects the RAUC inventory.
+func CollectRaucInventory(ctx context.Context) (*image.RaucStatus, error) {
+	if !image.HasRauc() {
+		return nil, nil
+	}
 
-		return agent.Update(ctx, cfg)
-	},
+	return image.GetRaucStatus(ctx)
 }

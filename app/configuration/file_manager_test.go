@@ -79,8 +79,8 @@ func Test_renderTemplateLine(t *testing.T) {
 		name   string
 		line   []byte
 		params map[string]string
-		lineNo int
-		want   []byte
+
+		want []byte
 	}{
 		{
 			name:   "no tags",
@@ -113,28 +113,25 @@ func Test_renderTemplateLine(t *testing.T) {
 			params: map[string]string{"tag1": "1", "tag2": "2"},
 		},
 		{
-			name:   "unclosed tag",
-			line:   []byte("test {{tag"),
-			want:   []byte("test {{tag"),
-			lineNo: 123,
+			name: "unclosed tag",
+			line: []byte("test {{tag"),
+			want: []byte("test {{tag"),
 		},
 		{
-			name:   "unknown tag",
-			line:   []byte("test {{tag}}"),
-			want:   []byte("test {{tag}}"),
-			lineNo: 123,
+			name: "unknown tag",
+			line: []byte("test {{tag}}"),
+			want: []byte("test {{tag}}"),
 		},
 		{
 			name:   "unknown properties and missing closing",
 			line:   []byte("test {{tag1}} {{tag2}} {{valid}} {{ unclosed \n"),
 			want:   []byte("test {{tag1}} {{tag2}} 1 {{ unclosed \n"),
 			params: map[string]string{"valid": "1"},
-			lineNo: 123,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := renderTemplateLine(tt.line, tt.params, tt.lineNo)
+			got, err := renderTemplateLine(tt.line, tt.params)
 			if err != nil {
 				t.Fatalf("unexpected error = %v", err)
 			}

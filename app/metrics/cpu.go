@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/qbee-io/qbee-agent/app/inventory/linux"
+	"go.qbee.io/agent/app/inventory/linux"
 )
 
 // CPUValues contains CPU metrics.
@@ -34,19 +34,16 @@ import (
 //
 //	{
 //	 "user": 2.08,
-//	 "nice": 0.00,
 //	 "system": 0.76,
-//	 "idle": 97.16,
 //	 "iowait": 0.00,
-//	 "irq": 0.00
 //	}
 type CPUValues struct {
 	User   float64 `json:"user"`
-	Nice   float64 `json:"nice"`
+	Nice   float64 `json:"-"`
 	System float64 `json:"system"`
-	Idle   float64 `json:"idle"`
+	Idle   float64 `json:"-"`
 	IOWait float64 `json:"iowait"`
-	IRQ    float64 `json:"irq"`
+	IRQ    float64 `json:"-"`
 }
 
 // CollectCPU returns CPU metrics.

@@ -20,8 +20,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/qbee-io/qbee-agent/app/inventory"
-	"github.com/qbee-io/qbee-agent/app/utils"
+	"go.qbee.io/agent/app/inventory"
+	"go.qbee.io/agent/app/utils"
 )
 
 // UsersBundle adds or removes users.

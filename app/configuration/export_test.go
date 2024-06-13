@@ -19,7 +19,7 @@ package configuration
 import (
 	"strings"
 
-	"github.com/qbee-io/qbee-agent/app/utils/runner"
+	"go.qbee.io/agent/app/utils/runner"
 )
 
 // ResetRebootAfterRun allows to reset internal rebootAfterRun flag from tests.

@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/qbee-io/qbee-agent/app/utils/assert"
+	"go.qbee.io/agent/app/utils/assert"
 )
 
 func TestCollectFilesystem(t *testing.T) {

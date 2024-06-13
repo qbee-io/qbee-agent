@@ -19,20 +19,25 @@
 package inventory_test
 
 import (
-	"encoding/json"
-	"fmt"
 	"testing"
 
-	"github.com/qbee-io/qbee-agent/app/inventory"
+	"go.qbee.io/agent/app/inventory"
+	"go.qbee.io/agent/app/utils/assert"
 )
 
 func TestCollectSystemInventory(t *testing.T) {
-	systemInfo, err := inventory.CollectSystemInventory()
+
+	systemInfo, err := inventory.CollectSystemInventory(true)
 	if err != nil {
 		t.Fatalf("error collecting system info: %v", err)
 	}
 
-	data, _ := json.MarshalIndent(systemInfo, " ", " ")
-
-	fmt.Println(string(data))
+	assert.True(t, systemInfo.System.TPMEnabled)
+	assert.NotEmpty(t, systemInfo.System.OSType)
+	assert.NotEmpty(t, systemInfo.System.Flavor)
+	assert.Equal(t, systemInfo.System.OS, "linux")
+	assert.Equal(t, systemInfo.System.Class, "linux")
+	assert.NotEmpty(t, systemInfo.System.Host)
+	assert.NotEmpty(t, systemInfo.System.Architecture)
+	assert.NotEmpty(t, systemInfo.System.OSVersion)
 }

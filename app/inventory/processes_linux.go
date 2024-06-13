@@ -30,7 +30,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/qbee-io/qbee-agent/app/inventory/linux"
+	"go.qbee.io/agent/app/inventory/linux"
 )
 
 // CollectProcessesInventory returns populated Processes inventory based on current system status.

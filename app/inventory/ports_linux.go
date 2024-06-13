@@ -30,9 +30,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/qbee-io/qbee-agent/app/inventory/linux"
-	"github.com/qbee-io/qbee-agent/app/log"
-	"github.com/qbee-io/qbee-agent/app/utils"
+	"go.qbee.io/agent/app/inventory/linux"
+	"go.qbee.io/agent/app/log"
+	"go.qbee.io/agent/app/utils"
 )
 
 // CollectPortsInventory returns populated Ports inventory based on current system status.

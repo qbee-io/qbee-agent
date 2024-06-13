@@ -21,10 +21,10 @@ import (
 
 	"github.com/google/go-tpm-tools/client"
 	"github.com/google/go-tpm-tools/proto/tpm"
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/qbee-io/qbee-agent/app/log"
+	"go.qbee.io/agent/app/log"
 )
 
 var tpmPCRSelection = tpm2.PCRSelection{Hash: tpm2.AlgSHA256, PCRs: []int{7}}

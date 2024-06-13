@@ -128,6 +128,17 @@ func NoError(t *testing.T, err error) {
 	}
 }
 
+// EventuallyTrue asserts that provided function returns true within the given timeout.
+func EventuallyTrue(t *testing.T, f func() bool, timeout time.Duration) {
+	for st := time.Now(); time.Since(st) < timeout; time.Sleep(10 * time.Millisecond) {
+		if f() {
+			return
+		}
+	}
+
+	failTest(t, "expected true, got false")
+}
+
 // failTest prints out a formatted failure message and fails the test immediately.
 func failTest(t *testing.T, msg string, args ...any) {
 	logMsg := fmt.Sprintf(msg, args...)
