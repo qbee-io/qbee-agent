@@ -24,6 +24,7 @@ import (
 	"io"
 	"net/http"
 
+	"go.qbee.io/agent/app/api"
 	"go.qbee.io/agent/app/log"
 )
 
@@ -58,7 +59,13 @@ func (srv *Service) getFileMetadataFromAPI(ctx context.Context, src string) (*Fi
 	fileMetadataResp := new(fileMetadataResponse)
 
 	if err := srv.api.Get(ctx, path, fileMetadataResp); err != nil {
-		return nil, fmt.Errorf("error getting file metadata: %w", err)
+
+		asErr, ok := err.(*api.Error)
+
+		if ok && asErr.ResponseCode >= http.StatusBadRequest {
+			return nil, fmt.Errorf("error getting file metadata: %w", err)
+		}
+		return nil, nil
 	}
 
 	return &fileMetadataResp.Data, nil
