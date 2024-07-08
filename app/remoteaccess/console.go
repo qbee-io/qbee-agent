@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/creack/pty"
 	"github.com/xtaci/smux"
@@ -129,7 +130,7 @@ func getCurrentUserShell() string {
 // NewConsole creates a new console.
 // It returns a Console object and an error if any.
 // If err == nil, the caller is responsible for closing the Console.
-func NewConsole(ctx context.Context, rows, cols uint16) (*Console, error) {
+func NewConsole(ctx context.Context, command string, cmdArgs []string, rows, cols uint16) (*Console, error) {
 	consoleID, err := newConsoleID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate console ID: %w", err)
@@ -137,7 +138,7 @@ func NewConsole(ctx context.Context, rows, cols uint16) (*Console, error) {
 
 	console := &Console{
 		id:  consoleID,
-		cmd: exec.CommandContext(ctx, getCurrentUserShell()),
+		cmd: exec.CommandContext(ctx, command, cmdArgs...),
 	}
 
 	console.cmd.Env = append(os.Environ(), "TERM=xterm-256color")
@@ -171,7 +172,18 @@ func (s *Service) HandleConsole(ctx context.Context, stream *smux.Stream, payloa
 		return transport.WriteError(stream, fmt.Errorf("invalid initial PTY command type"))
 	}
 
-	console, err := NewConsole(ctx, initCmd.Rows, initCmd.Cols)
+	command := getCurrentUserShell()
+	cmdArgs := make([]string, 0)
+
+	if initCmd.Command != "" {
+		command = initCmd.Command
+	}
+
+	if initCmd.CommandArgs != nil {
+		cmdArgs = append(cmdArgs, initCmd.CommandArgs...)
+	}
+
+	console, err := NewConsole(ctx, command, cmdArgs, initCmd.Rows, initCmd.Cols)
 	if err != nil {
 		return transport.WriteError(stream, fmt.Errorf("failed to start console: %w", err))
 	}
@@ -229,4 +241,29 @@ func (s *Service) HandleConsoleCommand(_ context.Context, stream *smux.Stream, p
 	default:
 		return transport.WriteError(stream, fmt.Errorf("unsupported PTY command: %v", cmd.Type))
 	}
+}
+
+// HandleCommand handles a remote command.
+func (s *Service) HandleCommand(_ context.Context, stream *smux.Stream, payload []byte) error {
+	cmdPayload := new(transport.Command)
+	if err := json.Unmarshal(payload, cmdPayload); err != nil {
+		return transport.WriteError(stream, fmt.Errorf("failed to unmarshal command: %w", err))
+	}
+
+	command := []string{cmdPayload.Command}
+
+	if len(cmdPayload.CommandArgs) > 0 {
+		command = append(command, cmdPayload.CommandArgs...)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
+	defer cancel()
+
+	output, err := utils.RunCommand(ctx, command)
+
+	if err != nil {
+		return transport.WriteError(stream, fmt.Errorf("failed to run command: %w", err))
+	}
+
+	return transport.WriteOK(stream, output)
 }

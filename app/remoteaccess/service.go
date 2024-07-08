@@ -77,7 +77,8 @@ func (s *Service) ensureInit(edgeURL string) error {
 		WithHandler(transport.MessageTypeUDPTunnel, transport.HandleUDPTunnel).
 		WithHandler(transport.MessageTypePTY, s.HandleConsole).
 		WithHandler(transport.MessageTypePTYCommand, s.HandleConsoleCommand).
-		WithHandler(transport.MessageTypeReload, s.HandleReloadCommand)
+		WithHandler(transport.MessageTypeReload, s.HandleReloadCommand).
+		WithHandler(transport.MessageTypeCommand, s.HandleCommand)
 
 	return nil
 }
