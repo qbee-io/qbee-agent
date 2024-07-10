@@ -34,6 +34,10 @@ func (agent *Agent) doInventories(ctx context.Context) error {
 		"docker-images":     agent.doDockerImagesInventory,
 		"docker-volumes":    agent.doDockerVolumesInventory,
 		"docker-networks":   agent.doDockerNetworksInventory,
+		"podman-containers": agent.doPodmanContainersInventory,
+		"podman-images":     agent.doPodmanImagesInventory,
+		"podman-volumes":    agent.doPodmanVolumesInventory,
+		"podman-networks":   agent.doPodmanNetworksInventory,
 		"software":          agent.doSoftwareInventory,
 		"process":           agent.doProcessInventory,
 		"rauc":              agent.doRaucInventory,
@@ -122,6 +126,46 @@ func (agent *Agent) doDockerNetworksInventory(ctx context.Context) error {
 	}
 
 	return agent.Inventory.Send(ctx, inventory.TypeDockerNetworks, dockerNetworksInventory)
+}
+
+// doPodmanContainersInventory collects podman containers inventory and delivers it to the device hub API.
+func (agent *Agent) doPodmanContainersInventory(ctx context.Context) error {
+	podmanContainersInventory, err := inventory.CollectPodmanContainersInventory(ctx)
+	if err != nil {
+		return err
+	}
+
+	return agent.Inventory.Send(ctx, inventory.TypePodmanContainers, podmanContainersInventory)
+}
+
+// doPodmanImagesInventory collects podman images inventory and delivers it to the device hub API.
+func (agent *Agent) doPodmanImagesInventory(ctx context.Context) error {
+	podmanImagesInventory, err := inventory.CollectPodmanImagesInventory(ctx)
+	if err != nil {
+		return err
+	}
+
+	return agent.Inventory.Send(ctx, inventory.TypePodmanImages, podmanImagesInventory)
+}
+
+// doPodmanVolumesInventory collects podman volumes inventory and delivers it to the device hub API.
+func (agent *Agent) doPodmanVolumesInventory(ctx context.Context) error {
+	podmanVolumesInventory, err := inventory.CollectPodmanVolumesInventory(ctx)
+	if err != nil {
+		return err
+	}
+
+	return agent.Inventory.Send(ctx, inventory.TypePodmanVolumes, podmanVolumesInventory)
+}
+
+// doPodmanNetworksInventory collects podman networks inventory and delivers it to the device hub API.
+func (agent *Agent) doPodmanNetworksInventory(ctx context.Context) error {
+	podmanNetworksInventory, err := inventory.CollectPodmanNetworksInventory(ctx)
+	if err != nil {
+		return err
+	}
+
+	return agent.Inventory.Send(ctx, inventory.TypePodmanNetworks, podmanNetworksInventory)
 }
 
 // doSoftwareInventory collects software inventory - if enabled - and delivers it to the device hub API.

@@ -1,0 +1,40 @@
+FROM golang:1.21 as builder
+
+ARG version
+ENV VERSION_VAR=go.qbee.io/agent/app.Version
+
+ENV CGO_ENABLED=0
+
+WORKDIR /src
+
+COPY . /src
+
+# build the agent
+RUN --mount=type=cache,target=/go \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go build \
+    -ldflags "-s -w -X ${VERSION_VAR}=$version" \
+    -o /usr/bin/qbee-agent \
+    main.go
+
+# Get the openwrt rootfs
+ADD https://downloads.openwrt.org/releases/23.05.0/targets/x86/64/openwrt-23.05.0-x86-64-rootfs.tar.gz /src/rootfs.tar.gz
+RUN mkdir /rootfs
+RUN tar -xz -C /rootfs -f /src/rootfs.tar.gz
+
+FROM scratch
+COPY --from=builder /rootfs /
+RUN mkdir -p /var/lock
+
+RUN sed -i '/^exit 0/i cat \/tmp\/resolv.conf > \/etc\/resolv.conf' /etc/rc.local
+
+COPY app/software/test_repository/opkg /opkg-repo
+
+RUN echo "src/gz qbee file:///opkg-repo" >> /etc/opkg/customfeeds.conf
+RUN sed -i '/option check_signature/d' /etc/opkg.conf
+
+RUN mkdir /etc/qbee && echo '{}' > /etc/qbee/qbee-agent.json
+COPY --from=builder /usr/bin/qbee-agent /usr/bin/qbee-agent
+
+WORKDIR /app
+CMD [ "/bin/sh" ]

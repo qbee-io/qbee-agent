@@ -85,12 +85,12 @@ func Test_DockerContainers_Container_Start(t *testing.T) {
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
 	dockerBundle := configuration.DockerContainersBundle{
-		Containers: []configuration.DockerContainer{
+		Containers: []configuration.Container{
 			{
-				Name:       containerName,
-				Image:      runner.Debian,
-				DockerArgs: "--rm",
-				Command:    "sleep 5",
+				Name:    containerName,
+				Image:   runner.Debian,
+				Args:    "--rm",
+				Command: "sleep 5",
 			},
 		},
 	}
@@ -120,7 +120,7 @@ func Test_DockerContainers_Container_StartExited(t *testing.T) {
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
 	dockerBundle := configuration.DockerContainersBundle{
-		Containers: []configuration.DockerContainer{
+		Containers: []configuration.Container{
 			{
 				Name:    containerName,
 				Image:   runner.Debian,
@@ -140,12 +140,12 @@ func Test_DockerContainers_Container_StartExited(t *testing.T) {
 
 	// running it the second time re-starts exited container
 	dockerBundle = configuration.DockerContainersBundle{
-		Containers: []configuration.DockerContainer{
+		Containers: []configuration.Container{
 			{
-				Name:       containerName,
-				Image:      runner.Debian,
-				DockerArgs: "--rm",
-				Command:    "sleep 5",
+				Name:    containerName,
+				Image:   runner.Debian,
+				Args:    "--rm",
+				Command: "sleep 5",
 			},
 		},
 	}
@@ -169,7 +169,7 @@ func Test_DockerContainers_Container_RestartOnConfigChange(t *testing.T) {
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
 	dockerBundle := configuration.DockerContainersBundle{
-		Containers: []configuration.DockerContainer{
+		Containers: []configuration.Container{
 			{
 				Name:    containerName,
 				Image:   runner.Debian,
@@ -187,12 +187,12 @@ func Test_DockerContainers_Container_RestartOnConfigChange(t *testing.T) {
 
 	// running it the second time re-starts running container
 	dockerBundle = configuration.DockerContainersBundle{
-		Containers: []configuration.DockerContainer{
+		Containers: []configuration.Container{
 			{
-				Name:       containerName,
-				Image:      runner.Debian,
-				DockerArgs: "--rm",
-				Command:    "sleep 5",
+				Name:    containerName,
+				Image:   runner.Debian,
+				Args:    "--rm",
+				Command: "sleep 5",
 			},
 		},
 	}
@@ -206,6 +206,54 @@ func Test_DockerContainers_Container_RestartOnConfigChange(t *testing.T) {
 	// check that there is a container running with the specified command
 	output := r.MustExec("docker", "container", "ls", "--filter", "name="+containerName, "--format", "{{.Command}}")
 	assert.Equal(t, string(output), fmt.Sprintf(`"%s"`, dockerBundle.Containers[0].Command))
+}
+
+func Test_DockerContainers_Container_PreCondition(t *testing.T) {
+	r := runner.New(t)
+
+	r.MustExec("apt-get", "install", "-y", "docker-ce-cli")
+
+	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
+
+	dockerBundleTrue := configuration.DockerContainersBundle{
+		Containers: []configuration.Container{
+			{
+				Name:         containerName,
+				Image:        runner.Debian,
+				Command:      "sleep 5",
+				Args:         "--rm",
+				PreCondition: "/bin/true",
+			},
+		},
+	}
+
+	reports := executeDockerContainersBundle(r, dockerBundleTrue)
+	expectedReports := []string{
+		"[INFO] Successfully started container for image debian:qbee.",
+	}
+
+	assert.Equal(t, reports, expectedReports)
+
+	output := r.MustExec("docker", "container", "ls", "--filter", "name="+containerName, "--format", "{{.Command}}")
+	assert.Equal(t, string(output), fmt.Sprintf(`"%s"`, dockerBundleTrue.Containers[0].Command))
+
+	containerName = fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
+
+	dockerBundleFalse := configuration.DockerContainersBundle{
+		Containers: []configuration.Container{
+			{
+				Name:         containerName,
+				Image:        runner.Debian,
+				Command:      "sleep 5",
+				Args:         "--rm",
+				PreCondition: "/bin/false",
+			},
+		},
+	}
+
+	// running it the second time does nothing, since the correct container is already running
+	reports = executeDockerContainersBundle(r, dockerBundleFalse)
+	assert.Empty(t, reports)
 }
 
 // executeDockerContainersBundle is a helper method to quickly execute docker containers bundle.

@@ -23,7 +23,6 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"sync"
@@ -142,16 +141,19 @@ const (
 
 // RunOnce performs a single run of the agent routines.
 func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
-
-	// avoid running the agent if a reboot is scheduled
-	// this is to avoid a race condition where the agent would run again after a reboot is scheduled
-	if agent.Configuration.ShouldReboot() {
+	// lock the agent to prevent concurrent runs, but if the lock is already held, skip the run
+	// we do that, so we don't 'accumulate' runs if the agent is slow
+	if !agent.lock.TryLock() {
 		return
 	}
 
-	agent.lock.Lock()
 	defer func() {
 		agent.lock.Unlock()
+
+		if agent.Configuration.ShouldReboot() {
+			log.Warnf("reboot condition detected, scheduling system reboot")
+			agent.reboot <- true
+		}
 
 		if err := recover(); err != nil {
 			log.Errorf("fatal agent error: %v", err)
@@ -209,13 +211,6 @@ func (agent *Agent) doConfig(configData *configuration.CommittedConfig) func(ctx
 		if err := agent.Configuration.Execute(ctx, configData); err != nil {
 			return fmt.Errorf("failed to apply configuration: %w", err)
 		}
-
-		// Send reboot command if it is scheduled
-		if agent.Configuration.ShouldReboot() {
-			log.Warnf("reboot condition detected, scheduling system reboot")
-			agent.reboot <- true
-		}
-
 		return nil
 	}
 }
@@ -232,18 +227,17 @@ func (agent *Agent) doRemoteAccess(cfg *configuration.CommittedConfig) func(ctx 
 	}
 }
 
-const shutdownBinPath = "/sbin/shutdown"
-
 // RebootSystem reboots the host system.
 func (agent *Agent) RebootSystem(ctx context.Context) {
-	if _, err := exec.LookPath(shutdownBinPath); err != nil {
-		log.Errorf("cannot reboot: %s - %v", shutdownBinPath, err)
+
+	rebootCmd, err := utils.RebootCommand()
+
+	if err != nil {
+		log.Errorf("reboot command not found: %v", err)
 		return
 	}
-	log.Debugf("waiting for agent routines to finish")
-	agent.Wait()
 
-	if output, err := utils.RunCommand(ctx, []string{"/sbin/shutdown", "-r", "+1"}); err != nil {
+	if output, err := utils.RunCommand(ctx, rebootCmd); err != nil {
 		log.Errorf("scheduling system reboot failed: %v", err)
 	} else {
 		log.Infof("scheduling system reboot completed: %s", output)

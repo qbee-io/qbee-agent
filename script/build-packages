@@ -17,7 +17,13 @@ function build_agent() {
   local arch
   arch=$1
   cd $BASEDIR
-  make VERSION=$VERSION GOOS=$GOOS GOARCH=$arch
+
+  if [[ $arch == "arm" ]]; then
+    make VERSION=$VERSION GOOS=$GOOS GOARCH=$arch GOARM=5
+  else
+    make VERSION=$VERSION GOOS=$GOOS GOARCH=$arch
+  fi
+
   mv ./bin/qbee-agent ./bin/qbee-agent-$arch
 }
 
