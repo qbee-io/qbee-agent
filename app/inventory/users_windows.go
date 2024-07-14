@@ -14,18 +14,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package main
+//go:build windows
 
-import (
-	"fmt"
-	"os"
+package inventory
 
-	"go.qbee.io/agent/app/cmd"
+// Paths to standard passwd and shadow files.
+const (
+	PasswdFilePath = ""
+	ShadowFilePath = ""
 )
 
-func main() {
-	if err := cmd.Main.Execute(os.Args[1:], nil); err != nil {
-		fmt.Printf("Error: %s\n", err)
-		os.Exit(1)
-	}
+func CollectUsersInventory() (*Users, error) {
+
+	return nil, nil
 }

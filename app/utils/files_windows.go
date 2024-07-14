@@ -14,18 +14,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package main
+//go:build windows
 
-import (
-	"fmt"
-	"os"
+package utils
 
-	"go.qbee.io/agent/app/cmd"
-)
+// DetermineFileOwner detects uid and gid for the path.
+func DetermineFileOwner(dst string) (int, int, error) {
 
-func main() {
-	if err := cmd.Main.Execute(os.Args[1:], nil); err != nil {
-		fmt.Printf("Error: %s\n", err)
-		os.Exit(1)
-	}
+	return 0, 0, nil
 }

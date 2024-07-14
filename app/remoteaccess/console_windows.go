@@ -1,4 +1,20 @@
-//go:build unix
+// Copyright 2023 qbee.io
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
+//go:build windows
 
 package remoteaccess
 
@@ -10,51 +26,31 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"os/exec"
-	"runtime"
-	"strconv"
-	"strings"
 	"syscall"
 
-	"github.com/creack/pty"
+	"github.com/UserExistsError/conpty"
 	"github.com/xtaci/smux"
 	"go.qbee.io/transport"
-	"golang.org/x/sys/unix"
-
-	"go.qbee.io/agent/app/inventory"
-	"go.qbee.io/agent/app/utils"
 )
 
 // Console contains resources involved in a remote console session.
 type Console struct {
 	id  string
-	cmd *exec.Cmd
-	pty *os.File
+	pty *conpty.ConPty
 }
 
 // Close the console and release all resources.
 func (c *Console) Close() {
-	if c.cmd.Process != nil {
-		_ = c.cmd.Process.Kill()
-
-	}
-
-	// extra check for nilness to avoid panic if kill has somehow changed the process pointer
-	if c.cmd.Process != nil {
-		// Wait for the process to exit properly before closing the PTY.
-		// This is necessary to avoid a situation where we end up with a zombie process.
-		_, _ = c.cmd.Process.Wait()
-	}
 
 	if c.pty != nil {
 		_ = c.pty.Close()
 	}
+
 }
 
 // Resize the console.
 func (c *Console) Resize(rows, cols uint16) error {
-	return pty.Setsize(c.pty, &pty.Winsize{Rows: rows, Cols: cols})
+	return c.pty.Resize(int(cols), int(rows))
 }
 
 // newConsoleID generates a new random console ID.
@@ -70,66 +66,6 @@ func newConsoleID() (string, error) {
 	return consoleID, nil
 }
 
-// getDefaultShell returns the default shell for the system.
-func getDefaultShell() string {
-	var shell string
-
-	_ = utils.ForLinesInFile("/etc/shells", func(line string) error {
-		if strings.HasPrefix(line, "#") || line == "" {
-			return nil
-		}
-
-		if shell != "" {
-			return nil
-		}
-
-		shell = line
-
-		return nil
-	})
-
-	if shell != "" {
-		return shell
-	}
-
-	// if shell is still not determined, use /bin/sh.
-	return "/bin/sh"
-}
-
-// getCurrentUserShell returns the current user's shell.
-func getCurrentUserShell() string {
-
-	// Try to get the shell from the SHELL environment variable if set.
-	shell := os.Getenv("SHELL")
-	if shell != "" {
-		return shell
-	}
-
-	// if not set, try to get the shell from the passwd file for the current user.
-	currentUID := os.Getuid()
-
-	_ = utils.ForLinesInFile(inventory.PasswdFilePath, func(line string) error {
-		fields := strings.Split(line, ":")
-
-		uid, err := strconv.Atoi(fields[2])
-		if err != nil {
-			return nil
-		}
-
-		if uid == currentUID {
-			shell = fields[6]
-		}
-
-		return nil
-	})
-
-	if shell != "" {
-		return shell
-	}
-
-	return getDefaultShell()
-}
-
 // NewConsole creates a new console.
 // It returns a Console object and an error if any.
 // If err == nil, the caller is responsible for closing the Console.
@@ -140,29 +76,16 @@ func NewConsole(ctx context.Context, rows, cols uint16) (*Console, error) {
 	}
 
 	console := &Console{
-		id:  consoleID,
-		cmd: exec.CommandContext(ctx, getCurrentUserShell()),
+		id: consoleID,
 	}
 
-	console.cmd.Env = append(os.Environ(), "TERM=xterm-256color")
-	console.cmd.SysProcAttr = &syscall.SysProcAttr{
-		Pdeathsig: syscall.SIGHUP,
-	}
+	sizeOption := conpty.ConPtyDimensions(int(cols), int(rows))
 
-	winSize := &pty.Winsize{Rows: rows, Cols: cols}
-
-	if console.pty, err = pty.StartWithSize(console.cmd, winSize); err != nil {
+	if console.pty, err = conpty.Start("powershell.exe", sizeOption); err != nil {
 		console.Close()
 		return nil, fmt.Errorf("failed to start command: %v", err)
 	}
 
-	// This causes the console to be non-blocking on Linux. Causes the console fd to fail on freebsd.
-	if runtime.GOOS == "linux" {
-		if err = unix.SetNonblock(int(console.pty.Fd()), true); err != nil {
-			console.Close()
-			return nil, fmt.Errorf("failed to set PTY to non-blocking mode: %v", err)
-		}
-	}
 	return console, nil
 }
 
@@ -190,22 +113,20 @@ func (s *Service) HandleConsole(ctx context.Context, stream *smux.Stream, payloa
 		s.consoleMapMutex.Lock()
 		delete(s.consoleMap, console.id)
 		s.consoleMapMutex.Unlock()
-		console.Close()
+		//console.Close()
 	}()
 
 	if err = transport.WriteOK(stream, []byte(console.id)); err != nil {
 		return err
 	}
 
-	if _, _, err = transport.Pipe(stream, console.pty); err != nil {
-		// handle expected read /dev/ptmx: input/output error
+	if _, _, err = console.Pipe(stream, console.pty); err != nil {
 		if errors.Is(err, syscall.EIO) {
 			return nil
 		}
 
 		return fmt.Errorf("failed to pipe console stream: %w", err)
 	}
-
 	return nil
 }
 
@@ -238,3 +159,30 @@ func (s *Service) HandleConsoleCommand(_ context.Context, stream *smux.Stream, p
 }
 
 // Windows pty https://github.com/ActiveState/termtest/blob/master/conpty/conpty_windows.go
+
+// Pipe copies data from src to dst and vice versa and returns first non-nil error.
+func (c *Console) Pipe(src io.ReadWriteCloser, dst io.ReadWriteCloser) (sent int64, received int64, err error) {
+
+	defer func() {
+		_ = src.Close()
+		_ = dst.Close()
+	}()
+
+	go func() {
+		received, _ = io.Copy(src, dst)
+	}()
+
+	go func() {
+		sent, _ = io.Copy(dst, src)
+	}()
+
+	ctx := context.Background()
+	_, err = c.pty.Wait(ctx)
+
+	// Ignore closed pipe and EOF errors.
+	if errors.Is(err, io.ErrClosedPipe) || errors.Is(err, io.EOF) {
+		err = nil
+	}
+
+	return
+}

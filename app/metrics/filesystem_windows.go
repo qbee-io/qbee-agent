@@ -14,18 +14,26 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package main
+//go:build windows
 
-import (
-	"fmt"
-	"os"
+package metrics
 
-	"go.qbee.io/agent/app/cmd"
-)
+// FilesystemValues represents filesystem metric values.
+//
+// Example payload:
+//
+//	{
+//	 "avail": 399848008,
+//	 "use": 14,
+//	}
+type FilesystemValues struct {
+	Available uint64 `json:"avail"`
+	Use       uint64 `json:"use"`
+}
 
-func main() {
-	if err := cmd.Main.Execute(os.Args[1:], nil); err != nil {
-		fmt.Printf("Error: %s\n", err)
-		os.Exit(1)
-	}
+const fsBlockSize = 1024
+
+// CollectFilesystem returns filesystem metric for each filesystem mounted in read-write mode.
+func CollectFilesystem() ([]Metric, error) {
+	return nil, nil
 }

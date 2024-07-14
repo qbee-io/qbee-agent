@@ -1,4 +1,4 @@
-// Copyright 2023 qbee.io
+// Copyright 2024 qbee.io
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,23 +16,26 @@
 
 //go:build windows
 
-package utils
+package metrics
 
-import (
-	"context"
-	"fmt"
-)
-
-// RunCommand runs a command and returns its output.
-func RunCommand(ctx context.Context, cmd []string) ([]byte, error) {
-	return nil, nil
+// TemperatureValues represents temperature metrics
+type TemperatureValues struct {
+	// Temperature in degrees Celsius
+	Temperature float64 `json:"temperature"`
 }
 
-// GenerateServiceCommand generates a command to start or stop a service.
-func GenerateServiceCommand(ctx context.Context, serviceName, action string) ([]string, error) {
-	return nil, nil
+// cpuTemperatures represents temperature metrics
+type cpuTemperatures struct {
+	main    float64
+	cores   []float64
+	socket  []float64
+	chipset float64
 }
 
-func RebootCommand() ([]string, error) {
-	return nil, fmt.Errorf("reboot command is not supported on Windows")
+// hostTemperatureScale is the scale of the temperature values (milli-degrees Celsius)
+const hostTemperatureScale = 1000.0
+
+// CollectTemperature collects temperature metrics from from /sys/class/[hwmon|thermal]
+func CollectTemperature() ([]Metric, error) {
+	return nil, nil
 }

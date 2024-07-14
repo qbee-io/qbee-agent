@@ -72,9 +72,10 @@ func (agent *Agent) Run(ctx context.Context) error {
 	signal.Notify(stopSignalCh, os.Interrupt, syscall.SIGTERM)
 
 	// use SIGUSR1 to force processing outside normal schedule
-	updateSignalCh := make(chan os.Signal, 1)
-	signal.Notify(updateSignalCh, syscall.SIGUSR1)
-
+	/*
+		updateSignalCh := make(chan os.Signal, 1)
+		signal.Notify(updateSignalCh, syscall.SIGUSR1)
+	*/
 	// ticker won't trigger the first run immediately, so let's do that ourselves
 	go agent.RunOnce(ctx, FullRun)
 
@@ -109,11 +110,12 @@ func (agent *Agent) Run(ctx context.Context) error {
 		case <-agent.loopTicker.C:
 			go agent.RunOnce(ctx, FullRun)
 
-		case <-updateSignalCh:
-			log.Debugf("received update signal")
+		/*
+			case <-updateSignalCh:
+				log.Debugf("received update signal")
 
-			agent.update <- true
-
+				agent.update <- true
+		*/
 		case <-agent.update:
 			// reset the ticker, so we don't run the update twice (scheduled and manually triggered)
 			agent.loopTicker.Reset(agent.Configuration.RunInterval())

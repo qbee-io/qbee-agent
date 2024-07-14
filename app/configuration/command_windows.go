@@ -14,18 +14,19 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package main
+//go:build windows
+
+package configuration
 
 import (
+	"context"
 	"fmt"
-	"os"
-
-	"go.qbee.io/agent/app/cmd"
 )
 
-func main() {
-	if err := cmd.Main.Execute(os.Args[1:], nil); err != nil {
-		fmt.Printf("Error: %s\n", err)
-		os.Exit(1)
-	}
+func RunCommand(ctx context.Context, command string) ([]byte, error) {
+	return nil, fmt.Errorf("command execution is not supported on Windows")
+}
+
+func getShell() string {
+	return ""
 }

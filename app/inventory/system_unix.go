@@ -57,11 +57,11 @@ func CollectSystemInventory(tpmEnabled bool) (*System, error) {
 	if err := systemInfo.parseOSRelease(); err != nil {
 		return nil, err
 	}
-	/*
-		if err := systemInfo.parseCPUInfo(); err != nil {
-			return nil, err
-		}
-	*/
+
+	if err := systemInfo.parseCPUInfo(); err != nil {
+		return nil, err
+	}
+
 	if err := systemInfo.parseUnameSyscall(); err != nil {
 		return nil, err
 	}
@@ -69,11 +69,11 @@ func CollectSystemInventory(tpmEnabled bool) (*System, error) {
 	if err := systemInfo.parseSysinfoSyscall(); err != nil {
 		return nil, err
 	}
-	/*
-		if err := systemInfo.gatherNetworkInfo(); err != nil {
-			return nil, err
-		}
-	*/
+
+	if err := systemInfo.gatherNetworkInfo(); err != nil {
+		return nil, err
+	}
+
 	systemInfo.OSType = fmt.Sprintf("%s_%s", systemInfo.OS, systemInfo.Architecture)
 	systemInfo.LongArchitecture = canonify(fmt.Sprintf("%s_%s_%s_%s",
 		systemInfo.OS,

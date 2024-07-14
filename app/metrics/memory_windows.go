@@ -14,18 +14,31 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package main
+//go:build windows
 
-import (
-	"fmt"
-	"os"
+package metrics
 
-	"go.qbee.io/agent/app/cmd"
-)
+// MemoryValues contains memory metrics.
+//
+// Example payload:
+//
+//	{
+//	 "memfree": 26791968,
+//	 "memutil": 17,
+//	 "swaputil": 0
+//	}
+type MemoryValues struct {
+	MemoryTotal       int `json:"-"`
+	MemoryUsed        int `json:"-"`
+	MemoryFree        int `json:"memfree"`
+	MemoryUtilization int `json:"memutil"`
+	SwapTotal         int `json:"-"`
+	SwapUsed          int `json:"-"`
+	SwapFree          int `json:"-"`
+	SwapUtilization   int `json:"swaputil"`
+}
 
-func main() {
-	if err := cmd.Main.Execute(os.Args[1:], nil); err != nil {
-		fmt.Printf("Error: %s\n", err)
-		os.Exit(1)
-	}
+// CollectMemory metrics.
+func CollectMemory() ([]Metric, error) {
+	return nil, nil
 }

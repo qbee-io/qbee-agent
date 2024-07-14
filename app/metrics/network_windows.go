@@ -16,23 +16,33 @@
 
 //go:build windows
 
-package utils
+package metrics
 
-import (
-	"context"
-	"fmt"
-)
+// NetworkValues contains network metrics for an interface.
+//
+// Example payload:
+//
+//	{
+//	 "label": "network",
+//	 "ts": 1669988326,
+//	 "id": "eth0",
+//	 "values": {
+//	   "tx_bytes": 7126,
+//	   "rx_bytes": 17423
+//	 }
+//	}
+type NetworkValues struct {
+	// Received bytes on a network interface
+	RXBytes uint64 `json:"rx_bytes"`
+	// Transferred bytes on a network interface
+	TXBytes uint64 `json:"tx_bytes"`
+}
 
-// RunCommand runs a command and returns its output.
-func RunCommand(ctx context.Context, cmd []string) ([]byte, error) {
+func CollectNetwork() ([]Metric, error) {
 	return nil, nil
 }
 
-// GenerateServiceCommand generates a command to start or stop a service.
-func GenerateServiceCommand(ctx context.Context, serviceName, action string) ([]string, error) {
+// Delta calculates the delta between two NetworkValues.
+func (v *NetworkValues) Delta(old *NetworkValues) (*NetworkValues, error) {
 	return nil, nil
-}
-
-func RebootCommand() ([]string, error) {
-	return nil, fmt.Errorf("reboot command is not supported on Windows")
 }

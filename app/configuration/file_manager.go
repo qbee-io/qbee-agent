@@ -31,7 +31,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
+
+	"go.qbee.io/agent/app/utils"
 )
 
 const (
@@ -378,7 +379,7 @@ func calculateTemplateDigest(src string, params map[string]string) (string, erro
 
 // createFile under provided path and with provided uid and gid.
 func createFile(path string, permission os.FileMode) (*os.File, error) {
-	uid, gid, err := determineFileOwner(path)
+	uid, gid, err := utils.DetermineFileOwner(path)
 	if err != nil {
 		return nil, err
 	}
@@ -433,36 +434,6 @@ func isFileReady(path, sha256Digest, md5Digest string) (bool, error) {
 	fileIsReady := calculatedHexDigest == expectedHexDigest
 
 	return fileIsReady, nil
-}
-
-// determineFileOwner detects uid and gid for the path.
-func determineFileOwner(dst string) (int, int, error) {
-	fileInfo, err := os.Stat(dst)
-	if err != nil {
-		// if path doesn't exist, try to determine owner of the parent directory
-		if errors.Is(err, fs.ErrNotExist) {
-			parentDirPath := filepath.Dir(dst)
-
-			if parentDirPath == dst {
-				// this should never happen, but in case it does, use the process uid/gid
-				return os.Geteuid(), os.Getgid(), nil
-			}
-
-			return determineFileOwner(parentDirPath)
-		}
-
-		return 0, 0, fmt.Errorf("cannot check file ownership: %s - %w", dst, err)
-	}
-
-	// if file exists, use its uid/gid
-	fileStat, ok := fileInfo.Sys().(*syscall.Stat_t)
-	if !ok {
-		return 0, 0, fmt.Errorf("cannot check file ownership: %s - unsupported OS", dst)
-	}
-
-	uid, gid := int(fileStat.Uid), int(fileStat.Gid)
-
-	return uid, gid, nil
 }
 
 // makeDirectories checks if all directories for the dst file exist, if not, create them with provided owner and group.

@@ -31,3 +31,21 @@ test:
 
 lint:
 	docker run --rm -v $(shell pwd):/app -w /app golangci/golangci-lint:v1.55.2 golangci-lint run
+
+build-win:
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build \
+		-ldflags "-s -w -X $(VERSION_VAR)=$(VERSION) -X $(COMMIT_VAR)=$(COMMIT)" \
+		-trimpath \
+		-o bin/qbee-agent-windows-amd64.exe main.go
+
+build-mac:
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build \
+		-ldflags "-s -w -X $(VERSION_VAR)=$(VERSION) -X $(COMMIT_VAR)=$(COMMIT)" \
+		-trimpath \
+		-o bin/qbee-agent-darwin-amd64 main.go
+
+build-freebsd:
+	CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build \
+		-ldflags "-s -w -X $(VERSION_VAR)=$(VERSION) -X $(COMMIT_VAR)=$(COMMIT)" \
+		-trimpath \
+		-o bin/qbee-agent-freebsd-amd64 main.go

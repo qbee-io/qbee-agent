@@ -14,18 +14,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+//go:build unix
+
 package main
 
-import (
-	"fmt"
-	"os"
+import "syscall"
 
-	"go.qbee.io/agent/app/cmd"
-)
+var defaultUmask int = 0077
 
-func main() {
-	if err := cmd.Main.Execute(os.Args[1:], nil); err != nil {
-		fmt.Printf("Error: %s\n", err)
-		os.Exit(1)
-	}
+func init() {
+	// set global umask
+	syscall.Umask(defaultUmask)
 }

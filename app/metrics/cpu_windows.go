@@ -14,18 +14,33 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package main
+//go:build windows
 
-import (
-	"fmt"
-	"os"
+package metrics
 
-	"go.qbee.io/agent/app/cmd"
-)
+// CPUValues contains CPU metrics.
+//
+// Example payload:
+//
+//	{
+//	 "user": 2.08,
+//	 "system": 0.76,
+//	 "iowait": 0.00,
+//	}
+type CPUValues struct {
+	User   float64 `json:"user"`
+	Nice   float64 `json:"-"`
+	System float64 `json:"system"`
+	Idle   float64 `json:"-"`
+	IOWait float64 `json:"iowait"`
+	IRQ    float64 `json:"-"`
+}
 
-func main() {
-	if err := cmd.Main.Execute(os.Args[1:], nil); err != nil {
-		fmt.Printf("Error: %s\n", err)
-		os.Exit(1)
-	}
+// CollectCPU returns CPU metrics.
+func CollectCPU() (*CPUValues, error) {
+	return nil, nil
+}
+
+func (c *CPUValues) Delta(previous *CPUValues) (*CPUValues, error) {
+	return nil, nil
 }

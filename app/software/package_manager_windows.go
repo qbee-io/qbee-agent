@@ -14,41 +14,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-//go:build unix
+//go:build windows
 
 package software
 
-import (
-	"context"
-	"time"
-)
+import "context"
 
-// DefaultPackageManager is set to the supporter package manager for the OS.
-// If there are no support package managers available, this will be nil.
-var DefaultPackageManager PackageManager
-
-const pkgCacheTTL = 24 * time.Hour
-const pkgCacheKeyPrefix = "packages"
-
-// PackageManagers provides a map of all package managers supported by the agent.
-var PackageManagers = map[PackageManagerType]PackageManager{
-	PackageManagerTypeDebian: new(DebianPackageManager),
-	PackageManagerTypeRpm:    new(RpmPackageManager),
-	PackageManagerTypeOpkg:   new(OpkgPackageManager),
-}
-
-func init() {
-	// set default package manager
-	for _, pkgManager := range PackageManagers {
-		if pkgManager.IsSupported() {
-			DefaultPackageManager = pkgManager
-			return
-		}
-	}
-}
-
-// PackageManagerType defines package manager type.
 type PackageManagerType string
+
+var DefaultPackageManager PackageManager
 
 // PackageManager defines package manager interface.
 type PackageManager interface {
@@ -81,4 +55,8 @@ type PackageManager interface {
 
 	// ParsePackageFile returns a package from a file path.
 	ParsePackageFile(ctx context.Context, filePath string) (*Package, error)
+}
+
+func init() {
+
 }
