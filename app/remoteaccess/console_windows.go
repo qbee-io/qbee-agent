@@ -160,6 +160,8 @@ func (s *Service) HandleConsoleCommand(_ context.Context, stream *smux.Stream, p
 
 // Windows pty https://github.com/ActiveState/termtest/blob/master/conpty/conpty_windows.go
 
+// Service installation: https://pkg.go.dev/golang.org/x/sys/windows/svc/example
+
 // Pipe copies data from src to dst and vice versa and returns first non-nil error.
 func (c *Console) Pipe(src io.ReadWriteCloser, dst io.ReadWriteCloser) (sent int64, received int64, err error) {
 
