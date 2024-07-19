@@ -8,6 +8,49 @@ import (
 	"go.qbee.io/agent/app/utils/assert"
 )
 
+func Test_IsCompatible(t *testing.T) {
+
+	var testCases = []struct {
+		name        string
+		raucVersion string
+		expected    bool
+	}{
+		{
+			"compatible with rauc in string",
+			"rauc 1.10.1",
+			true,
+		},
+		{
+			"compatible without rauc in string",
+			"1.10.1",
+			true,
+		},
+		{
+			"compatible without patch version",
+			"1.10",
+			true,
+		},
+		{
+			"incomaptible with rauc in string",
+			"rauc 1.7.4",
+			false,
+		},
+		{
+			"incompatible without rauc in string",
+			"1.7.4",
+			false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ver := image.ParseRaucVersion(tc.raucVersion)
+			assert.Equal(t, image.IsRaucCompatible(ver), tc.expected)
+		})
+	}
+
+}
+
 func Test_Before_Install(t *testing.T) {
 
 	var raucStatus image.RaucStatus
