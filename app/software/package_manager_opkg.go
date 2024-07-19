@@ -181,7 +181,7 @@ func (opkg *OpkgPackageManager) parseUpdateAvailableLine(line string) *Package {
 }
 
 const (
-	opkgControlPath = "/usr/lib/opkg/info"
+	opkgInfoDir = "/usr/lib/opkg/info"
 )
 
 // listInstalledPackages returns a list of installed packages.
@@ -229,9 +229,49 @@ func (opkg *OpkgPackageManager) listInstalledPackages(ctx context.Context) ([]Pa
 
 var opkgControlArchitectureRE = regexp.MustCompile(`^Architecture:\s+(\S+)`)
 
-func (opkg *OpkgPackageManager) resolvePackageArchitecture(packageName string) (string, error) {
+func resolveOpkgConfigPath() string {
+	opkgConfigFilePaths := []string{"/etc/opkg.conf", "/etc/opkg/opkg.conf"}
 
-	pkgControlFile := filepath.Join(opkgControlPath, packageName+".control")
+	for _, opkgConfigFilePath := range opkgConfigFilePaths {
+		if _, err := os.Stat(opkgConfigFilePath); err == nil {
+			return opkgConfigFilePath
+		}
+	}
+	return ""
+}
+
+var opkgInfoDirRE = regexp.MustCompile(`^option\s+info_dir\s+(\S+)$`)
+
+func resolveOpkgInfoPath(configPath string) string {
+
+	if configPath == "" {
+		return opkgInfoDir
+	}
+
+	// read the opkg config file
+	configFile, err := os.Open(configPath)
+	if err != nil {
+		return opkgInfoDir
+	}
+	defer configFile.Close()
+
+	// read the first 10 lines of the control file
+	scanner := bufio.NewScanner(configFile)
+
+	for scanner.Scan() {
+		if opkgInfoDirRE.MatchString(scanner.Text()) {
+			return opkgInfoDirRE.FindStringSubmatch(scanner.Text())[1]
+		}
+	}
+	return opkgInfoDir
+}
+
+func (opkg *OpkgPackageManager) resolvePackageArchitecture(packageName string) (string, error) {
+	configPath := resolveOpkgConfigPath()
+
+	infoDir := resolveOpkgInfoPath(configPath)
+
+	pkgControlFile := filepath.Join(infoDir, packageName+".control")
 
 	if _, err := os.Stat(pkgControlFile); err != nil {
 		return "", fmt.Errorf("error reading package control file: %w", err)
