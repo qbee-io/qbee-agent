@@ -34,6 +34,14 @@ type Console struct {
 func (c *Console) Close() {
 	if c.cmd.Process != nil {
 		_ = c.cmd.Process.Kill()
+
+	}
+
+	// extra check for nilness to avoid panic if kill has somehow changed the process pointer
+	if c.cmd.Process != nil {
+		// Wait for the process to exit properly before closing the PTY.
+		// This is necessary to avoid a situation where we end up with a zombie process.
+		_, _ = c.cmd.Process.Wait()
 	}
 
 	if c.pty != nil {
