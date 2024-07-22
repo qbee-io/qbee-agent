@@ -65,6 +65,8 @@ func (srv *Service) getFileMetadataFromAPI(ctx context.Context, src string) (*Fi
 		if ok && asErr.ResponseCode >= http.StatusBadRequest {
 			return nil, fmt.Errorf("error getting file metadata: %w", err)
 		}
+
+		// Do not return if there's no http error (e.g. during network outage)
 		return nil, nil
 	}
 

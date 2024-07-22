@@ -92,7 +92,9 @@ func (srv *Service) downloadFile(ctx context.Context, label, src, dst string) (b
 		return false, err
 	}
 
-	// We don't have metadata for the file and err is nil, so we do not have a http error
+	// We don't have metadata for the file and err is nil, so we can assume network outage.
+	// We should not create reports for network outages as this will create a lot of noise
+	// and fill up the reports buffer.
 	if fileMetadata == nil {
 		return false, nil
 	}

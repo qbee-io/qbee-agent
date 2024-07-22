@@ -82,7 +82,8 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	}
 
 	// if no errors where return, but raucPath is empty, we can assume that the bundle is already installed
-	// and we can return without doing anything. This only happens for non-streaming installations
+	// or that we have network issues and the bundle could not be downloaded.
+	// We can return without doing anything. This only happens for non-streaming installations
 	if raucPath == "" {
 		return nil
 	}
@@ -239,10 +240,13 @@ func (r *RaucBundle) resolveRaucPath(ctx context.Context, service *Service) (str
 
 func downloadRaucBundle(ctx context.Context, service *Service, raucPath, raucDownloadPath string) (string, error) {
 	bundleMetadata, err := service.getFileMetadataFromAPI(ctx, raucPath)
+
+	// If we have an error, it is an http API error and we should return it
 	if err != nil {
 		return "", err
 	}
 
+	// If we do not have metadata, we can assume network issues and return an empty string
 	if bundleMetadata == nil {
 		return "", nil
 	}
