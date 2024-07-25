@@ -21,6 +21,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"go.qbee.io/agent/app/inventory"
+	"go.qbee.io/agent/app/log"
 	"go.qbee.io/agent/app/utils"
 )
 
@@ -243,27 +244,119 @@ func (s *Service) HandleConsoleCommand(_ context.Context, stream *smux.Stream, p
 	}
 }
 
-// HandleCommand handles a remote command.
+const streamCommandTimeout = time.Second * 5
+
+// HandleCommand handles a command and streams output back to the client.
 func (s *Service) HandleCommand(_ context.Context, stream *smux.Stream, payload []byte) error {
 	cmdPayload := new(transport.Command)
 	if err := json.Unmarshal(payload, cmdPayload); err != nil {
 		return transport.WriteError(stream, fmt.Errorf("failed to unmarshal command: %w", err))
 	}
-
 	command := []string{cmdPayload.Command}
 
 	if len(cmdPayload.CommandArgs) > 0 {
 		command = append(command, cmdPayload.CommandArgs...)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
+	ctx, cancel := context.WithTimeout(context.Background(), streamCommandTimeout)
+
 	defer cancel()
 
-	output, err := utils.RunCommand(ctx, command)
+	cmd := utils.NewCommand(ctx, command)
 
+	outputPipe, err := cmd.StdoutPipe()
 	if err != nil {
-		return transport.WriteError(stream, fmt.Errorf("failed to run command: %w", err))
+		log.Errorf("failed to get stdout pipe: %v", err)
+		return transport.WriteError(stream, fmt.Errorf("failed to get stdout pipe: %w", err))
+	}
+	defer outputPipe.Close()
+
+	errPipe, err := cmd.StderrPipe()
+	if err != nil {
+		log.Errorf("failed to get stderr pipe: %v", err)
+		return transport.WriteError(stream, fmt.Errorf("failed to get stderr pipe: %w", err))
+	}
+	defer errPipe.Close()
+
+	cmdReader := io.MultiReader(outputPipe, errPipe)
+
+	if err := cmd.Start(); err != nil {
+		log.Errorf("failed to start command: %v", err)
+		return transport.WriteError(stream, fmt.Errorf("failed to start command: %w", err))
 	}
 
-	return transport.WriteOK(stream, output)
+	defer func() {
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+		if cmd.Process != nil {
+			_, _ = cmd.Process.Wait()
+		}
+	}()
+
+	if err := transport.WriteOK(stream, []byte("")); err != nil {
+		return err
+	}
+
+	errorChan := make(chan error)
+
+	go func() {
+		var buf [1024]byte
+		for {
+			n, err := cmdReader.Read(buf[:])
+			if err != nil {
+				if err == io.EOF {
+					errorChan <- nil
+					return
+				}
+				errorChan <- err
+				return
+			}
+			if _, err := stream.Write(buf[:n]); err != nil {
+				errorChan <- err
+				return
+			}
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		if ctx.Err() != nil {
+			if ctx.Err() == context.DeadlineExceeded {
+				return transport.WriteError(stream, fmt.Errorf("command timed out"))
+			}
+			return transport.WriteError(stream, ctx.Err())
+		}
+	case err := <-errorChan:
+		if err != nil {
+			return transport.WriteError(stream, err)
+		}
+
+		err = cmd.Wait()
+		if err != nil {
+			return transport.WriteError(stream, err)
+		}
+		return nil
+	}
+	return nil
 }
+
+/*
+// HandleFileTransfer handles a file transfer request.
+func (s *Service) HandleFileTransfer(_ context.Context, stream *smux.Stream, payload []byte) error {
+	req := new(transport.FileTransferRequest)
+	if err := json.Unmarshal(payload, req); err != nil {
+		return transport.WriteError(stream, fmt.Errorf("failed to unmarshal file transfer request: %w", err))
+	}
+
+	if req.Type == transport.FileTransferTypeUpload {
+		return s.handleFileUpload(stream, req)
+	}
+
+	if req.Type == transport.FileTransferTypeDownload {
+		return s.handleFileDownload(stream, req)
+	}
+
+	return transport.WriteError(stream, fmt.Errorf("unsupported file transfer type: %v", req.Type))
+}
+*/
