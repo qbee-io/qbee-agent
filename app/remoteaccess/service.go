@@ -30,6 +30,7 @@ import (
 func New() *Service {
 	return &Service{
 		consoleMap: make(map[string]*Console),
+		commandMap: make(map[string]*Command),
 	}
 }
 
