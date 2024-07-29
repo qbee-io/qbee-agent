@@ -15,7 +15,7 @@ import (
 	"go.qbee.io/transport"
 )
 
-const streamCommandTimeout = time.Second * 5
+const streamCommandTimeout = time.Minute * 5
 
 // Command contains resources involved in a remote command session.
 type Command struct {
@@ -100,32 +100,12 @@ func (s *Service) HandleCommand(_ context.Context, stream *smux.Stream, payload 
 	}
 
 	errorChan := make(chan error)
-
 	go func() {
 		if _, err := io.Copy(stream, cmdReader); err != nil {
 			errorChan <- err
 		}
+		errorChan <- nil
 	}()
-	/*
-		go func() {
-			var buf [1024]byte
-			for {
-				n, err := cmdReader.Read(buf[:])
-				if err != nil {
-					if err == io.EOF {
-						errorChan <- nil
-						return
-					}
-					errorChan <- err
-					return
-				}
-				if _, err := stream.Write(buf[:n]); err != nil {
-					errorChan <- err
-					return
-				}
-			}
-		}()
-	*/
 
 	select {
 	case <-ctx.Done():
@@ -140,10 +120,12 @@ func (s *Service) HandleCommand(_ context.Context, stream *smux.Stream, payload 
 			return transport.WriteError(stream, err)
 		}
 
+		// Get the exit code of the command if non-zero.
 		err = cmdSession.cmd.Wait()
 		if err != nil {
 			return transport.WriteError(stream, err)
 		}
+
 		return nil
 	}
 	return nil
