@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/creack/pty"
 	"github.com/xtaci/smux"
@@ -21,7 +20,6 @@ import (
 	"golang.org/x/sys/unix"
 
 	"go.qbee.io/agent/app/inventory"
-	"go.qbee.io/agent/app/log"
 	"go.qbee.io/agent/app/utils"
 )
 
@@ -56,8 +54,8 @@ func (c *Console) Resize(rows, cols uint16) error {
 	return pty.Setsize(c.pty, &pty.Winsize{Rows: rows, Cols: cols})
 }
 
-// newConsoleID generates a new random console ID.
-func newConsoleID() (string, error) {
+// newSessionID generates a new random session ID.
+func newSessionID() (string, error) {
 	buf := make([]byte, 16)
 
 	if _, err := io.ReadFull(rand.Reader, buf); err != nil {
@@ -132,7 +130,7 @@ func getCurrentUserShell() string {
 // It returns a Console object and an error if any.
 // If err == nil, the caller is responsible for closing the Console.
 func NewConsole(ctx context.Context, command string, cmdArgs []string, rows, cols uint16) (*Console, error) {
-	consoleID, err := newConsoleID()
+	consoleID, err := newSessionID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate console ID: %w", err)
 	}
@@ -242,103 +240,6 @@ func (s *Service) HandleConsoleCommand(_ context.Context, stream *smux.Stream, p
 	default:
 		return transport.WriteError(stream, fmt.Errorf("unsupported PTY command: %v", cmd.Type))
 	}
-}
-
-const streamCommandTimeout = time.Second * 5
-
-// HandleCommand handles a command and streams output back to the client.
-func (s *Service) HandleCommand(_ context.Context, stream *smux.Stream, payload []byte) error {
-	cmdPayload := new(transport.Command)
-	if err := json.Unmarshal(payload, cmdPayload); err != nil {
-		return transport.WriteError(stream, fmt.Errorf("failed to unmarshal command: %w", err))
-	}
-	command := []string{cmdPayload.Command}
-
-	if len(cmdPayload.CommandArgs) > 0 {
-		command = append(command, cmdPayload.CommandArgs...)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), streamCommandTimeout)
-
-	defer cancel()
-
-	cmd := utils.NewCommand(ctx, command)
-
-	outputPipe, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Errorf("failed to get stdout pipe: %v", err)
-		return transport.WriteError(stream, fmt.Errorf("failed to get stdout pipe: %w", err))
-	}
-	defer outputPipe.Close()
-
-	errPipe, err := cmd.StderrPipe()
-	if err != nil {
-		log.Errorf("failed to get stderr pipe: %v", err)
-		return transport.WriteError(stream, fmt.Errorf("failed to get stderr pipe: %w", err))
-	}
-	defer errPipe.Close()
-
-	cmdReader := io.MultiReader(outputPipe, errPipe)
-
-	if err := cmd.Start(); err != nil {
-		log.Errorf("failed to start command: %v", err)
-		return transport.WriteError(stream, fmt.Errorf("failed to start command: %w", err))
-	}
-
-	defer func() {
-		if cmd.Process != nil {
-			_ = cmd.Process.Kill()
-		}
-		if cmd.Process != nil {
-			_, _ = cmd.Process.Wait()
-		}
-	}()
-
-	if err := transport.WriteOK(stream, []byte("")); err != nil {
-		return err
-	}
-
-	errorChan := make(chan error)
-
-	go func() {
-		var buf [1024]byte
-		for {
-			n, err := cmdReader.Read(buf[:])
-			if err != nil {
-				if err == io.EOF {
-					errorChan <- nil
-					return
-				}
-				errorChan <- err
-				return
-			}
-			if _, err := stream.Write(buf[:n]); err != nil {
-				errorChan <- err
-				return
-			}
-		}
-	}()
-
-	select {
-	case <-ctx.Done():
-		if ctx.Err() != nil {
-			if ctx.Err() == context.DeadlineExceeded {
-				return transport.WriteError(stream, fmt.Errorf("command timed out"))
-			}
-			return transport.WriteError(stream, ctx.Err())
-		}
-	case err := <-errorChan:
-		if err != nil {
-			return transport.WriteError(stream, err)
-		}
-
-		err = cmd.Wait()
-		if err != nil {
-			return transport.WriteError(stream, err)
-		}
-		return nil
-	}
-	return nil
 }
 
 /*

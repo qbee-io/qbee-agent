@@ -42,8 +42,14 @@ type Service struct {
 	// consoleMap is a map of all active consoles.
 	consoleMap map[string]*Console
 
+	// commandMap is a map of all active commands.
+	commandMap map[string]*Command
+
 	// consoleMapMutex is a mutex to protect the consoleMap from concurrent access.
 	consoleMapMutex sync.Mutex
+
+	// commandMapMutex is a mutex to protect the commandMap from concurrent access.
+	commandMapMutex sync.Mutex
 
 	// configReloadNotifierChannel is a function that is called when the agent configuration reload is requested remotely.
 	configReloadNotifierChannel chan bool
