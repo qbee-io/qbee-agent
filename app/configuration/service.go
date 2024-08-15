@@ -17,6 +17,7 @@
 package configuration
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -321,6 +322,11 @@ func (srv *Service) addReportsToBuffer(reports []Report) error {
 		}
 	}
 
+	// sync disk writes to avoid data loss
+	if err = fp.Sync(); err != nil {
+		return fmt.Errorf("failed to sync reports buffer file: %v", err)
+	}
+
 	return nil
 }
 
@@ -343,14 +349,35 @@ func (srv *Service) readReportsBuffer() ([]Report, error) {
 
 	reportsExpirationCutoff := time.Now().Add(-reportsBufferExpiration).Unix()
 
-	for {
+	for decoder.More() {
+		var offset int64
 		var report Report
 		if err := decoder.Decode(&report); err != nil {
-			if errors.Is(err, io.EOF) {
-				break
+
+			var serr *json.SyntaxError
+			var ok bool
+			if serr, ok = err.(*json.SyntaxError); !ok {
+				log.Errorf("failed to decode report: %v", err)
+				return reports, nil
 			}
 
-			return nil, fmt.Errorf("failed to decode report: %v", err)
+			offset = offset + serr.Offset
+			log.Errorf("syntax error at offset %d, trying to recover: %v", offset, err)
+			buffer, err := io.ReadAll(decoder.Buffered())
+
+			if err != nil {
+				log.Errorf("readall error: %v\n", err)
+				return reports, nil
+			}
+
+			if serr.Offset > int64(len(buffer)) {
+				log.Errorf("offset %d is beyond buffer length %d", serr.Offset, len(buffer))
+				return reports, nil
+			}
+
+			buffer = buffer[serr.Offset:]
+			decoder = json.NewDecoder(io.MultiReader(bytes.NewBuffer(buffer), fp))
+			continue
 		}
 
 		// don't return reports that are too old

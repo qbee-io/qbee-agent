@@ -18,6 +18,8 @@ package configuration
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -95,6 +97,42 @@ func TestService_reportsBuffer(t *testing.T) {
 		// clearing empty buffer shouldn't fail
 		if err := srv.clearReportsBuffer(); err != nil {
 			t.Fatalf("failed to clear reports buffer: %v", err)
+		}
+	})
+}
+
+func TestInvalidBytesReportsBuffer(t *testing.T) {
+	tmpDir := t.TempDir()
+	srv := New(nil, tmpDir, "")
+	reportsBuffer := filepath.Join(tmpDir, "reports.jsonl")
+
+	invalidChars := []byte{0x00, 0x01, 0x02, 0x03, 0x04}
+	// create invalid reports buffer
+	if err := os.WriteFile(reportsBuffer, invalidChars, 0644); err != nil {
+		t.Fatalf("failed to create nil reports buffer: %v", err)
+	}
+
+	// add new reports to the buffer
+	newReports := []Report{{Text: "new report", Timestamp: time.Now().Unix()}}
+	if err := srv.addReportsToBuffer(newReports); err != nil {
+		t.Fatalf("failed to add to reports buffer: %v", err)
+	}
+
+	// Add invalid chars after a valid report
+	f, err := os.OpenFile(reportsBuffer, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	if err != nil {
+		t.Fatalf("failed to open reports buffer: %v", err)
+	}
+	defer f.Close()
+
+	_, _ = f.Write(invalidChars)
+
+	t.Run("read invalid reports buffer", func(t *testing.T) {
+		// adding reports to invalid buffer should fail
+		if bufferedReports, err := srv.readReportsBuffer(); err != nil {
+			t.Fatalf("failed to read reports from buffer: %v", err)
+		} else {
+			assert.Equal(t, bufferedReports, newReports)
 		}
 	})
 }
