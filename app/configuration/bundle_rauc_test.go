@@ -31,7 +31,7 @@ func Test_IsCompatible(t *testing.T) {
 			true,
 		},
 		{
-			"incomaptible with rauc in string",
+			"incompatible with rauc in string",
 			"rauc 1.7.4",
 			false,
 		},
