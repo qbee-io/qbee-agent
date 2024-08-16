@@ -19,7 +19,9 @@ package image
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os/exec"
+	"strings"
 
 	"go.qbee.io/agent/app/utils"
 )
@@ -125,6 +127,46 @@ type RaucStatus struct {
 func HasRauc() bool {
 	_, err := exec.LookPath("rauc")
 	return err == nil
+}
+
+const minimumVersion = "1.10"
+
+// GetRaucVersion returns the installed RAUC version.
+func GetRaucVersion(ctx context.Context) (string, error) {
+	raucVersionCmd := []string{"rauc", "--version"}
+
+	raucVersionBytes, err := utils.RunCommand(ctx, raucVersionCmd)
+	if err != nil {
+		return "", err
+	}
+
+	if len(raucVersionBytes) == 0 {
+		return "", fmt.Errorf("RAUC version not found")
+	}
+
+	raucVersion := string(raucVersionBytes)
+
+	return ParseRaucVersion(raucVersion), nil
+}
+
+// ParseRaucVersion returns the RAUC version from the version string.
+func ParseRaucVersion(version string) string {
+	raucVersion := strings.Split(version, " ")
+
+	return raucVersion[len(raucVersion)-1]
+}
+
+// IsRaucCompatible checks if the installed RAUC version is compatible with the agent.
+func IsRaucCompatible(version string) bool {
+	if utils.IsNewerVersionOrEqual(version, minimumVersion) {
+		return true
+	}
+
+	if version == minimumVersion {
+		return true
+	}
+
+	return false
 }
 
 // GetRaucStatus returns RAUC information.

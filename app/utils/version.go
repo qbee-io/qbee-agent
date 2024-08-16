@@ -29,14 +29,21 @@ type SemanticVersion [3]uint64
 func IsNewerVersion(a, b string) bool {
 	versionA := parseSemanticVersion(a)
 	versionB := parseSemanticVersion(b)
-
 	for i := 0; i < 3; i++ {
 		if versionA[i] > versionB[i] {
 			return true
 		}
+		if versionA[i] < versionB[i] {
+			return false
+		}
 	}
-
+	// versions are equal
 	return false
+}
+
+// IsNewerVersionOrEqual returns true if "a" is newer or equal to "b".
+func IsNewerVersionOrEqual(a, b string) bool {
+	return !IsNewerVersion(b, a)
 }
 
 // parseSemanticVersion make a best-effort to parse a version string.
