@@ -127,6 +127,7 @@ func ReportWarning(ctx context.Context, extraLog any, msgFmt string, args ...any
 
 // ReportError adds an error message to the reporter instance set in context.
 func ReportError(ctx context.Context, extraLog any, msgFmt string, args ...any) {
+
 	if _, skipLogging := extraLog.(api.ConnectionError); skipLogging {
 		return
 	}
