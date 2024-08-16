@@ -100,23 +100,27 @@ func Test_Reporter_Redact(t *testing.T) {
 func Test_Reporter_Skip_Connectivity_Issues(t *testing.T) {
 	cases := []struct {
 		name                 string
-		testFn               func(ctx context.Context)
+		extraLog             any
 		expectedReportLength int
 	}{
 		{
-			name: "report connectivity issue",
-			testFn: func(ctx context.Context) {
-				err := api.ConnectionError(fmt.Errorf("connectivity issue"))
-				ReportError(ctx, err, "connectivity issue")
-			},
+			name:                 "report connectivity issue",
+			extraLog:             api.NewConnectionError(fmt.Errorf("connectivity issue")),
 			expectedReportLength: 0,
 		},
 		{
-			name: "report error",
-			testFn: func(ctx context.Context) {
-				err := fmt.Errorf("error")
-				ReportError(ctx, err, "error")
-			},
+			name:                 "report error",
+			extraLog:             fmt.Errorf("error"),
+			expectedReportLength: 1,
+		},
+		{
+			name:                 "errpr with string",
+			extraLog:             "this is a string",
+			expectedReportLength: 1,
+		},
+		{
+			name:                 "report error with bytes",
+			extraLog:             []byte("this is a byte slice"),
 			expectedReportLength: 1,
 		},
 	}
@@ -127,7 +131,7 @@ func Test_Reporter_Skip_Connectivity_Issues(t *testing.T) {
 
 			ctx := reporter.BundleContext(context.Background(), "", "")
 
-			c.testFn(ctx)
+			ReportError(ctx, c.extraLog, "error message")
 
 			assert.Length(t, reporter.reports, c.expectedReportLength)
 		})
