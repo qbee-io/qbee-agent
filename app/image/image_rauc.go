@@ -131,6 +131,7 @@ func HasRauc() bool {
 
 const minimumVersion = "1.10"
 
+// GetRaucVersion returns the installed RAUC version.
 func GetRaucVersion(ctx context.Context) (string, error) {
 	raucVersionCmd := []string{"rauc", "--version"}
 
@@ -148,6 +149,7 @@ func GetRaucVersion(ctx context.Context) (string, error) {
 	return ParseRaucVersion(raucVersion), nil
 }
 
+// ParseRaucVersion returns the RAUC version from the version string.
 func ParseRaucVersion(version string) string {
 	raucVersion := strings.Split(version, " ")
 

@@ -41,6 +41,7 @@ func IsNewerVersion(a, b string) bool {
 	return false
 }
 
+// IsNewerVersionOrEqual returns true if "a" is newer or equal to "b".
 func IsNewerVersionOrEqual(a, b string) bool {
 	return !IsNewerVersion(b, a)
 }
