@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"go.qbee.io/agent/app/api"
 )
 
 // Report represents a single configuration report.
@@ -125,6 +127,10 @@ func ReportWarning(ctx context.Context, extraLog any, msgFmt string, args ...any
 
 // ReportError adds an error message to the reporter instance set in context.
 func ReportError(ctx context.Context, extraLog any, msgFmt string, args ...any) {
+	if _, skipLogging := extraLog.(api.ConnectionError); skipLogging {
+		return
+	}
+
 	addReport(ctx, severityError, extraLog, msgFmt, args...)
 }
 
