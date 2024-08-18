@@ -54,8 +54,8 @@ func (c *Console) Resize(rows, cols uint16) error {
 	return pty.Setsize(c.pty, &pty.Winsize{Rows: rows, Cols: cols})
 }
 
-// newConsoleID generates a new random console ID.
-func newConsoleID() (string, error) {
+// newSessionID generates a new random session ID.
+func newSessionID() (string, error) {
 	buf := make([]byte, 16)
 
 	if _, err := io.ReadFull(rand.Reader, buf); err != nil {
@@ -129,15 +129,15 @@ func getCurrentUserShell() string {
 // NewConsole creates a new console.
 // It returns a Console object and an error if any.
 // If err == nil, the caller is responsible for closing the Console.
-func NewConsole(ctx context.Context, rows, cols uint16) (*Console, error) {
-	consoleID, err := newConsoleID()
+func NewConsole(ctx context.Context, command string, cmdArgs []string, rows, cols uint16) (*Console, error) {
+	consoleID, err := newSessionID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate console ID: %w", err)
 	}
 
 	console := &Console{
 		id:  consoleID,
-		cmd: exec.CommandContext(ctx, getCurrentUserShell()),
+		cmd: exec.CommandContext(ctx, command, cmdArgs...),
 	}
 
 	console.cmd.Env = append(os.Environ(), "TERM=xterm-256color")
@@ -171,7 +171,18 @@ func (s *Service) HandleConsole(ctx context.Context, stream *smux.Stream, payloa
 		return transport.WriteError(stream, fmt.Errorf("invalid initial PTY command type"))
 	}
 
-	console, err := NewConsole(ctx, initCmd.Rows, initCmd.Cols)
+	command := getCurrentUserShell()
+	cmdArgs := make([]string, 0)
+
+	if initCmd.Command != "" {
+		command = initCmd.Command
+	}
+
+	if initCmd.CommandArgs != nil {
+		cmdArgs = append(cmdArgs, initCmd.CommandArgs...)
+	}
+
+	console, err := NewConsole(ctx, command, cmdArgs, initCmd.Rows, initCmd.Cols)
 	if err != nil {
 		return transport.WriteError(stream, fmt.Errorf("failed to start console: %w", err))
 	}
@@ -230,3 +241,23 @@ func (s *Service) HandleConsoleCommand(_ context.Context, stream *smux.Stream, p
 		return transport.WriteError(stream, fmt.Errorf("unsupported PTY command: %v", cmd.Type))
 	}
 }
+
+/*
+// HandleFileTransfer handles a file transfer request.
+func (s *Service) HandleFileTransfer(_ context.Context, stream *smux.Stream, payload []byte) error {
+	req := new(transport.FileTransferRequest)
+	if err := json.Unmarshal(payload, req); err != nil {
+		return transport.WriteError(stream, fmt.Errorf("failed to unmarshal file transfer request: %w", err))
+	}
+
+	if req.Type == transport.FileTransferTypeUpload {
+		return s.handleFileUpload(stream, req)
+	}
+
+	if req.Type == transport.FileTransferTypeDownload {
+		return s.handleFileDownload(stream, req)
+	}
+
+	return transport.WriteError(stream, fmt.Errorf("unsupported file transfer type: %v", req.Type))
+}
+*/
