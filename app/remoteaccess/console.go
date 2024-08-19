@@ -241,23 +241,3 @@ func (s *Service) HandleConsoleCommand(_ context.Context, stream *smux.Stream, p
 		return transport.WriteError(stream, fmt.Errorf("unsupported PTY command: %v", cmd.Type))
 	}
 }
-
-/*
-// HandleFileTransfer handles a file transfer request.
-func (s *Service) HandleFileTransfer(_ context.Context, stream *smux.Stream, payload []byte) error {
-	req := new(transport.FileTransferRequest)
-	if err := json.Unmarshal(payload, req); err != nil {
-		return transport.WriteError(stream, fmt.Errorf("failed to unmarshal file transfer request: %w", err))
-	}
-
-	if req.Type == transport.FileTransferTypeUpload {
-		return s.handleFileUpload(stream, req)
-	}
-
-	if req.Type == transport.FileTransferTypeDownload {
-		return s.handleFileDownload(stream, req)
-	}
-
-	return transport.WriteError(stream, fmt.Errorf("unsupported file transfer type: %v", req.Type))
-}
-*/
