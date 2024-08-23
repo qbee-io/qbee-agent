@@ -284,7 +284,7 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 		}
 	}
 
-	if err := agent.loadCACertificatesPool(); err != nil {
+	if err := agent.loadCACertificatesPool(cfg.CACert); err != nil {
 		return nil, err
 	}
 
