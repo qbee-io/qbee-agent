@@ -171,6 +171,7 @@ func tidyMonitorState(metricsMonitorMap map[string]float64) {
 	}
 }
 
+// get the monitor state
 func getMonitorState(monitor string) bool {
 	metricsMonitorStatelock.Lock()
 	defer metricsMonitorStatelock.Unlock()
