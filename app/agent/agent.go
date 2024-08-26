@@ -295,8 +295,8 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 	cacheDir := filepath.Join(appDir, cacheDirectory)
 
 	agent.Inventory = inventory.New(agent.api)
-	agent.Configuration = configuration.New(agent.api, appDir, cacheDir).WithURLSigner(agent)
 	agent.Metrics = metrics.New(agent.api)
+	agent.Configuration = configuration.New(agent.api, appDir, cacheDir).WithURLSigner(agent).WithMetricsService(agent.Metrics)
 	agent.remoteAccess = remoteaccess.New().
 		WithConfigReloadNotifier(agent.update)
 	agent.loopTicker = time.NewTicker(agent.Configuration.RunInterval())
