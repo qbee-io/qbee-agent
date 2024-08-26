@@ -29,6 +29,7 @@ import (
 
 	"go.qbee.io/agent/app/api"
 	"go.qbee.io/agent/app/log"
+	"go.qbee.io/agent/app/metrics"
 )
 
 const defaultAgentInterval = 5 // minutes
@@ -66,6 +67,9 @@ type Service struct {
 	// 0 -> disabled
 	connectivityWatchdogThreshold int
 	failedConnectionsCount        int
+
+	// metrics service
+	metrics *metrics.Service
 }
 
 // New returns a new instance of configuration Service.
@@ -85,6 +89,12 @@ func New(apiClient *api.Client, appDirectory, cacheDirectory string) *Service {
 // WithURLSigner sets the URL signer for the service.
 func (srv *Service) WithURLSigner(urlSigner URLSigner) *Service {
 	srv.urlSigner = urlSigner
+	return srv
+}
+
+// WithMetricsService sets the metrics service for the service.
+func (srv *Service) WithMetricsService(metricsService *metrics.Service) *Service {
+	srv.metrics = metricsService
 	return srv
 }
 
@@ -143,6 +153,8 @@ func (srv *Service) UpdateSettings(configData *CommittedConfig) {
 
 	configData.BundleData.Settings.Execute(srv)
 }
+
+//
 
 const executeTimeout = time.Hour
 
