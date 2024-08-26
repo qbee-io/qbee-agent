@@ -31,7 +31,6 @@
 package configuration_test
 
 import (
-	"context"
 	"testing"
 
 	"go.qbee.io/agent/app/configuration"
@@ -74,11 +73,9 @@ func Test_Monitor_State_Set(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-
 	metricsService := metrics.New(nil)
 	collectedMetrics := metricsService.Collect()
-	reports, err := metricsMonitorBundle.EvaluateMonitors(ctx, collectedMetrics)
+	reports, err := metricsMonitorBundle.EvaluateMonitors(collectedMetrics)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -87,7 +84,7 @@ func Test_Monitor_State_Set(t *testing.T) {
 	assert.Equal(t, len(reports), 1)
 
 	collectedMetrics = metricsService.Collect()
-	reports, err = metricsMonitorBundle.EvaluateMonitors(ctx, collectedMetrics)
+	reports, err = metricsMonitorBundle.EvaluateMonitors(collectedMetrics)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -109,11 +106,9 @@ func Test_Monitor_State_Reset(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-
 	metricsService := metrics.New(nil)
 	collectedMetrics := metricsService.Collect()
-	reports, err := metricsMonitorBundle.EvaluateMonitors(ctx, collectedMetrics)
+	reports, err := metricsMonitorBundle.EvaluateMonitors(collectedMetrics)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -131,7 +126,7 @@ func Test_Monitor_State_Reset(t *testing.T) {
 	}
 
 	collectedMetrics = metricsService.Collect()
-	reports, err = metricsMonitorBundle.EvaluateMonitors(ctx, collectedMetrics)
+	reports, err = metricsMonitorBundle.EvaluateMonitors(collectedMetrics)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

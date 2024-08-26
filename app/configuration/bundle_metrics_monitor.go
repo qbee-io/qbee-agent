@@ -91,7 +91,7 @@ func (m *MetricsMonitorBundle) Execute(ctx context.Context, service *Service) er
 
 	collectedMetrics := service.metrics.Collect()
 
-	reports, err := m.EvaluateMonitors(ctx, collectedMetrics)
+	reports, err := m.EvaluateMonitors(collectedMetrics)
 	if err != nil {
 		return err
 	}
@@ -106,7 +106,8 @@ func (m *MetricsMonitorBundle) Execute(ctx context.Context, service *Service) er
 	return nil
 }
 
-func (m *MetricsMonitorBundle) EvaluateMonitors(ctx context.Context, values []metrics.Metric) ([]Report, error) {
+// EvaluateMonitors evaluates the metrics monitors and returns a list of reports
+func (m *MetricsMonitorBundle) EvaluateMonitors(values []metrics.Metric) ([]Report, error) {
 	metricValues, err := metricsToMap(values)
 	metricsMonitorsMap := metricMonitorsToMap(m.Metrics)
 
@@ -133,6 +134,7 @@ func (m *MetricsMonitorBundle) EvaluateMonitors(ctx context.Context, values []me
 	return reports, nil
 }
 
+// evaluateMonitor evaluates a single monitor and returns a report if the monitor has triggered or recovered
 func (m *MetricsMonitorBundle) evaluateMonitor(metricValues map[string]float64, monitor string, monitorValue float64) *Report {
 	if value, ok := metricValues[monitor]; ok {
 		if value >= monitorValue && !getMonitorState(monitor) {
