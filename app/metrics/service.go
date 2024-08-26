@@ -22,6 +22,7 @@ import (
 
 	"go.qbee.io/agent/app/api"
 	"go.qbee.io/agent/app/log"
+	"go.qbee.io/agent/app/utils/cache"
 )
 
 // Service collects system metrics and sends them to the device hub.
@@ -64,11 +65,19 @@ var metricsCollectors = []metricsCollector{
 	},
 }
 
+const metricsCacheKey = "metrics"
+
+var metricsCacheTTL = 60 * time.Second
+
 // Collect system metrics.
 // If any errors are encountered, they'll be logged, but won't interrupt the process.
 func (s *Service) Collect() []Metric {
 	s.lock.Lock()
 	defer s.lock.Unlock()
+
+	if cachedMetrics, ok := cache.Get(metricsCacheKey); ok {
+		return cachedMetrics.([]Metric)
+	}
 
 	allMetrics := make([]Metric, 0)
 
@@ -93,6 +102,8 @@ func (s *Service) Collect() []Metric {
 	} else if networkMetrics != nil {
 		allMetrics = append(allMetrics, networkMetrics...)
 	}
+
+	cache.Set(metricsCacheKey, allMetrics, metricsCacheTTL)
 
 	return allMetrics
 }
