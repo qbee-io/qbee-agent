@@ -101,7 +101,7 @@ func Test_Monitor_State_Reset(t *testing.T) {
 		Metrics: []configuration.MetricMonitor{
 			{
 				Value:     "memory:memutil",
-				Threshold: 0.0,
+				Threshold: 1.0,
 			},
 		},
 	}
@@ -120,7 +120,7 @@ func Test_Monitor_State_Reset(t *testing.T) {
 		Metrics: []configuration.MetricMonitor{
 			{
 				Value:     "memory:memutil",
-				Threshold: 1.0,
+				Threshold: 2.0,
 			},
 		},
 	}
