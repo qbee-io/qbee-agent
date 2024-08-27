@@ -58,6 +58,7 @@ import (
 //	  ]
 //	}
 
+// MetricsMonitorBundle configures on-agent metrics monitoring.
 type MetricsMonitorBundle struct {
 	Metadata
 
@@ -228,10 +229,10 @@ func metricsToMap(metrics []metrics.Metric) (map[string]float64, error) {
 		if !ok {
 			continue
 		}
-		monitorid, hasId := metMap["id"].(string)
 
+		monitorid, hasID := metMap["id"].(string)
 		for valueLabel, monitor := range metMap["values"].(map[string]any) {
-			if hasId {
+			if hasID {
 				mapValues[monitorLabel+":"+valueLabel+":"+monitorid] = monitor.(float64)
 			} else {
 				mapValues[monitorLabel+":"+valueLabel] = monitor.(float64)
@@ -239,4 +240,16 @@ func metricsToMap(metrics []metrics.Metric) (map[string]float64, error) {
 		}
 	}
 	return mapValues, nil
+}
+
+// delete the metrics monitor state if it is not empty. This should be called when bundle is not present or
+// or disabled.
+func deleteMetricsMonitorState() {
+	if len(metricsMonitorState) == 0 {
+		return
+	}
+
+	metricsMonitorStatelock.Lock()
+	defer metricsMonitorStatelock.Unlock()
+	metricsMonitorState = make(map[string]float64)
 }

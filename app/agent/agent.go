@@ -169,6 +169,7 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 	}
 
 	agent.Configuration.UpdateSettings(configData)
+	agent.Configuration.UpdateMetricsMonitorState(configData)
 
 	if mode == FullRun {
 		agent.do(ctx, "check-in", agent.checkIn)
