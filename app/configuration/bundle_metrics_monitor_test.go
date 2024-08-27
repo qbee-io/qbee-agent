@@ -92,7 +92,6 @@ func Test_Monitor_State_Set(t *testing.T) {
 
 	// Monitor has not changed value, we should not get a new report
 	assert.Equal(t, len(reports), 0)
-
 }
 
 func Test_Monitor_State_Reset(t *testing.T) {
@@ -135,6 +134,45 @@ func Test_Monitor_State_Reset(t *testing.T) {
 	// Monitor has changed value, we should get a new report
 	assert.Equal(t, len(reports), 1)
 
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	assert.Equal(t, len(reports), 1)
+
+}
+
+func Test_Monitor_State_Delete(t *testing.T) {
+
+	metricsMonitorBundle := configuration.MetricsMonitorBundle{
+		Metrics: []configuration.MetricMonitor{
+			{
+				Value:     "memory:memutil",
+				Threshold: 0.1,
+			},
+		},
+	}
+
+	metricsService := metrics.New(nil)
+	collectedMetrics := metricsService.Collect()
+	reports, err := metricsMonitorBundle.EvaluateMonitors(collectedMetrics)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	assert.Equal(t, len(reports), 1)
+	config := configuration.CommittedConfig{}
+	confService := configuration.New(nil, "", "")
+
+	confService.UpdateMetricsMonitorState(&config)
+
+	reports, err = metricsMonitorBundle.EvaluateMonitors(collectedMetrics)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	assert.Equal(t, len(reports), 1)
 }
 
 func executeMetricMonitorBundle(r *runner.Runner, bundle configuration.MetricsMonitorBundle) []string {
@@ -148,10 +186,10 @@ func executeMetricMonitorBundle(r *runner.Runner, bundle configuration.MetricsMo
 	config.BundleData.MetricsMonitor.Enabled = true
 
 	r.CreateJSON("/app/config.json", config)
-
 	output := r.MustExec("qbee-agent", "config", "-r", "-f", "/app/config.json")
-
 	reports, _ := configuration.ParseTestConfigExecuteOutput(output)
 
 	return reports
 }
+
+/* Should the monitor states be deleted completely if not enabled or not present? */

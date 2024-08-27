@@ -154,7 +154,13 @@ func (srv *Service) UpdateSettings(configData *CommittedConfig) {
 	configData.BundleData.Settings.Execute(srv)
 }
 
-//
+// UpdateMetricsMonitorState deletes the monitor state if the metrics monitor bundle is disabled
+// or not configured in the provided config data.
+func (srv *Service) UpdateMetricsMonitorState(configData *CommittedConfig) {
+	if !configData.HasBundle(BundleMetricsMonitor) || !configData.BundleData.MetricsMonitor.Enabled {
+		deleteMetricsMonitorState()
+	}
+}
 
 const executeTimeout = time.Hour
 
