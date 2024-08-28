@@ -169,6 +169,7 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 	}
 
 	agent.Configuration.UpdateSettings(configData)
+	agent.Configuration.UpdateMetricsMonitorState(configData)
 
 	if mode == FullRun {
 		agent.do(ctx, "check-in", agent.checkIn)
@@ -295,8 +296,8 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 	cacheDir := filepath.Join(appDir, cacheDirectory)
 
 	agent.Inventory = inventory.New(agent.api)
-	agent.Configuration = configuration.New(agent.api, appDir, cacheDir).WithURLSigner(agent)
 	agent.Metrics = metrics.New(agent.api)
+	agent.Configuration = configuration.New(agent.api, appDir, cacheDir).WithURLSigner(agent).WithMetricsService(agent.Metrics)
 	agent.remoteAccess = remoteaccess.New().
 		WithConfigReloadNotifier(agent.update)
 	agent.loopTicker = time.NewTicker(agent.Configuration.RunInterval())
