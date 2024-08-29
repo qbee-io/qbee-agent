@@ -62,7 +62,7 @@ func (srv *Service) getFileMetadataFromAPI(ctx context.Context, src string) (*Fi
 	if err := srv.api.Get(ctx, path, fileMetadataResp); err != nil {
 		wrappedErr := fmt.Errorf("error getting file metadata: %w", err)
 		if errors.As(err, new(api.ConnectionError)) {
-			return nil, api.NewConnectionError(err)
+			return nil, api.NewConnectionError(wrappedErr)
 		}
 
 		return nil, wrappedErr
