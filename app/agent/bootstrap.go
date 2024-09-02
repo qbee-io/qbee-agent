@@ -22,6 +22,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -35,6 +36,13 @@ const bootstrapWaitTime = 5 * time.Second
 
 // Bootstrap device using agent's config and provided bootstrap key.
 func Bootstrap(ctx context.Context, cfg *Config) error {
+
+	// make sure the custom CA certificate path is not the same as the default path
+	// as this would be overwritten in an agent upgrade
+	if cfg.CACert == filepath.Join(cfg.Directory, credentialsDirectory, caCertFilename) {
+		return fmt.Errorf("custom CA certificate path cannot be the same as the default path")
+	}
+
 	agent, err := NewWithoutCredentials(cfg)
 	if err != nil {
 		return err

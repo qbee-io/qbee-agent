@@ -35,6 +35,7 @@ const (
 	bootstrapProxyPasswordOption       = "proxy-password"
 	bootstrapDeviceNameOption          = "device-name"
 	bootstrapDisableRemoteAccessOption = "disable-remote-access"
+	bootstrapCACert                    = "ca-cert"
 )
 
 var bootstrapCommand = cmd.Command{
@@ -88,6 +89,10 @@ var bootstrapCommand = cmd.Command{
 			Name: bootstrapProxyPasswordOption,
 			Help: "HTTP proxy password.",
 		},
+		{
+			Name: bootstrapCACert,
+			Help: "Custom CA certificate to use for TLS.",
+		},
 	},
 
 	Target: func(opts cmd.Options) error {
@@ -104,6 +109,7 @@ var bootstrapCommand = cmd.Command{
 			ProxyPassword:       opts[bootstrapProxyPasswordOption],
 			DeviceName:          opts[bootstrapDeviceNameOption],
 			DisableRemoteAccess: opts[bootstrapDisableRemoteAccessOption] == "true",
+			CACert:              opts[bootstrapCACert],
 		}
 
 		if cfg.BootstrapKey == "" {

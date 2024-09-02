@@ -65,6 +65,19 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return nil
 	}
 
+	raucVersion, err := image.GetRaucVersion(ctx)
+
+	if err != nil {
+		ReportError(ctx, err, "Failed to get RAUC version")
+		return err
+	}
+
+	isCompatible := image.IsRaucCompatible(raucVersion)
+	if !isCompatible {
+		ReportError(ctx, nil, "RAUC version '%s' is not compatible with the agent", raucVersion)
+		return err
+	}
+
 	if !CheckPreCondition(ctx, r.PreCondition) {
 		return nil
 	}

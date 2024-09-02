@@ -136,7 +136,7 @@ func (cli *Client) Do(request *http.Request) (*http.Response, error) {
 
 	response, err := cli.httpClient.Do(request)
 	if err != nil {
-		return nil, ConnectionError(fmt.Errorf("failed to send API request: %w", err))
+		return nil, NewConnectionError(err)
 	}
 
 	return response, nil

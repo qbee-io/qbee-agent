@@ -64,6 +64,9 @@ type Config struct {
 
 	// DisableRemoteAccess disables remote access.
 	DisableRemoteAccess bool `json:"disable_remote_access,omitempty"`
+
+	// CACert is the path to the CA certificate.
+	CACert string `json:"ca_cert,omitempty"`
 }
 
 // LoadConfig loads config from a provided config file path.

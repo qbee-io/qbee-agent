@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"runtime"
 	"syscall"
+	"time"
 )
 
 // RunCommand runs a command and returns its output.
@@ -50,6 +51,15 @@ func NewCommand(ctx context.Context, cmd []string) *exec.Cmd {
 		Pdeathsig: syscall.SIGINT,
 	}
 	command.Dir = "/"
+	command.WaitDelay = 1 * time.Second
+
+	command.Cancel = func() error {
+		if command.Process == nil {
+			return nil
+		}
+		// kill the process group
+		return syscall.Kill(-command.Process.Pid, syscall.SIGKILL)
+	}
 	return command
 }
 

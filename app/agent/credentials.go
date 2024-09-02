@@ -40,8 +40,12 @@ const (
 )
 
 // loadCACertificatesPool loads trusted CA certificate.
-func (agent *Agent) loadCACertificatesPool() error {
+func (agent *Agent) loadCACertificatesPool(caCert string) error {
 	caCertPath := filepath.Join(agent.cfg.Directory, credentialsDirectory, caCertFilename)
+
+	if caCert != "" {
+		caCertPath = caCert
+	}
 
 	agent.caCertPool = x509.NewCertPool()
 

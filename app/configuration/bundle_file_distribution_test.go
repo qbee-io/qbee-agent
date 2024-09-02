@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"go.qbee.io/agent/app/agent"
 	"go.qbee.io/agent/app/configuration"
 	"go.qbee.io/agent/app/utils/assert"
 	"go.qbee.io/agent/app/utils/runner"
@@ -369,6 +370,35 @@ func Test_FileDistributionBundle_Destination_Is_Empty(t *testing.T) {
 					{
 						Files: []configuration.File{
 							{Source: localFileRef, Destination: destDir},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	reports, _ := configuration.ExecuteTestConfigInDocker(r, agentConfig)
+
+	assert.Empty(t, reports)
+}
+
+func Test_FileDistirbution_No_Reports_Connectivity_Issues(t *testing.T) {
+	r := runner.New(t)
+
+	r.CreateJSON("/etc/qbee/qbee-agent.json", agent.Config{
+		DeviceHubServer: "some-non-existing-host",
+		DeviceHubPort:   "8888",
+	})
+
+	agentConfig := configuration.CommittedConfig{
+		Bundles: []string{configuration.BundleFileDistribution},
+		BundleData: configuration.BundleData{
+			FileDistribution: &configuration.FileDistributionBundle{
+				Metadata: configuration.Metadata{Enabled: true},
+				FileSets: []configuration.FileSet{
+					{
+						Files: []configuration.File{
+							{Source: "/non-existing-file", Destination: "/tmp/test1"},
 						},
 					},
 				},

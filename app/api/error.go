@@ -23,7 +23,26 @@ import (
 
 // ConnectionError is used to explicitly indicate API connectivity issue.
 // This is used to track failed API connection attempts.
-type ConnectionError error
+type ConnectionError struct {
+	err error
+}
+
+// NewConnectionError returns a new connection error with the given underlying error.
+func NewConnectionError(err error) ConnectionError {
+	return ConnectionError{
+		err: err,
+	}
+}
+
+// Error returns a string representation of the error.
+func (err ConnectionError) Error() string {
+	return fmt.Sprintf("failed to send API request: %s", err.err)
+}
+
+// Unwrap returns the underlying error.
+func (err ConnectionError) Unwrap() error {
+	return err.err
+}
 
 // Error returned when HTTP API request results in status code >= 400.
 type Error struct {

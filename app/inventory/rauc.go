@@ -31,5 +31,15 @@ func CollectRaucInventory(ctx context.Context) (*image.RaucStatus, error) {
 		return nil, nil
 	}
 
+	raucVersion, err := image.GetRaucVersion(ctx)
+	if err != nil {
+		return nil, nil
+	}
+
+	isCompatible := image.IsRaucCompatible(raucVersion)
+	if !isCompatible {
+		return nil, nil
+	}
+
 	return image.GetRaucStatus(ctx)
 }

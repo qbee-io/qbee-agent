@@ -60,7 +60,7 @@ var shadowAlgorithms = map[string]int{
 
 // CollectUsersInventory returns populated Users inventory based on current system status.
 func CollectUsersInventory() (*Users, error) {
-	users, err := getUsersFromPasswd(PasswdFilePath, ShadowFilePath)
+	users, err := GetUsersFromPasswd(PasswdFilePath, ShadowFilePath)
 	if err != nil {
 		return nil, err
 	}
@@ -72,8 +72,8 @@ func CollectUsersInventory() (*Users, error) {
 	return usersInventory, nil
 }
 
-// getUsersFromPasswd returns users based on passwd file.
-func getUsersFromPasswd(passwdFilePath, shadowFilePath string) ([]User, error) {
+// GetUsersFromPasswd returns users based on passwd file.
+func GetUsersFromPasswd(passwdFilePath, shadowFilePath string) ([]User, error) {
 	// get mapping of username -> User (with populated password fields)
 	usersPasswords, err := getUsersFromShadow(shadowFilePath)
 	if err != nil {
@@ -83,6 +83,10 @@ func getUsersFromPasswd(passwdFilePath, shadowFilePath string) ([]User, error) {
 	users := make([]User, 0)
 	err = utils.ForLinesInFile(passwdFilePath, func(line string) error {
 		fields := strings.Split(line, ":")
+
+		if len(fields) < 7 {
+			return nil
+		}
 
 		var uid, gid int
 		if uid, err = strconv.Atoi(fields[2]); err != nil {
@@ -134,6 +138,10 @@ func getUsersFromShadow(filePath string) (map[string]User, error) {
 
 	err := utils.ForLinesInFile(filePath, func(line string) error {
 		fields := strings.Split(line, ":")
+
+		if len(fields) < 3 {
+			return nil
+		}
 
 		// skip invalid passwords
 		passwordFields := strings.Split(fields[1], "$")

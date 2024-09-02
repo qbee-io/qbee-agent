@@ -19,8 +19,10 @@ package configuration
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"testing"
 
+	"go.qbee.io/agent/app/api"
 	"go.qbee.io/agent/app/utils/assert"
 )
 
@@ -91,6 +93,47 @@ func Test_Reporter_Redact(t *testing.T) {
 
 			assert.Equal(t, extraLog, c.expectedReportLog)
 
+		})
+	}
+}
+
+func Test_Reporter_Skip_Connectivity_Issues(t *testing.T) {
+	cases := []struct {
+		name                 string
+		extraLog             any
+		expectedReportLength int
+	}{
+		{
+			name:                 "report connectivity issue",
+			extraLog:             api.NewConnectionError(fmt.Errorf("connectivity issue")),
+			expectedReportLength: 0,
+		},
+		{
+			name:                 "report error",
+			extraLog:             fmt.Errorf("error"),
+			expectedReportLength: 1,
+		},
+		{
+			name:                 "errpr with string",
+			extraLog:             "this is a string",
+			expectedReportLength: 1,
+		},
+		{
+			name:                 "report error with bytes",
+			extraLog:             []byte("this is a byte slice"),
+			expectedReportLength: 1,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			reporter := NewReporter("", false, nil)
+
+			ctx := reporter.BundleContext(context.Background(), "", "")
+
+			ReportError(ctx, c.extraLog, "error message")
+
+			assert.Length(t, reporter.reports, c.expectedReportLength)
 		})
 	}
 }

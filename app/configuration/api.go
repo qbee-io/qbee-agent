@@ -20,10 +20,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 
+	"go.qbee.io/agent/app/api"
 	"go.qbee.io/agent/app/log"
 )
 
@@ -58,7 +60,12 @@ func (srv *Service) getFileMetadataFromAPI(ctx context.Context, src string) (*Fi
 	fileMetadataResp := new(fileMetadataResponse)
 
 	if err := srv.api.Get(ctx, path, fileMetadataResp); err != nil {
-		return nil, fmt.Errorf("error getting file metadata: %w", err)
+		wrappedErr := fmt.Errorf("error getting file metadata: %w", err)
+		if errors.As(err, new(api.ConnectionError)) {
+			return nil, api.NewConnectionError(wrappedErr)
+		}
+
+		return nil, wrappedErr
 	}
 
 	return &fileMetadataResp.Data, nil
