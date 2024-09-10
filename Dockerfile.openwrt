@@ -30,7 +30,7 @@ RUN sed -i '/^exit 0/i cat \/tmp\/resolv.conf > \/etc\/resolv.conf' /etc/rc.loca
 
 COPY app/software/test_repository/opkg /opkg-repo
 
-RUN echo "src/gz qbee file:///opkg-repo" >> /etc/opkg/customfeeds.conf
+RUN echo "src/gz qbee file:///opkg-repo/repo" >> /etc/opkg/customfeeds.conf
 RUN sed -i '/option check_signature/d' /etc/opkg.conf
 
 RUN mkdir /etc/qbee && echo '{}' > /etc/qbee/qbee-agent.json

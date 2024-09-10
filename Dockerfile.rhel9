@@ -24,7 +24,7 @@ COPY app/software/test_repository/rhel /yum-repo
 COPY <<EOF /etc/yum.repos.d/qbee.repo
 [qbee-dev]
 name=qbee-dev
-baseurl=file:///yum-repo/
+baseurl=file:///yum-repo/repo
 enabled=1
 gpgcheck=0
 EOF
