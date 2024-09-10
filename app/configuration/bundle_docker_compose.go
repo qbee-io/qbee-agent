@@ -27,6 +27,19 @@ import (
 	"go.qbee.io/agent/app/utils"
 )
 
+/*
+
+passing context:
+
+docker compose --project-name testing --file $(pwd)/compose.yml --project-directory $(pwd)/context up --wait --force-recreate
+
+We need some way of unpacking context
+- new context means re-create
+- new compose file means re-create
+- store context hash in a file, delete tarball after unpacking
+- Remove context if changed to make sure we have clean
+*/
+
 // Example payload:
 //
 //	{
@@ -37,6 +50,7 @@ import (
 //		  }
 //		],
 //	}
+
 type DockerComposeBundle struct {
 	Metadata
 
@@ -55,14 +69,19 @@ type DockerCompose struct {
 	// Name of the project.
 	Name string `json:"name"`
 
-	// Path to the docker-compose file.
-	ComposeFile string `json:"compose_file"`
+	// ComposeFile to the docker-compose file.
+	ComposeFile string `json:"file"`
+
+	// ComposeContent is the content any build context.
+	ComposeContext string `json:"context,omitempty"`
 
 	// PreCondition is a shell command that needs to be true before starting the container.
 	PreCondition string `json:"pre_condition,omitempty"`
 }
 
 const dockerComposeMinimumVersion = "2.0.0"
+const dockerComposeFile = "compose.yml"
+const dockerComposeContext = "context"
 
 var dockerComposeVersionRE = regexp.MustCompile(`Docker Compose version v([0-9.]+)`)
 
@@ -91,6 +110,7 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 	for _, project := range d.Projects {
 		project.Name = resolveParameters(ctx, project.Name)
 		project.ComposeFile = resolveParameters(ctx, project.ComposeFile)
+		project.ComposeContext = resolveParameters(ctx, project.ComposeContext)
 		project.PreCondition = resolveParameters(ctx, project.PreCondition)
 
 		configuredProjects[project.Name] = true
@@ -99,9 +119,9 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 			continue
 		}
 
-		composeFilePath := filepath.Join(service.cacheDirectory, DockerComposeDirectory, fmt.Sprintf("%s.yml", project.Name))
-		created, err := service.downloadFile(ctx, "", project.ComposeFile, composeFilePath)
+		created, err := dockerComposeGetResources(ctx, service, project)
 		if err != nil {
+			ReportError(ctx, err, "Cannot get resources for compose project %s", project.Name)
 			return err
 		}
 
@@ -109,14 +129,16 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 			dockerComposeStart := []string{
 				"docker",
 				"compose",
-				"-p",
+				"--project-name",
 				project.Name,
-				"-f",
-				composeFilePath,
+				"--project-directory",
+				filepath.Join(service.cacheDirectory, DockerComposeDirectory, project.Name, dockerComposeContext),
+				"--file",
+				filepath.Join(service.cacheDirectory, DockerComposeDirectory, project.Name, dockerComposeFile),
 				"up",
-				"-d",
 				"--remove-orphans",
 				"--wait",
+				"--force-recreate",
 			}
 
 			output, err := utils.RunCommand(ctx, dockerComposeStart)
@@ -144,6 +166,78 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 
 type DockerComposeProject struct {
 	Name string `json:"Name"`
+}
+
+func dockerComposeGetResources(ctx context.Context, service *Service, project DockerCompose) (bool, error) {
+	downloadedComposeFile, err := dockerComposeGetComposeFile(ctx, service, project)
+	if err != nil {
+		return false, err
+	}
+
+	downloadedContextFile, err := dockerComposeGetContext(ctx, service, project)
+	if err != nil {
+		return false, err
+	}
+
+	return downloadedComposeFile || downloadedContextFile, nil
+}
+
+func dockerComposeGetComposeFile(ctx context.Context, service *Service, project DockerCompose) (bool, error) {
+	projectDirectory := dockerComposeGetProjectDirectory(service, project)
+	if err := os.MkdirAll(projectDirectory, 0700); err != nil {
+		ReportError(ctx, err, "Cannot create directory for compose project %s", project.Name)
+		return false, err
+	}
+
+	composeFilePath := filepath.Join(projectDirectory, dockerComposeFile)
+
+	return service.downloadFile(ctx, "", project.ComposeFile, composeFilePath)
+}
+
+func dockerComposeGetProjectDirectory(service *Service, project DockerCompose) string {
+	return filepath.Join(service.cacheDirectory, DockerComposeDirectory, project.Name)
+}
+
+func dockerComposeGetContext(ctx context.Context, service *Service, project DockerCompose) (bool, error) {
+	contextDirectory := filepath.Join(dockerComposeGetProjectDirectory(service, project), dockerComposeContext)
+
+	if err := os.MkdirAll(contextDirectory, 0700); err != nil {
+		return false, err
+	}
+
+	if project.ComposeContext == "" {
+		return false, nil
+	}
+
+	fileMetaData, err := service.getFileMetadata(ctx, project.ComposeContext)
+	if err != nil {
+		return false, err
+	}
+
+	if fileMetaData == nil {
+		return false, fmt.Errorf("context file %s does not exist", project.ComposeContext)
+	}
+
+	if fileMetaData.SHA256() == "" {
+		return false, fmt.Errorf("context file %s has no hash", project.ComposeContext)
+	}
+
+	contextTarPath := filepath.Join(
+		dockerComposeGetProjectDirectory(service, project),
+		fmt.Sprintf("%s.%s", dockerComposeContext, filepath.Ext(project.ComposeContext)),
+	)
+
+	fmt.Println("Downloading context file", project.ComposeContext, "to", contextTarPath)
+
+	if _, err := service.downloadFile(ctx, fileMetaData.SHA256(), project.ComposeContext, contextTarPath); err != nil {
+		return false, err
+	}
+
+	if err := dockerComposeContextUnpack(contextTarPath, contextDirectory); err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 func dockerComposeClean(ctx context.Context, service *Service, configuredProjects map[string]bool) error {
@@ -182,7 +276,7 @@ func dockerComposeRemoveProject(ctx context.Context, projectName string) ([]byte
 	dockerComposeStop := []string{
 		"docker",
 		"compose",
-		"-p",
+		"--project-name",
 		projectName,
 		"down",
 		"--remove-orphans",
@@ -192,8 +286,17 @@ func dockerComposeRemoveProject(ctx context.Context, projectName string) ([]byte
 }
 
 func dockerComposeIsDeployed(projectName string, service *Service) bool {
-	if _, err := os.Stat(filepath.Join(service.cacheDirectory, DockerComposeDirectory, fmt.Sprintf("%s.yml", projectName))); err != nil {
+	if _, err := os.Stat(filepath.Join(service.cacheDirectory, DockerComposeDirectory, projectName)); err != nil {
 		return false
 	}
 	return true
+}
+
+func dockerComposeContextUnpack(tarPath, destination string) error {
+
+	if err := utils.UnpackTar(tarPath, destination); err != nil {
+		return err
+	}
+
+	return nil
 }
