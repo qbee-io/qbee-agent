@@ -358,7 +358,7 @@ func (rpm *RpmPackageManager) IsSupportedArchitecture(arch string) error {
 		return err
 	}
 
-	allArchitectures := []string{mainArch, "all", "noarch"}
+	allArchitectures := []string{mainArch, "noarch"}
 	for _, supportedArch := range allArchitectures {
 		if supportedArch == arch {
 			return nil
