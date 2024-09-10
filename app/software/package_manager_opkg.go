@@ -413,3 +413,20 @@ func (opkg *OpkgPackageManager) ParsePackageFile(ctx context.Context, pkgFilePat
 		Architecture: matches[3],
 	}, nil
 }
+
+// IsSupportedArchitecture returns true if architecture is supported by the system
+func (opkg *OpkgPackageManager) IsSupportedArchitecture(arch string) error {
+	mainArch, err := opkg.PackageArchitecture()
+	if err != nil {
+		return err
+	}
+
+	allArchitectures := []string{mainArch, "all", "noarch"}
+	for _, supportedArch := range allArchitectures {
+		if supportedArch == arch {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("architecture %s is not supported by the system", arch)
+}
