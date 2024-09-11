@@ -23,7 +23,7 @@ ARG version
 
 # add qbee-dev apt repo
 COPY app/software/test_repository/debian /apt-repo
-COPY app/configuration/docker-compose /docker-compose
+COPY test/resources/docker-compose /docker-compose
 RUN echo "deb [trusted=yes] file:/apt-repo ./" > /etc/apt/sources.list.d/qbee-dev.list
 
 # Install ca-certificates in latest version
