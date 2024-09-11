@@ -21,8 +21,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"go.qbee.io/agent/app/utils"
 )
@@ -69,11 +71,11 @@ type DockerCompose struct {
 	// Name of the project.
 	Name string `json:"name"`
 
-	// ComposeFile to the docker-compose file.
-	ComposeFile string `json:"file"`
+	// File to the docker-compose file.
+	File string `json:"file"`
 
 	// ComposeContent is the content any build context.
-	ComposeContext string `json:"context,omitempty"`
+	Context string `json:"context,omitempty"`
 
 	// PreCondition is a shell command that needs to be true before starting the container.
 	PreCondition string `json:"pre_condition,omitempty"`
@@ -82,13 +84,14 @@ type DockerCompose struct {
 const dockerComposeMinimumVersion = "2.0.0"
 const dockerComposeFile = "compose.yml"
 const dockerComposeContext = "context"
+const dockerComposeTimeout = "60"
 
 var dockerComposeVersionRE = regexp.MustCompile(`Docker Compose version v([0-9.]+)`)
 
 // Execute docker compose configuration bundle on the system.
 func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) error {
 
-	configuredProjects := make(map[string]bool)
+	configuredProjects := make(map[string]DockerCompose)
 
 	output, err := utils.RunCommand(ctx, []string{"docker", "compose", "version"})
 	if err != nil {
@@ -103,18 +106,26 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 
 	version := dockerComposeVersionRE.FindStringSubmatch(string(output))[1]
 	if !utils.IsNewerVersionOrEqual(version, dockerComposeMinimumVersion) {
-		ReportError(ctx, err, "Docker Compose version is too old")
+		ReportError(ctx, err, "Docker Compose version %s is not supported. Minimum version is %s", version, dockerComposeMinimumVersion)
 		return err
 	}
 
 	for _, project := range d.Projects {
 		project.Name = resolveParameters(ctx, project.Name)
-		project.ComposeFile = resolveParameters(ctx, project.ComposeFile)
-		project.ComposeContext = resolveParameters(ctx, project.ComposeContext)
+		project.File = resolveParameters(ctx, project.File)
+		project.Context = resolveParameters(ctx, project.Context)
 		project.PreCondition = resolveParameters(ctx, project.PreCondition)
 
-		configuredProjects[project.Name] = true
+		configuredProjects[project.Name] = project
+	}
 
+	// clean projects first to release resources
+	if err := d.dockerComposeClean(ctx, service, configuredProjects); err != nil {
+		ReportError(ctx, err, "Cannot clean up compose projects")
+		return err
+	}
+
+	for _, project := range d.Projects {
 		if !CheckPreCondition(ctx, project.PreCondition) {
 			continue
 		}
@@ -136,8 +147,12 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 				"--file",
 				filepath.Join(service.cacheDirectory, DockerComposeDirectory, project.Name, dockerComposeFile),
 				"up",
+				"--build",
 				"--remove-orphans",
 				"--wait",
+				"--timeout",
+				dockerComposeTimeout,
+				"--timestamps",
 				"--force-recreate",
 			}
 
@@ -150,15 +165,6 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 			ReportInfo(ctx, output, "Started compose project %s", project.Name)
 		}
 
-	}
-
-	if !d.Clean {
-		return nil
-	}
-
-	if err := dockerComposeClean(ctx, service, configuredProjects); err != nil {
-		ReportError(ctx, err, "Cannot clean up compose projects")
-		return err
 	}
 
 	return nil
@@ -191,7 +197,7 @@ func dockerComposeGetComposeFile(ctx context.Context, service *Service, project 
 
 	composeFilePath := filepath.Join(projectDirectory, dockerComposeFile)
 
-	return service.downloadFile(ctx, "", project.ComposeFile, composeFilePath)
+	return service.downloadFile(ctx, "", project.File, composeFilePath)
 }
 
 func dockerComposeGetProjectDirectory(service *Service, project DockerCompose) string {
@@ -199,48 +205,48 @@ func dockerComposeGetProjectDirectory(service *Service, project DockerCompose) s
 }
 
 func dockerComposeGetContext(ctx context.Context, service *Service, project DockerCompose) (bool, error) {
-	contextDirectory := filepath.Join(dockerComposeGetProjectDirectory(service, project), dockerComposeContext)
 
-	if err := os.MkdirAll(contextDirectory, 0700); err != nil {
-		return false, err
-	}
-
-	if project.ComposeContext == "" {
+	if project.Context == "" {
 		return false, nil
 	}
 
-	fileMetaData, err := service.getFileMetadata(ctx, project.ComposeContext)
+	if !utils.IsSupportedTarExtension(project.Context) {
+		return false, fmt.Errorf("unsupported context file extension %s", project.Context)
+	}
+
+	contextState := filepath.Join(dockerComposeGetProjectDirectory(service, project), "context-metadata.json")
+
+	contextTmpFilename := strings.Join([]string{dockerComposeContext, utils.GetTarExtension(project.Context)}, ".")
+	contextDst := filepath.Join(dockerComposeGetProjectDirectory(service, project), "_tmp", contextTmpFilename)
+
+	downloaded, err := downloadStateFileCompare(ctx, service, contextState, project.Context, contextDst)
+
 	if err != nil {
 		return false, err
 	}
 
-	if fileMetaData == nil {
-		return false, fmt.Errorf("context file %s does not exist", project.ComposeContext)
+	if !downloaded {
+		return false, nil
 	}
 
-	if fileMetaData.SHA256() == "" {
-		return false, fmt.Errorf("context file %s has no hash", project.ComposeContext)
-	}
+	contextUnpackDir := filepath.Join(dockerComposeGetProjectDirectory(service, project), dockerComposeContext)
 
-	contextTarPath := filepath.Join(
-		dockerComposeGetProjectDirectory(service, project),
-		fmt.Sprintf("%s.%s", dockerComposeContext, filepath.Ext(project.ComposeContext)),
-	)
-
-	fmt.Println("Downloading context file", project.ComposeContext, "to", contextTarPath)
-
-	if _, err := service.downloadFile(ctx, fileMetaData.SHA256(), project.ComposeContext, contextTarPath); err != nil {
+	if err := utils.UnpackTar(contextDst, contextUnpackDir); err != nil {
 		return false, err
 	}
 
-	if err := dockerComposeContextUnpack(contextTarPath, contextDirectory); err != nil {
+	if err := os.Remove(contextDst); err != nil {
 		return false, err
 	}
 
 	return true, nil
 }
 
-func dockerComposeClean(ctx context.Context, service *Service, configuredProjects map[string]bool) error {
+func (d DockerComposeBundle) dockerComposeClean(ctx context.Context, service *Service, configuredProjects map[string]DockerCompose) error {
+	if !d.Clean {
+		return nil
+	}
+
 	projectListingCmd := []string{"docker", "compose", "ls", "--all", "--format", "json"}
 	output, err := utils.RunCommand(ctx, projectListingCmd)
 
@@ -263,7 +269,7 @@ func dockerComposeClean(ctx context.Context, service *Service, configuredProject
 			continue
 		}
 
-		_, err := dockerComposeRemoveProject(ctx, project.Name)
+		_, err := dockerComposeRemoveProject(ctx, service, project.Name)
 		if err != nil {
 			return fmt.Errorf("cannot stop compose project %s: %w", project.Name, err)
 		}
@@ -272,7 +278,7 @@ func dockerComposeClean(ctx context.Context, service *Service, configuredProject
 	return nil
 }
 
-func dockerComposeRemoveProject(ctx context.Context, projectName string) ([]byte, error) {
+func dockerComposeRemoveProject(ctx context.Context, service *Service, projectName string) ([]byte, error) {
 	dockerComposeStop := []string{
 		"docker",
 		"compose",
@@ -280,9 +286,22 @@ func dockerComposeRemoveProject(ctx context.Context, projectName string) ([]byte
 		projectName,
 		"down",
 		"--remove-orphans",
+		"--volumes",
+		"--timeout",
+		"60",
+		"--rmi",
+		"all",
 	}
 
-	return utils.RunCommand(ctx, dockerComposeStop)
+	if output, err := utils.RunCommand(ctx, dockerComposeStop); err != nil {
+		return output, err
+	}
+
+	dockerComposeProjectDir := filepath.Join(service.cacheDirectory, DockerComposeDirectory, projectName)
+	if err := os.RemoveAll(dockerComposeProjectDir); err != nil {
+		return nil, err
+	}
+	return nil, nil
 }
 
 func dockerComposeIsDeployed(projectName string, service *Service) bool {
@@ -292,11 +311,63 @@ func dockerComposeIsDeployed(projectName string, service *Service) bool {
 	return true
 }
 
-func dockerComposeContextUnpack(tarPath, destination string) error {
+func downloadStateFileCompare(
+	ctx context.Context,
+	service *Service,
+	stateFilePath,
+	src,
+	dst string,
+) (bool, error) {
 
-	if err := utils.UnpackTar(tarPath, destination); err != nil {
-		return err
+	fileMetadata, err := service.getFileMetadata(ctx, src)
+	if err != nil {
+		return false, err
 	}
 
-	return nil
+	stateDir := path.Dir(stateFilePath)
+	if _, err := os.Stat(stateDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(stateDir, 0700); err != nil {
+			return false, err
+		}
+	}
+
+	doDownload := false
+	if _, err := os.Stat(stateFilePath); os.IsNotExist(err) {
+		doDownload = true
+	} else {
+		stateBytes, err := os.ReadFile(stateFilePath)
+		if err != nil {
+			return false, err
+		}
+
+		var stateData FileMetadata
+		if err := json.Unmarshal(stateBytes, &stateData); err != nil {
+			return false, err
+		}
+
+		if stateData.SHA256() != fileMetadata.SHA256() {
+			doDownload = true
+		}
+	}
+
+	if doDownload {
+		if _, err := service.downloadMetadataCompare(ctx, "", src, dst, fileMetadata); err != nil {
+			return false, err
+		}
+
+		stateBytes, err := json.Marshal(fileMetadata)
+		if err != nil {
+			return false, err
+		}
+
+		if err := os.WriteFile(stateFilePath, stateBytes, 0600); err != nil {
+			return false, err
+		}
+	}
+
+	// Check if the rauc bundle is available, if not return an empty string
+	if _, err := os.Stat(dst); os.IsNotExist(err) {
+		return false, nil
+	}
+	return doDownload, nil
 }

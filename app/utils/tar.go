@@ -8,8 +8,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
+// UnpackTar unpacks a tar archive to a destination directory.
 func UnpackTar(tarPath string, destPath string) error {
 	tarFile, err := os.Open(tarPath)
 	if err != nil {
@@ -17,13 +19,13 @@ func UnpackTar(tarPath string, destPath string) error {
 	}
 	defer tarFile.Close()
 
-	switch filepath.Ext(tarPath) {
-	case ".tar":
+	switch GetTarExtension(tarPath) {
+	case "tar":
 		return unpackTar(tarFile, destPath)
-	case ".tar.gz":
+	case "tar.bz2":
 		bz2Reader := bzip2.NewReader(tarFile)
 		return unpackTar(bz2Reader, destPath)
-	case ".tar.bz2":
+	case "tar.gz":
 		gzReader, err := gzip.NewReader(tarFile)
 		if err != nil {
 			return err
@@ -35,6 +37,27 @@ func UnpackTar(tarPath string, destPath string) error {
 	}
 }
 
+// IsSupportedTarExtension returns true if the tarPath has a supported extension.
+func IsSupportedTarExtension(tarPath string) bool {
+	switch GetTarExtension(tarPath) {
+	case "tar", "tar.gz", "tar.bz2":
+		return true
+	default:
+		return false
+	}
+}
+
+// GetTarExtension returns the extension of a tar file.
+func GetTarExtension(tarPath string) string {
+	basename := filepath.Base(tarPath)
+	parts := strings.Split(basename, ".")
+	if len(parts) < 2 {
+		return ""
+	}
+	return strings.Join(parts[1:], ".")
+}
+
+// unpackTar unpacks a tar archive to a destination directory.
 func unpackTar(reader io.Reader, destPath string) error {
 	tarReader := tar.NewReader(reader)
 

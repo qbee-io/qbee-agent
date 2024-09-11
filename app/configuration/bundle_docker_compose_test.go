@@ -30,7 +30,8 @@ const composeFileContents = `
 	"version": "3",
 	"services": {
 		"web": {
-			"image": "nginx:alpine"
+			"image": "nginx:alpine",
+			"ports": ["8080:80"]
 		},
 		"redis": {
 			"image": "redis:alpine"
@@ -47,8 +48,8 @@ func Test_Simple_Docker_Compose(t *testing.T) {
 	dockerComposeBundle := configuration.DockerComposeBundle{
 		Projects: []configuration.DockerCompose{
 			{
-				Name:        "project-a",
-				ComposeFile: "file:///compose.yml",
+				Name: "project-a",
+				File: "file:///compose.yml",
 			},
 		},
 	}
@@ -64,7 +65,7 @@ func Test_Simple_Docker_Compose(t *testing.T) {
 
 	reports, _ := configuration.ExecuteTestConfigInDocker(r, config)
 	expectedReports := []string{
-		"[INFO] Successfully downloaded file file:///compose.yml to /var/lib/qbee/app_workdir/cache/docker_compose/project-a.yml",
+		"[INFO] Successfully downloaded file file:///compose.yml to /var/lib/qbee/app_workdir/cache/docker_compose/project-a/compose.yml",
 		"[INFO] Started compose project project-a",
 	}
 
@@ -77,8 +78,8 @@ func Test_Simple_Docker_Compose(t *testing.T) {
 	dockerComposeBundle = configuration.DockerComposeBundle{
 		Projects: []configuration.DockerCompose{
 			{
-				Name:        "project-b",
-				ComposeFile: "file:///compose.yml",
+				Name: "project-b",
+				File: "file:///compose.yml",
 			},
 		},
 		Clean: true,
@@ -95,10 +96,74 @@ func Test_Simple_Docker_Compose(t *testing.T) {
 
 	reports, _ = configuration.ExecuteTestConfigInDocker(r, config)
 	expectedReports = []string{
-		"[INFO] Successfully downloaded file file:///compose.yml to /var/lib/qbee/app_workdir/cache/docker_compose/project-b.yml",
+		"[INFO] Successfully downloaded file file:///compose.yml to /var/lib/qbee/app_workdir/cache/docker_compose/project-b/compose.yml",
 		"[INFO] Started compose project project-b",
 	}
 
 	assert.Equal(t, reports, expectedReports)
-	r.MustExec("docker", "compose", "-p", "project-b", "down", "--remove-orphans")
+	r.MustExec("docker", "compose", "-p", "project-b", "down", "--remove-orphans", "--volumes", "--timeout", "60", "--rmi", "all")
+}
+
+func Test_ComposeWithBuildContext(t *testing.T) {
+
+	r := runner.New(t)
+
+	r.CreateFile("/compose.yml", []byte(composeFileContents))
+
+	dockerComposeBundle := configuration.DockerComposeBundle{
+		Projects: []configuration.DockerCompose{
+
+			{
+				Name:    "project-a",
+				File:    "file:///docker-compose/compose.yml",
+				Context: "file:///docker-compose/context.tar.gz",
+			},
+		},
+	}
+
+	dockerComposeBundle.Enabled = true
+
+	config := configuration.CommittedConfig{
+		Bundles: []string{configuration.BundleDockerCompose},
+		BundleData: configuration.BundleData{
+			DockerCompose: &dockerComposeBundle,
+		},
+	}
+
+	reports, _ := configuration.ExecuteTestConfigInDocker(r, config)
+	expectedReports := []string{
+		"[INFO] Successfully downloaded file file:///docker-compose/compose.yml to /var/lib/qbee/app_workdir/cache/docker_compose/project-a/compose.yml",
+		"[INFO] Successfully downloaded file file:///docker-compose/context.tar.gz to /var/lib/qbee/app_workdir/cache/docker_compose/project-a/_tmp/context.tar.gz",
+		"[INFO] Started compose project project-a",
+	}
+
+	assert.Equal(t, reports, expectedReports)
+
+	dockerComposeBundle = configuration.DockerComposeBundle{
+		Projects: []configuration.DockerCompose{
+			{
+				Name:    "project-a",
+				File:    "file:///docker-compose/compose.yml",
+				Context: "file:///docker-compose/context.tar.bz2",
+			},
+		},
+	}
+
+	dockerComposeBundle.Enabled = true
+
+	config = configuration.CommittedConfig{
+		Bundles: []string{configuration.BundleDockerCompose},
+		BundleData: configuration.BundleData{
+			DockerCompose: &dockerComposeBundle,
+		},
+	}
+
+	reports, _ = configuration.ExecuteTestConfigInDocker(r, config)
+
+	expectedReports = []string{
+		"[INFO] Successfully downloaded file file:///docker-compose/context.tar.bz2 to /var/lib/qbee/app_workdir/cache/docker_compose/project-a/_tmp/context.tar.bz2",
+		"[INFO] Started compose project project-a",
+	}
+	assert.Equal(t, reports, expectedReports)
+	r.MustExec("docker", "compose", "-p", "project-b", "down", "--remove-orphans", "--volumes", "--timeout", "60", "--rmi", "all")
 }
