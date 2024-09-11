@@ -51,6 +51,9 @@ const DockerContainerDirectory = "docker_containers"
 // PodmanContainerDirectory is where the agent will download podman related files.
 const PodmanContainerDirectory = "podman_containers"
 
+// DockerComposeDirectory is where the agent will download docker-compose related files.
+const DockerComposeDirectory = "docker_compose"
+
 // FileMetadata is the metadata of a file.
 type FileMetadata struct {
 	MD5          string            `json:"md5"`

@@ -34,6 +34,7 @@ const (
 	BundlePodmanContainers     = "podman_containers"
 	BundleRauc                 = "rauc"
 	BundleMetricsMonitor       = "metrics_monitor"
+	BundleDockerCompose        = "docker_compose"
 )
 
 // CommittedConfig contains the configuration that is committed.
@@ -95,6 +96,8 @@ func (cc *CommittedConfig) selectBundleByName(bundleName string) Bundle {
 		return cc.BundleData.Rauc
 	case BundleMetricsMonitor:
 		return cc.BundleData.MetricsMonitor
+	case BundleDockerCompose:
+		return cc.BundleData.DockerCompose
 	default:
 		return nil
 	}
@@ -121,6 +124,7 @@ type BundleData struct {
 	SoftwareManagement *SoftwareManagementBundle `json:"software_management,omitempty"`
 	DockerContainers   *DockerContainersBundle   `json:"docker_containers,omitempty"`
 	PodmanContainers   *PodmanContainerBundle    `json:"podman_containers,omitempty"`
+	DockerCompose      *DockerComposeBundle      `json:"docker_compose,omitempty"`
 
 	// Security
 	Password *PasswordBundle `json:"password,omitempty"`

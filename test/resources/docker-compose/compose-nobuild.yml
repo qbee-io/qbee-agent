@@ -1,0 +1,8 @@
+---
+services:
+  web:
+    image: nginx:alpine
+    ports:
+      - "8000:5000"
+  redis:
+    image: redis:alpine
