@@ -53,6 +53,7 @@ We need some way of unpacking context
 //		],
 //	}
 
+// DockerComposeBundle controls docker compose projects running in the system.
 type DockerComposeBundle struct {
 	Metadata
 
@@ -170,7 +171,8 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 	return nil
 }
 
-type DockerComposeProject struct {
+// dockerComposeProject is a project that is running in the system.
+type dockerComposeProject struct {
 	Name string `json:"Name"`
 }
 
@@ -254,7 +256,7 @@ func (d DockerComposeBundle) dockerComposeClean(ctx context.Context, service *Se
 		return fmt.Errorf("cannot get list of running compose projects: %w", err)
 	}
 
-	var runningProjects []DockerComposeProject
+	var runningProjects []dockerComposeProject
 	if err := json.Unmarshal(output, &runningProjects); err != nil {
 		return fmt.Errorf("cannot parse list of running compose projects: %w", err)
 	}
