@@ -203,6 +203,18 @@ func (s Software) installFromFile(ctx context.Context, srv *Service, pkgManager 
 		return false, err
 	}
 
+	// check non-empty architecture
+	if pkgInfo.Architecture == "" {
+		ReportError(ctx, nil, "Package %s reports empty architecture", pkgInfo.Name)
+		return false, fmt.Errorf("package %s reports empty architecture", pkgInfo.Name)
+	}
+
+	// check package architecture
+	if err := pkgManager.IsSupportedArchitecture(pkgInfo.Architecture); err != nil {
+		ReportError(ctx, err, "Unable to determine supported architecture for package %s", pkgInfo.Name)
+		return false, err
+	}
+
 	// Check whether package is installed
 	if isInstalled, err := s.isPackageInstalled(ctx, pkgInfo, pkgManager); err != nil {
 		return false, err

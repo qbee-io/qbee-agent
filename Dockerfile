@@ -22,8 +22,8 @@ FROM debian:stable
 ARG version
 
 # add qbee-dev apt repo
-COPY app/software/test_repository/debian /apt-repo
-RUN echo "deb [trusted=yes] file:/apt-repo ./" > /etc/apt/sources.list.d/qbee-dev.list
+COPY test/resources/debian /apt-repo
+RUN echo "deb [trusted=yes] file:/apt-repo/repo ./" > /etc/apt/sources.list.d/qbee-dev.list
 
 # Install ca-certificates in latest version
 RUN apt-get update && apt-get install -y ca-certificates curl
