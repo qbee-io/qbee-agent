@@ -258,6 +258,14 @@ func (agent *Agent) IsTPMEnabled() bool {
 	return agent.cfg.TPMDevice != ""
 }
 
+// GetAgentCertificateDate returns the issued date of the agent certificate as unix timestamp.
+func (agent *Agent) GetAgentCertificateDate() int64 {
+	if agent.certificate == nil {
+		return 0
+	}
+	return agent.certificate.NotBefore.Unix()
+}
+
 // NewWithoutCredentials returns a new instance of Agent without loaded credentials.
 func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 	if err := prepareDirectories(cfg.Directory, cfg.StateDirectory); err != nil {

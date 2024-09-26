@@ -181,4 +181,7 @@ type SystemInfo struct {
 	// VPNIndex - defines numeric ID of the VPN server to which the device is connected.
 	// For now all devices are connected to the same VPN server, so this value is always 1.
 	VPNIndex string `json:"vpn_idx" bson:"vpn_idx"`
+
+	// CertDate - the date when the certificate was issued (e.g. "2022-03-31T14:00:00Z").
+	CertDate int64 `json:"cert_date"`
 }
