@@ -22,7 +22,9 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"os/user"
 	"runtime"
+	"strconv"
 	"syscall"
 	"time"
 )
@@ -30,15 +32,40 @@ import (
 // RunCommand runs a command and returns its output.
 func RunCommand(ctx context.Context, cmd []string) ([]byte, error) {
 	command := NewCommand(ctx, cmd)
+	return runCommand(command)
+}
 
+func RunCommandAsUser(ctx context.Context, cmd []string, userName string) ([]byte, error) {
+	command := NewCommand(ctx, cmd)
+
+	// get user and group id
+	execUser, err := user.Lookup(userName)
+	if err != nil {
+		return nil, fmt.Errorf("error getting uid and gid for user %s: %w", userName, err)
+	}
+
+	// convert user id to int32
+	uid, err := strconv.ParseUint(execUser.Uid, 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("error converting uid to uint64: %w", err)
+	}
+	gid, err := strconv.ParseUint(execUser.Gid, 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("error converting gid to uint64: %w", err)
+	}
+	command.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}
+	return runCommand(command)
+}
+
+func runCommand(command *exec.Cmd) ([]byte, error) {
 	output, err := command.Output()
 	if err != nil {
 		exitError := new(exec.ExitError)
 		if errors.As(err, &exitError) {
-			return nil, fmt.Errorf("error running command %v: %w\n%s", cmd, err, exitError.Stderr)
+			return nil, fmt.Errorf("error running command %v: %w\n%s", command.Args, err, exitError.Stderr)
 		}
 
-		return nil, fmt.Errorf("error running command %v: %w", cmd, err)
+		return nil, fmt.Errorf("error running command %v: %w", command.Args, err)
 	}
 	return output, nil
 }

@@ -57,6 +57,12 @@ type Container struct {
 
 	// PreCondition is a shell command that needs to be true before starting the container.
 	PreCondition string `json:"pre_condition,omitempty"`
+
+	// SkipRestart defines whether the container should be restarted if it's stopped
+	SkipRestart bool `json:"skip_restart,omitempty"`
+
+	// ExecUser defines the user to execute the container as. Podman only.
+	ExecUser string `json:"exec_user,omitempty"`
 }
 
 // execute ensures that configured container is running
@@ -87,7 +93,7 @@ func (c Container) execute(ctx context.Context, srv *Service, containerBin strin
 		return c.run(ctx, srv, containerBin)
 	}
 
-	if !container.isRunning() {
+	if !container.isRunning() && !c.SkipRestart {
 		ReportWarning(ctx, nil, "Container exited for image %s.", c.Image)
 		needRestart = true
 	} else if !container.argsMatch(c.args(srv)) {
@@ -170,6 +176,7 @@ func (c Container) getRunCommand(srv *Service, containerBin string) string {
 
 // restart an existing container
 func (c Container) restart(ctx context.Context, srv *Service, containerBin, containerID string) error {
+
 	restartCmd := []string{
 		containerBin, "kill", containerID, ";", // kill the container
 		containerBin, "rm", containerID, ";", // remove the container
