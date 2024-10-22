@@ -55,6 +55,7 @@ type Config struct {
 	ProxyPort     string `json:"http_proxy_port,omitempty"`
 	ProxyUser     string `json:"http_proxy_user,omitempty"`
 	ProxyPassword string `json:"http_proxy_pass,omitempty"`
+	ProxyTLS      bool   `json:"http_proxy_tls,omitempty"`
 
 	// TPM Configuration
 	TPMDevice string `json:"tpm_device,omitempty"`

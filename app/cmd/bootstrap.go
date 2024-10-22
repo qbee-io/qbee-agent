@@ -33,6 +33,7 @@ const (
 	bootstrapProxyPortOption           = "proxy-port"
 	bootstrapProxyUserOption           = "proxy-user"
 	bootstrapProxyPasswordOption       = "proxy-password"
+	bootstrapProxyTLSOption            = "proxy-tls"
 	bootstrapDeviceNameOption          = "device-name"
 	bootstrapDisableRemoteAccessOption = "disable-remote-access"
 	bootstrapCACert                    = "ca-cert"
@@ -90,6 +91,11 @@ var bootstrapCommand = cmd.Command{
 			Help: "HTTP proxy password.",
 		},
 		{
+			Name: bootstrapProxyTLSOption,
+			Flag: "true",
+			Help: "Use TLS for the proxy connection.",
+		},
+		{
 			Name: bootstrapCACert,
 			Help: "Custom CA certificate to use for TLS.",
 		},
@@ -107,6 +113,7 @@ var bootstrapCommand = cmd.Command{
 			ProxyPort:           opts[bootstrapProxyPortOption],
 			ProxyUser:           opts[bootstrapProxyUserOption],
 			ProxyPassword:       opts[bootstrapProxyPasswordOption],
+			ProxyTLS:            opts[bootstrapProxyTLSOption] == "true",
 			DeviceName:          opts[bootstrapDeviceNameOption],
 			DisableRemoteAccess: opts[bootstrapDisableRemoteAccessOption] == "true",
 			CACert:              opts[bootstrapCACert],

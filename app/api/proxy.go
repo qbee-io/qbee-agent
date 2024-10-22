@@ -30,6 +30,7 @@ type Proxy struct {
 	Port     string
 	User     string
 	Password string
+	TLS      bool
 }
 
 // UseProxy sets HTTP_PROXY environmental variable, so HTTP clients can make use of it.
@@ -45,7 +46,12 @@ func UseProxy(proxy *Proxy) error {
 		proxyURL = fmt.Sprintf("%s:%s@%s", proxy.User, proxy.Password, proxyURL)
 	}
 
-	proxyURL = "http://" + proxyURL
+	proto := "http"
+	if proxy.TLS {
+		proto = "https"
+	}
+
+	proxyURL = fmt.Sprintf("%s://%s", proto, proxyURL)
 
 	if err := os.Setenv(proxyEnvVar, proxyURL); err != nil {
 		return fmt.Errorf("error setting up HTTP proxy: %w", err)
