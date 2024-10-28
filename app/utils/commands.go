@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"os/user"
 	"runtime"
@@ -35,25 +36,31 @@ func RunCommand(ctx context.Context, cmd []string) ([]byte, error) {
 	return runCommand(command)
 }
 
-func RunCommandAsUser(ctx context.Context, cmd []string, userName string) ([]byte, error) {
+func RunCommandAsUser(ctx context.Context, cmd []string, user *user.User) ([]byte, error) {
 	command := NewCommand(ctx, cmd)
 
-	// get user and group id
-	execUser, err := user.Lookup(userName)
-	if err != nil {
-		return nil, fmt.Errorf("error getting uid and gid for user %s: %w", userName, err)
-	}
-
 	// convert user id to int32
-	uid, err := strconv.ParseUint(execUser.Uid, 10, 32)
+	uid, err := strconv.ParseUint(user.Uid, 10, 32)
 	if err != nil {
 		return nil, fmt.Errorf("error converting uid to uint64: %w", err)
 	}
-	gid, err := strconv.ParseUint(execUser.Gid, 10, 32)
+	gid, err := strconv.ParseUint(user.Gid, 10, 32)
 	if err != nil {
 		return nil, fmt.Errorf("error converting gid to uint64: %w", err)
 	}
+
+	// set the PATH to current PATH
+	pathVar := os.Getenv("PATH")
+
+	// set environment variables
+	command.Env = append(command.Env, fmt.Sprintf("HOME=%s", user.HomeDir))
+	command.Env = append(command.Env, fmt.Sprintf("USER=%s", user.Username))
+	command.Env = append(command.Env, fmt.Sprintf("LOGNAME=%s", user.Username))
+	command.Env = append(command.Env, fmt.Sprintf("USERNAME=%s", user.Username))
+	command.Env = append(command.Env, fmt.Sprintf("PATH=%s", pathVar))
+
 	command.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}
+
 	return runCommand(command)
 }
 
@@ -173,4 +180,70 @@ func RebootCommand() ([]string, error) {
 	}
 
 	return nil, fmt.Errorf("cannot reboot: %s or %s not found", shutdownBinPath, rebootBinPath)
+}
+
+// ShutdownCommand parses a string into an array of commandline arguments
+func ParseCommandLine(command string) ([]string, error) {
+	var args []string
+	state := "start"
+	current := ""
+	quote := "\""
+	escapeNext := true
+	for i := 0; i < len(command); i++ {
+		c := command[i]
+
+		if state == "quotes" {
+			if string(c) != quote {
+				current += string(c)
+			} else {
+				args = append(args, current)
+				current = ""
+				state = "start"
+			}
+			continue
+		}
+
+		if escapeNext {
+			current += string(c)
+			escapeNext = false
+			continue
+		}
+
+		if c == '\\' {
+			escapeNext = true
+			continue
+		}
+
+		if c == '"' || c == '\'' {
+			state = "quotes"
+			quote = string(c)
+			continue
+		}
+
+		if state == "arg" {
+			if c == ' ' || c == '\t' {
+				args = append(args, current)
+				current = ""
+				state = "start"
+			} else {
+				current += string(c)
+			}
+			continue
+		}
+
+		if c != ' ' && c != '\t' {
+			state = "arg"
+			current += string(c)
+		}
+	}
+
+	if state == "quotes" {
+		return []string{}, fmt.Errorf("unclosed quote in command line: %s", command)
+	}
+
+	if current != "" {
+		args = append(args, current)
+	}
+
+	return args, nil
 }
