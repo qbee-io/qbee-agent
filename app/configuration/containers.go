@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 
@@ -63,6 +64,8 @@ type Container struct {
 
 	// ExecUser defines the user to execute the container as. Podman only.
 	ExecUser string `json:"exec_user,omitempty"`
+
+	user *user.User
 }
 
 // execute ensures that configured container is running
@@ -73,6 +76,11 @@ func (c Container) execute(ctx context.Context, srv *Service, containerBin strin
 	if !CheckPreCondition(ctx, c.PreCondition) {
 		// skip container if pre-condition is not met
 		return nil
+	}
+
+	if err = c.userCheck(); err != nil {
+		ReportError(ctx, err, "Cannot check user for container %s.", c.Name)
+		return err
 	}
 
 	envFilePath := c.localEnvFilePath(srv)
@@ -93,10 +101,19 @@ func (c Container) execute(ctx context.Context, srv *Service, containerBin strin
 		return c.run(ctx, srv, containerBin)
 	}
 
-	if !container.isRunning() && !c.SkipRestart {
+	if c.SkipRestart {
+		return nil
+	}
+
+	args, err := c.args(srv)
+	if err != nil {
+		return err
+	}
+
+	if !container.isRunning() {
 		ReportWarning(ctx, nil, "Container exited for image %s.", c.Image)
 		needRestart = true
-	} else if !container.argsMatch(c.args(srv)) {
+	} else if !container.argsMatch(args) {
 		ReportWarning(ctx, nil, "Container configuration update detected for image %s.", c.Image)
 		needRestart = true
 	}
@@ -108,8 +125,23 @@ func (c Container) execute(ctx context.Context, srv *Service, containerBin strin
 	return c.restart(ctx, srv, containerBin, container.ID)
 }
 
+// userCheck checks if the user exists and sets it to the container.
+func (c *Container) userCheck() error {
+	if c.ExecUser == "" {
+		return nil
+	}
+
+	u, err := user.Lookup(c.ExecUser)
+	if err != nil {
+		return err
+	}
+
+	c.user = u
+	return nil
+}
+
 // args returns docker cli command line arguments needed to launch the container.
-func (c Container) args(srv *Service) string {
+func (c Container) args(srv *Service) ([]string, error) {
 	args := []string{
 		"--name", c.Name,
 	}
@@ -119,9 +151,26 @@ func (c Container) args(srv *Service) string {
 		args = append(args, "--env-file", envFilePath)
 	}
 
-	args = append(args, c.Args, c.Image, c.Command)
+	extraArgs, err := utils.ParseCommandLine(c.Args)
+	if err != nil {
+		return nil, err
+	}
 
-	return strings.Join(args, " ")
+	if len(extraArgs) != 0 {
+		args = append(args, extraArgs...)
+	}
+
+	args = append(args, c.Image)
+
+	containerCmd, err := utils.ParseCommandLine(c.Command)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(containerCmd) != 0 {
+		return append(args, containerCmd...), nil
+	}
+	return args, nil
 }
 
 // id returns container identifier base on its name.
@@ -144,11 +193,12 @@ func (c Container) localEnvFilePath(srv *Service) string {
 
 // start a container
 func (c Container) run(ctx context.Context, srv *Service, containerBin string) error {
-	runCmd := c.getRunCommand(srv, containerBin)
+	runCmd, err := c.getRunCommand(srv, containerBin)
+	if err != nil {
+		return err
+	}
 
-	cmd := []string{"sh", "-c", runCmd}
-
-	output, err := utils.RunCommand(ctx, cmd)
+	output, err := c.runContainerCmd(ctx, runCmd)
 	if err != nil {
 		ReportError(ctx, err, "Unable to start container for image %s.", c.Image)
 		return err
@@ -159,33 +209,61 @@ func (c Container) run(ctx context.Context, srv *Service, containerBin string) e
 	return nil
 }
 
+func (c Container) runContainerCmd(ctx context.Context, cmd []string) ([]byte, error) {
+	if c.user == nil {
+		return utils.RunCommand(ctx, cmd)
+	}
+
+	return utils.RunCommandAsUser(ctx, cmd, c.user)
+}
+
 // getRunCommand returns run command string for the container.
-func (c Container) getRunCommand(srv *Service, containerBin string) string {
-	args := c.args(srv)
+func (c Container) getRunCommand(srv *Service, containerBin string) ([]string, error) {
+	args, err := c.args(srv)
+
+	if err != nil {
+		return nil, err
+	}
 
 	runCmd := []string{
 		containerBin, "run",
 		"--detach",
 		"--label", fmt.Sprintf("qbee-docker-id=%s", c.Name),
-		"--label", fmt.Sprintf("qbee-docker-args-sha=%x", sha256.Sum256([]byte(args))),
-		args,
+		"--label", fmt.Sprintf("qbee-docker-args-sha=%x", sha256.Sum256([]byte(strings.Join(args, " ")))),
 	}
 
-	return strings.Join(runCmd, " ")
+	return append(runCmd, args...), nil
+}
+
+// kill and remove a container. Do not track errors.
+func (c Container) kill(ctx context.Context, containerID, containerBin string) {
+	cmd := []string{
+		containerBin, "kill", containerID,
+	}
+	// Attempt to forcefully kill the container
+	c.runContainerCmd(ctx, cmd)
+
+	// TODO: check if container is still present after kill
+	cmd = []string{
+		containerBin, "rm", containerID,
+	}
+
+	// Attempt to remove the container
+	c.runContainerCmd(ctx, cmd)
 }
 
 // restart an existing container
 func (c Container) restart(ctx context.Context, srv *Service, containerBin, containerID string) error {
 
-	restartCmd := []string{
-		containerBin, "kill", containerID, ";", // kill the container
-		containerBin, "rm", containerID, ";", // remove the container
-		c.getRunCommand(srv, containerBin), // start the container
+	runCmd, err := c.getRunCommand(srv, containerBin)
+	if err != nil {
+		ReportError(ctx, err, "Unable to get run command for image %s.", c.Image)
+		return err
 	}
 
-	cmd := []string{"sh", "-c", strings.Join(restartCmd, " ")}
+	c.kill(ctx, containerID, containerBin)
 
-	output, err := utils.RunCommand(ctx, cmd)
+	output, err := c.runContainerCmd(ctx, runCmd)
 	if err != nil {
 		ReportError(ctx, err, "Unable to restart container for image %s.", c.Image)
 		return err
@@ -213,8 +291,8 @@ func (ci *containerInfo) exists() bool {
 }
 
 // returns true if container is running with the right set of run arguments.
-func (ci *containerInfo) argsMatch(args string) bool {
-	expectedArgsDigest := fmt.Sprintf("%x", sha256.Sum256([]byte(args)))
+func (ci *containerInfo) argsMatch(args []string) bool {
+	expectedArgsDigest := fmt.Sprintf("%x", sha256.Sum256([]byte(strings.Join(args, " "))))
 
 	if val, ok := ci.Labels["qbee-docker-args-sha"]; ok {
 		return val == expectedArgsDigest
@@ -237,7 +315,7 @@ func (c Container) getStatus(ctx context.Context, containerBin string) (*contain
 	var err error
 	var output []byte
 
-	output, err = utils.RunCommand(ctx, cmd)
+	output, err = c.runContainerCmd(ctx, cmd)
 	if err != nil {
 		return nil, err
 	}

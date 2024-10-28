@@ -29,8 +29,6 @@ import (
 func Test_PodmanContainers_Container_Start(t *testing.T) {
 	r := runner.NewPodmanRunner(t)
 
-	r.MustExec("apt-get", "install", "-y", "podman")
-
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
 	podmanBundle := configuration.PodmanContainerBundle{
@@ -64,8 +62,6 @@ func Test_PodmanContainers_Container_Start(t *testing.T) {
 
 func Test_PodmanContainers_Container_Change(t *testing.T) {
 	r := runner.NewPodmanRunner(t)
-
-	r.MustExec("apt-get", "install", "-y", "podman")
 
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
@@ -101,8 +97,6 @@ func Test_PodmanContainers_Container_Change(t *testing.T) {
 
 func Test_PodmanContainers_Container_StartExited(t *testing.T) {
 	r := runner.NewPodmanRunner(t)
-
-	r.MustExec("apt-get", "install", "-y", "podman")
 
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
@@ -146,6 +140,39 @@ func Test_PodmanContainers_Container_StartExited(t *testing.T) {
 	// check that there is a container running with the specified command
 	output := r.MustExec("podman", "container", "ls", "--filter", "name="+containerName, "--format", "{{.Command}}")
 	assert.Equal(t, string(output), podmanBundle.Containers[0].Command)
+}
+
+func Test_PodmanContainers_As_User_Container_Start(t *testing.T) {
+	r := runner.NewPodmanRunner(t)
+
+	userName := "podman"
+	r.MustExec("useradd", "-m", userName)
+
+	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
+
+	podmanBundle := configuration.PodmanContainerBundle{
+		Containers: []configuration.Container{
+			{
+				Name:     containerName,
+				Image:    "alpine:latest",
+				Args:     "--rm",
+				Command:  "sleep 5",
+				ExecUser: userName,
+			},
+		},
+	}
+
+	// running it the first time starts a docker container
+	reports := executePodmanContainersBundle(r, podmanBundle)
+	expectedReports := []string{
+		"[INFO] Successfully started container for image alpine:latest.",
+	}
+
+	assert.Equal(t, reports, expectedReports)
+
+	// running it the second time does nothing, since the correct container is already running
+	reports = executePodmanContainersBundle(r, podmanBundle)
+	assert.Empty(t, reports)
 }
 
 // executePodmanContainersBundle is a helper method to quickly execute podman containers bundle.
