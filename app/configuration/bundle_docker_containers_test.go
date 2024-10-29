@@ -17,6 +17,7 @@
 package configuration_test
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -34,8 +35,6 @@ func Test_DockerContainers_Auths(t *testing.T) {
 	}
 
 	r := runner.New(t)
-
-	r.MustExec("apt-get", "install", "-y", "docker-ce-cli")
 
 	dockerBundle := configuration.DockerContainersBundle{
 		RegistryAuths: []configuration.RegistryAuth{
@@ -63,13 +62,17 @@ func Test_DockerContainers_Auths(t *testing.T) {
 		t.Fatalf("error decoding docker config: %v", err)
 	}
 
+	authString := base64.StdEncoding.EncodeToString(
+		[]byte(fmt.Sprintf("%s:%s", os.Getenv("DOCKER_USERNAME"), os.Getenv("DOCKER_PASSWORD"))))
+
 	expectedDockerConfig := map[string]any{
 		"auths": map[string]any{
 			"https://index.docker.io/v1/": map[string]any{
-				"auth": "cWJlZXRlc3RlcjpkY2tyX3BhdF9yR2lKMVFPeFFOZVZlSkhib25KeVhmS2Fac1k=",
+				"auth": authString,
 			},
 		},
 	}
+
 	assert.Equal(t, dockerConfig, expectedDockerConfig)
 
 	// running it the second time does nothing
@@ -79,8 +82,6 @@ func Test_DockerContainers_Auths(t *testing.T) {
 
 func Test_DockerContainers_Container_Start(t *testing.T) {
 	r := runner.New(t)
-
-	r.MustExec("apt-get", "install", "-y", "docker-ce-cli")
 
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
@@ -114,8 +115,6 @@ func Test_DockerContainers_Container_Start(t *testing.T) {
 
 func Test_DockerContainers_Container_StartExited(t *testing.T) {
 	r := runner.New(t)
-
-	r.MustExec("apt-get", "install", "-y", "docker-ce-cli")
 
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
@@ -164,8 +163,6 @@ func Test_DockerContainers_Container_StartExited(t *testing.T) {
 func Test_DockerContainers_Container_RestartOnConfigChange(t *testing.T) {
 	r := runner.New(t)
 
-	r.MustExec("apt-get", "install", "-y", "docker-ce-cli")
-
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
 	dockerBundle := configuration.DockerContainersBundle{
@@ -210,8 +207,6 @@ func Test_DockerContainers_Container_RestartOnConfigChange(t *testing.T) {
 
 func Test_DockerContainers_Container_PreCondition(t *testing.T) {
 	r := runner.New(t)
-
-	r.MustExec("apt-get", "install", "-y", "docker-ce-cli")
 
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
