@@ -146,6 +146,9 @@ func Test_PodmanContainers_As_User_Container_Start(t *testing.T) {
 	r := runner.NewPodmanRunner(t)
 
 	userName := "podman"
+	envFile := "/tmp/envfile"
+
+	r.CreateFile("/tmp/envfile", []byte("HELLO=world"))
 	r.MustExec("useradd", "-m", userName)
 
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
@@ -158,6 +161,7 @@ func Test_PodmanContainers_As_User_Container_Start(t *testing.T) {
 				Args:     "--rm",
 				Command:  "sleep 5",
 				ExecUser: userName,
+				EnvFile:  "file:///" + envFile,
 			},
 		},
 	}
@@ -165,14 +169,21 @@ func Test_PodmanContainers_As_User_Container_Start(t *testing.T) {
 	// running it the first time starts a docker container
 	reports := executePodmanContainersBundle(r, podmanBundle)
 	expectedReports := []string{
+		"[INFO] Successfully downloaded file file:////tmp/envfile to",
 		"[INFO] Successfully started container for image alpine:latest.",
 	}
 
-	assert.Equal(t, reports, expectedReports)
+	assert.Equal(t, len(reports), len(expectedReports))
+	assert.Equal(t, reports[1], expectedReports[1])
 
 	// running it the second time does nothing, since the correct container is already running
 	reports = executePodmanContainersBundle(r, podmanBundle)
+
 	assert.Empty(t, reports)
+
+	output := r.MustExec("su", "-c", "podman container ls --filter name="+containerName+" --format {{.Command}}", userName)
+	assert.Equal(t, string(output), podmanBundle.Containers[0].Command)
+
 }
 
 // executePodmanContainersBundle is a helper method to quickly execute podman containers bundle.
