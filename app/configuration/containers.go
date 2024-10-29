@@ -30,6 +30,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"go.qbee.io/agent/app/log"
 	"go.qbee.io/agent/app/utils"
 )
 
@@ -271,7 +272,9 @@ func (c Container) kill(ctx context.Context, containerID, containerBin string) {
 		containerBin, "kill", containerID,
 	}
 	// Attempt to forcefully kill the container
-	c.runContainerCmd(ctx, cmd)
+	if _, err := c.runContainerCmd(ctx, cmd); err != nil {
+		log.Errorf("Failed to kill container %s: %w", containerID, err)
+	}
 
 	// TODO: check if container is still present after kill
 	cmd = []string{
@@ -279,7 +282,9 @@ func (c Container) kill(ctx context.Context, containerID, containerBin string) {
 	}
 
 	// Attempt to remove the container
-	c.runContainerCmd(ctx, cmd)
+	if _, err := c.runContainerCmd(ctx, cmd); err != nil {
+		log.Errorf("Failed to remove container %s: %w", containerID, err)
+	}
 }
 
 // restart an existing container

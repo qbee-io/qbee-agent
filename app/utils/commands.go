@@ -36,6 +36,7 @@ func RunCommand(ctx context.Context, cmd []string) ([]byte, error) {
 	return runCommand(command)
 }
 
+// RunCommandAsRoot runs a command as user and returns its output.
 func RunCommandAsUser(ctx context.Context, cmd []string, user *user.User) ([]byte, error) {
 	command := NewCommand(ctx, cmd)
 
