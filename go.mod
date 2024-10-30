@@ -1,6 +1,6 @@
 module go.qbee.io/agent
 
-go 1.21
+go 1.22
 
 require (
 	github.com/creack/pty v1.1.21
