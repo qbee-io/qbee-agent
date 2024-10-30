@@ -63,6 +63,7 @@ func (agent *Agent) doSystemInventory(ctx context.Context) error {
 	systemInventory.System.LastConfigUpdate = fmt.Sprintf("%d", agent.Configuration.ConfigChangeTimestamp())
 	systemInventory.System.LastPolicyUpdate = systemInventory.System.LastConfigUpdate
 	systemInventory.System.AgentVersion = app.Version
+	systemInventory.System.RebootScheduled = agent.Configuration.ShouldReboot()
 
 	return agent.Inventory.Send(ctx, inventory.TypeSystem, systemInventory)
 }
