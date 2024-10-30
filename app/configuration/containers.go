@@ -537,7 +537,7 @@ func (a RegistryAuth) getConfigFilename() string {
 
 	if a.ContainerRuntime == podmanRuntimeType {
 		if a.user != nil {
-			return filepath.Join("run", "user", a.user.Uid, "containers", "auth.json")
+			return a.getPodmanUserConfigFile()
 		}
 		return podmanConfigFilename
 	}
@@ -546,4 +546,14 @@ func (a RegistryAuth) getConfigFilename() string {
 		return filepath.Join(a.user.HomeDir, ".docker", "config.json")
 	}
 	return dockerConfigFilename
+}
+
+func (a RegistryAuth) getPodmanUserConfigFile() string {
+
+	configFile := filepath.Join("/run", "user", a.user.Uid, "containers", "auth.json")
+	if _, err := os.Stat(configFile); err == nil {
+		return configFile
+	}
+
+	return filepath.Join("/tmp", "podman-run-"+a.user.Uid, "containers", "auth.json")
 }
