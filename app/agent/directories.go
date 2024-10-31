@@ -22,15 +22,16 @@ import (
 	"os"
 	"path/filepath"
 
-	"go.qbee.io/agent/app/configuration"
 	"go.qbee.io/agent/app/log"
 )
 
 const (
 	directoryMode        = 0700
+	directoryModeRead    = 0755
 	credentialsDirectory = "ppkeys"
 	appWorkingDirectory  = "app_workdir"
 	cacheDirectory       = "cache"
+	userCacheDirectory   = "user-cache"
 )
 
 // prepareDirectories makes sure that agent's directories are in place.
@@ -38,16 +39,40 @@ func prepareDirectories(cfgDirectory, stateDirectory string) error {
 	log.Infof("Preparing agent directories")
 
 	cacheDirectoryPath := filepath.Join(stateDirectory, appWorkingDirectory, cacheDirectory)
+	userCacheDirectoryPath := filepath.Join(stateDirectory, appWorkingDirectory, userCacheDirectory)
 
-	directories := []string{
-		filepath.Join(cfgDirectory, credentialsDirectory),
-		filepath.Join(cacheDirectoryPath, configuration.FileDistributionCacheDirectory),
-		filepath.Join(cacheDirectoryPath, configuration.SoftwareCacheDirectory),
-		filepath.Join(cacheDirectoryPath, configuration.DockerContainerDirectory),
+	directories := []struct {
+		path string
+		mode os.FileMode
+	}{
+		{
+			cfgDirectory,
+			directoryMode,
+		},
+		{
+			filepath.Join(cfgDirectory, credentialsDirectory),
+			directoryMode,
+		},
+		{
+			stateDirectory,
+			directoryModeRead,
+		},
+		{
+			filepath.Join(stateDirectory, appWorkingDirectory),
+			directoryModeRead,
+		},
+		{
+			cacheDirectoryPath,
+			directoryMode,
+		},
+		{
+			userCacheDirectoryPath,
+			directoryModeRead,
+		},
 	}
 
 	for _, directory := range directories {
-		if err := createDirectory(directory); err != nil {
+		if err := createDirectory(directory.path, directory.mode); err != nil {
 			return err
 		}
 	}
@@ -57,8 +82,8 @@ func prepareDirectories(cfgDirectory, stateDirectory string) error {
 
 // createDirectory checks whether directory exists and has correct permissions.
 // Directory will be created if not found.
-func createDirectory(path string) error {
-	if err := os.MkdirAll(path, directoryMode); err != nil {
+func createDirectory(path string, mode os.FileMode) error {
+	if err := os.MkdirAll(path, mode); err != nil {
 		return fmt.Errorf("error creating directory %s: %w", path, err)
 	}
 
@@ -71,8 +96,8 @@ func createDirectory(path string) error {
 		return fmt.Errorf("path %s is not a directory", path)
 	}
 
-	if stats.Mode() != directoryMode|fs.ModeDir {
-		if err = os.Chmod(path, directoryMode); err != nil {
+	if stats.Mode() != mode|fs.ModeDir {
+		if err = os.Chmod(path, mode); err != nil {
 			return fmt.Errorf("directory %s has incorrect permissions %s and unable to fix: %w,", path, stats.Mode(), err)
 		}
 	}

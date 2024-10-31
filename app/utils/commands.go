@@ -21,8 +21,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"os/user"
 	"runtime"
+	"strconv"
 	"syscall"
 	"time"
 )
@@ -30,15 +33,47 @@ import (
 // RunCommand runs a command and returns its output.
 func RunCommand(ctx context.Context, cmd []string) ([]byte, error) {
 	command := NewCommand(ctx, cmd)
+	return runCommand(command)
+}
 
+// RunCommandAsRoot runs a command as user and returns its output.
+func RunCommandAsUser(ctx context.Context, cmd []string, user *user.User) ([]byte, error) {
+	command := NewCommand(ctx, cmd)
+
+	// convert user id to int32
+	uid, err := strconv.ParseUint(user.Uid, 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("error converting uid to uint64: %w", err)
+	}
+	gid, err := strconv.ParseUint(user.Gid, 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("error converting gid to uint64: %w", err)
+	}
+
+	// set the PATH to current PATH
+	pathVar := os.Getenv("PATH")
+
+	// set environment variables
+	command.Env = append(command.Env, fmt.Sprintf("HOME=%s", user.HomeDir))
+	command.Env = append(command.Env, fmt.Sprintf("USER=%s", user.Username))
+	command.Env = append(command.Env, fmt.Sprintf("LOGNAME=%s", user.Username))
+	command.Env = append(command.Env, fmt.Sprintf("USERNAME=%s", user.Username))
+	command.Env = append(command.Env, fmt.Sprintf("PATH=%s", pathVar))
+
+	command.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}
+
+	return runCommand(command)
+}
+
+func runCommand(command *exec.Cmd) ([]byte, error) {
 	output, err := command.Output()
 	if err != nil {
 		exitError := new(exec.ExitError)
 		if errors.As(err, &exitError) {
-			return nil, fmt.Errorf("error running command %v: %w\n%s", cmd, err, exitError.Stderr)
+			return nil, fmt.Errorf("error running command %v: %w\n%s", command.Args, err, exitError.Stderr)
 		}
 
-		return nil, fmt.Errorf("error running command %v: %w", cmd, err)
+		return nil, fmt.Errorf("error running command %v: %w", command.Args, err)
 	}
 	return output, nil
 }

@@ -44,6 +44,9 @@ type Service struct {
 	// cacheDirectory is a directory where the agent stores its cache data
 	cacheDirectory string
 
+	// userCacheDirectory is a directory where the agent stores its non-root user cache data
+	userCacheDirectory string
+
 	// currentCommitID represents commit ID of committed device config currently applied to the system
 	currentCommitID string
 
@@ -89,6 +92,12 @@ func New(apiClient *api.Client, appDirectory, cacheDirectory string) *Service {
 // WithURLSigner sets the URL signer for the service.
 func (srv *Service) WithURLSigner(urlSigner URLSigner) *Service {
 	srv.urlSigner = urlSigner
+	return srv
+}
+
+// WithUserCacheDirectory sets the user cache directory for the service.
+func (srv *Service) WithUserCacheDirectory(userCacheDirectory string) *Service {
+	srv.userCacheDirectory = userCacheDirectory
 	return srv
 }
 
