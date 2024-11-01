@@ -37,6 +37,9 @@ RUN echo "deb [trusted=yes] http://download.docker.com/linux/debian bullseye sta
 RUN apt-get update && apt-get upgrade -y
 RUN apt-get install docker-ce-cli podman -y 
 
+# install docker cli
+RUN apt-get install docker-ce-cli -y
+
 # create empty agent configuration directory
 RUN mkdir /etc/qbee && echo '{}' > /etc/qbee/qbee-agent.json
 
