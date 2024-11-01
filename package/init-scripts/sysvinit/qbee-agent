@@ -14,6 +14,9 @@
 pidfile=/var/run/qbee-agent.pid
 launcher=/usr/bin/qbee-agent
 
+# shellcheck source=/dev/null
+[ -r /etc/default/qbee-agent ] && . /etc/default/qbee-agent
+
 start_qbee_agent()
 {
     echo "Starting qbee-agent"
@@ -34,28 +37,28 @@ die()
 
 case "$1" in
   start)
-        start_qbee_agent
-        ;;
+    start_qbee_agent
+    ;;
   stop)
-        stop_qbee_agent
-        ;;
+    stop_qbee_agent
+    ;;
   restart)
-        $0 stop
-        $0 start
-        ;;
+    $0 stop
+    $0 start
+    ;;
   status)
-        if [ -f $pidfile ]; then
-            echo "qbee-agent (pid $(cat $pidfile)) is running..."
-            exit 0
-        else
-            echo "qbee-agent is stopped"
-        fi
-        exit 3
-        ;;
+    if [ -f $pidfile ]; then
+        echo "qbee-agent (pid $(cat $pidfile)) is running..."
+        exit 0
+    else
+        echo "qbee-agent is stopped"
+    fi
+    exit 3
+    ;;
   *)
-        echo "Usage: qbee-agent { start | stop | restart | status }" >&2
-        exit 1
-        ;;
+    echo "Usage: qbee-agent { start | stop | restart | status }" >&2
+    exit 1
+    ;;
 esac
 
 exit 0
