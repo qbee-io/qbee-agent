@@ -29,7 +29,7 @@ func Test_Simple_Docker_Compose(t *testing.T) {
 	r := runner.New(t)
 
 	dockerComposeBundle := configuration.DockerComposeBundle{
-		Projects: []configuration.DockerCompose{
+		Projects: []configuration.Compose{
 			{
 				Name: "project-a",
 				File: "file:///docker-compose/compose-nobuild.yml",
@@ -59,7 +59,7 @@ func Test_Simple_Docker_Compose(t *testing.T) {
 	assert.Empty(t, reports)
 
 	dockerComposeBundle = configuration.DockerComposeBundle{
-		Projects: []configuration.DockerCompose{
+		Projects: []configuration.Compose{
 			{
 				Name: "project-b",
 				File: "file:///docker-compose/compose-nobuild.yml",
@@ -92,7 +92,7 @@ func Test_ComposeWithBuildContext(t *testing.T) {
 	r := runner.New(t)
 
 	dockerComposeBundle := configuration.DockerComposeBundle{
-		Projects: []configuration.DockerCompose{
+		Projects: []configuration.Compose{
 			{
 				Name:    "project-a",
 				File:    "file:///docker-compose/compose-build.yml",
@@ -124,7 +124,7 @@ func Test_ComposeWithBuildContext(t *testing.T) {
 	assert.Empty(t, reports)
 
 	dockerComposeBundle = configuration.DockerComposeBundle{
-		Projects: []configuration.DockerCompose{
+		Projects: []configuration.Compose{
 			{
 				Name:    "project-a",
 				File:    "file:///docker-compose/compose-build.yml",
