@@ -18,7 +18,6 @@ type Compose struct {
 	Parameters []Parameter `json:"parameters,omitempty"`
 }
 
-const dockerComposeMinimumVersion = "2.0.0"
 const composeFile = "compose.yml"
 const composeContext = "context"
 const dockerComposeTimeout = "60"
