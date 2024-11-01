@@ -35,7 +35,7 @@ RUN echo "deb [trusted=yes] http://download.docker.com/linux/debian bullseye sta
 
 # update apt cache
 RUN apt-get update && apt-get upgrade -y
-RUN apt-get install docker-ce-cli podman -y 
+RUN apt-get install docker-ce-cli podman podman-compose -y 
 
 # install docker cli
 RUN apt-get install docker-ce-cli -y
