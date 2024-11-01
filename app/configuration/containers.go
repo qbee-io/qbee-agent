@@ -17,60 +17,21 @@
 package configuration
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
-	"os/user"
 	"path/filepath"
 	"strings"
 
-	"go.qbee.io/agent/app/log"
+	"go.qbee.io/agent/app/container"
 	"go.qbee.io/agent/app/utils"
 )
 
-const dockerRuntimeType = "docker"
-const podmanRuntimeType = "podman"
-
-// Container defines a docker container instance.
-type Container struct {
-	// ContainerRuntime defines the container runtime to be used.
-	ContainerRuntime string `json:"-"`
-
-	// Name used by the container.
-	Name string `json:"name"`
-
-	// Image used by the container.
-	Image string `json:"image"`
-
-	// Args defines command line arguments for "docker run".
-	Args string `json:"docker_args"`
-
-	// EnvFile defines an env file (from file manager) to be used inside container.
-	EnvFile string `json:"env_file"`
-
-	// Command to be executed in the container.
-	Command string `json:"command"`
-
-	// PreCondition is a shell command that needs to be true before starting the container.
-	PreCondition string `json:"pre_condition,omitempty"`
-
-	// SkipRestart defines whether the container should be restarted if it's stopped
-	SkipRestart bool `json:"skip_restart,omitempty"`
-
-	// ExecUser defines the user to execute the container as. Podman only.
-	ExecUser string `json:"exec_user,omitempty"`
-
-	user *user.User
-}
-
-// execute ensures that configured container is running
-func (c Container) execute(ctx context.Context, srv *Service, containerBin string) error {
+// executeContainer ensures that configured container is running
+func executeContainer(ctx context.Context, srv *Service, containerBin string, c container.Container) error {
 	var err error
 	var needRestart bool
 
@@ -79,47 +40,54 @@ func (c Container) execute(ctx context.Context, srv *Service, containerBin strin
 		return nil
 	}
 
-	if err = c.userCheck(); err != nil {
+	if err = c.UserCheck(); err != nil {
 		ReportError(ctx, err, "Cannot check user for container %s.", c.Name)
 		return err
 	}
 
-	envFilePath := c.localEnvFilePath(srv)
+	envFilePath := c.LocalEnvFilePath()
 	if envFilePath != "" {
 		if needRestart, err = srv.downloadFile(ctx, "", c.EnvFile, envFilePath); err != nil {
 			return err
 		}
 
-		if err = c.setUserFilePermissions(srv.userCacheDirectory); err != nil {
+		if err = c.SetUserFilePermissions(srv.userCacheDirectory); err != nil {
 			ReportError(ctx, err, "Cannot set file permissions for env file %s.", c.EnvFile)
 			return err
 		}
 	}
 
-	var container *containerInfo
-	if container, err = c.getStatus(ctx, containerBin); err != nil {
+	var container *container.ContainerInfo
+	if container, err = c.GetStatus(ctx, containerBin); err != nil {
 		ReportError(ctx, err, "Cannot check status for image %s.", c.Image)
 		return err
 	}
 
 	// start a new container if it doesn't exist
-	if !container.exists() {
-		return c.run(ctx, srv, containerBin)
+	if !container.Exists() {
+		output, err := c.Run(ctx, containerBin)
+		if err != nil {
+			ReportError(ctx, err, "Cannot start container for image %s.", c.Image)
+			return err
+		}
+
+		ReportInfo(ctx, output, "Successfully started container for image %s.", c.Image)
+		return nil
 	}
 
 	if c.SkipRestart {
 		return nil
 	}
 
-	args, err := c.args(srv)
+	args, err := c.GetCmdArgs()
 	if err != nil {
 		return err
 	}
 
-	if !container.isRunning() {
+	if !container.IsRunning() {
 		ReportWarning(ctx, nil, "Container exited for image %s.", c.Image)
 		needRestart = true
-	} else if !container.argsMatch(args) {
+	} else if !container.ArgsMatch(args) {
 		ReportWarning(ctx, nil, "Container configuration update detected for image %s.", c.Image)
 		needRestart = true
 	}
@@ -128,319 +96,15 @@ func (c Container) execute(ctx context.Context, srv *Service, containerBin strin
 		return nil
 	}
 
-	return c.restart(ctx, srv, containerBin, container.ID)
-}
-
-// userCheck checks if the user exists and sets it to the container.
-func (c *Container) userCheck() error {
-	if c.ExecUser == "" {
-		return nil
-	}
-
-	u, err := user.Lookup(c.ExecUser)
+	output, err := c.Restart(ctx, containerBin, container.ID)
 	if err != nil {
-		return err
-	}
-
-	if u.Uid == "0" {
-		return nil
-	}
-
-	c.user = u
-	return nil
-}
-
-// args returns docker cli command line arguments needed to launch the container.
-func (c Container) args(srv *Service) ([]string, error) {
-	args := []string{
-		"--name", c.Name,
-	}
-
-	envFilePath := c.localEnvFilePath(srv)
-	if envFilePath != "" {
-		args = append(args, "--env-file", envFilePath)
-	}
-
-	extraArgs, err := utils.ParseCommandLine(c.Args)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(extraArgs) != 0 {
-		args = append(args, extraArgs...)
-	}
-
-	args = append(args, c.Image)
-
-	containerCmd, err := utils.ParseCommandLine(c.Command)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(containerCmd) != 0 {
-		return append(args, containerCmd...), nil
-	}
-	return args, nil
-}
-
-// id returns container identifier base on its name.
-func (c Container) id() string {
-	return fmt.Sprintf("%x", sha256.Sum256([]byte(c.Name)))
-}
-
-// setUserFilePermissions sets file permissions for the container env file.
-func (c Container) setUserFilePermissions(userCacheDirectory string) error {
-	if c.user == nil {
-		return nil
-	}
-
-	cacheDir := filepath.Join(userCacheDirectory, c.user.Uid)
-
-	return filepath.Walk(cacheDir, func(path string, info fs.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		return utils.SetFileOwner(path, c.user)
-	})
-}
-
-// localEnvFilePath returns container specific local path of the envfile.
-func (c Container) localEnvFilePath(srv *Service) string {
-	if c.EnvFile == "" {
-		return ""
-	}
-
-	cachePath := srv.cacheDirectory
-	if c.user != nil {
-		cachePath = filepath.Join(srv.userCacheDirectory, c.user.Uid)
-	}
-
-	if c.ContainerRuntime == podmanRuntimeType {
-		return filepath.Join(cachePath, PodmanContainerDirectory, fmt.Sprintf("%s.envfile", c.id()))
-	}
-
-	return filepath.Join(cachePath, DockerContainerDirectory, fmt.Sprintf("%s.envfile", c.id()))
-}
-
-// start a container
-func (c Container) run(ctx context.Context, srv *Service, containerBin string) error {
-	runCmd, err := c.getRunCommand(srv, containerBin)
-	if err != nil {
-		return err
-	}
-
-	output, err := c.runContainerCmd(ctx, runCmd)
-	if err != nil {
-		ReportError(ctx, err, "Unable to start container for image %s.", c.Image)
-		return err
-	}
-
-	ReportInfo(ctx, output, "Successfully started container for image %s.", c.Image)
-
-	return nil
-}
-
-func (c Container) runContainerCmd(ctx context.Context, cmd []string) ([]byte, error) {
-	if c.user == nil {
-		return utils.RunCommand(ctx, cmd)
-	}
-
-	return utils.RunCommandAsUser(ctx, cmd, c.user)
-}
-
-// getRunCommand returns run command string for the container.
-func (c Container) getRunCommand(srv *Service, containerBin string) ([]string, error) {
-	args, err := c.args(srv)
-
-	if err != nil {
-		return nil, err
-	}
-
-	runCmd := []string{
-		containerBin, "run",
-		"--detach",
-		"--label", fmt.Sprintf("qbee-docker-id=%s", c.Name),
-		"--label", fmt.Sprintf("qbee-docker-args-sha=%x", sha256.Sum256([]byte(strings.Join(args, " ")))),
-	}
-
-	return append(runCmd, args...), nil
-}
-
-// kill and remove a container. Do not track errors.
-func (c Container) kill(ctx context.Context, containerID, containerBin string) {
-	cmd := []string{
-		containerBin, "kill", containerID,
-	}
-	// Attempt to forcefully kill the container
-	if _, err := c.runContainerCmd(ctx, cmd); err != nil {
-		log.Errorf("Failed to kill container %s: %w", containerID, err)
-	}
-
-	// TODO: check if container is still present after kill
-	cmd = []string{
-		containerBin, "rm", containerID,
-	}
-
-	// Attempt to remove the container
-	if _, err := c.runContainerCmd(ctx, cmd); err != nil {
-		log.Errorf("Failed to remove container %s: %w", containerID, err)
-	}
-}
-
-// restart an existing container
-func (c Container) restart(ctx context.Context, srv *Service, containerBin, containerID string) error {
-
-	runCmd, err := c.getRunCommand(srv, containerBin)
-	if err != nil {
-		ReportError(ctx, err, "Unable to get run command for image %s.", c.Image)
-		return err
-	}
-
-	c.kill(ctx, containerID, containerBin)
-
-	output, err := c.runContainerCmd(ctx, runCmd)
-	if err != nil {
-		ReportError(ctx, err, "Unable to restart container for image %s.", c.Image)
+		ReportError(ctx, err, "Cannot restart container for image %s.", c.Image)
 		return err
 	}
 
 	ReportInfo(ctx, output, "Successfully restarted container for image %s.", c.Image)
-
 	return nil
 }
-
-type containerInfo struct {
-	ID     string            `json:"ID"`
-	Labels map[string]string `json:"Labels"`
-	State  string            `json:"State"`
-}
-
-// isRunning returns true if container is currently running.
-func (ci *containerInfo) isRunning() bool {
-	return ci.State == "running"
-}
-
-// exists returns true if container exists (regardless of its state).
-func (ci *containerInfo) exists() bool {
-	return ci.ID != ""
-}
-
-// returns true if container is running with the right set of run arguments.
-func (ci *containerInfo) argsMatch(args []string) bool {
-	expectedArgsDigest := fmt.Sprintf("%x", sha256.Sum256([]byte(strings.Join(args, " "))))
-
-	if val, ok := ci.Labels["qbee-docker-args-sha"]; ok {
-		return val == expectedArgsDigest
-	}
-	return false
-}
-
-// getStatus returns a status for
-func (c Container) getStatus(ctx context.Context, containerBin string) (*containerInfo, error) {
-
-	cmd := []string{
-		containerBin,
-		"container", "ls",
-		"--all",
-		"--no-trunc",
-		"--filter", fmt.Sprintf("label=qbee-docker-id=%s", c.Name),
-		"--format", "{{json .}}",
-	}
-
-	var err error
-	var output []byte
-
-	output, err = c.runContainerCmd(ctx, cmd)
-	if err != nil {
-		return nil, err
-	}
-
-	ci := new(containerInfo)
-	if bytes.TrimSpace(output) == nil {
-		return ci, nil
-	}
-
-	if c.ContainerRuntime == podmanRuntimeType {
-		return c.parseStatusPodman(output)
-	}
-
-	if c.ContainerRuntime == dockerRuntimeType {
-		return c.parseStatusDocker(output)
-	}
-
-	return nil, fmt.Errorf("unsupported container runtime: %s", containerBin)
-}
-
-// parseStatusPodman returns a status for a container using podman command.
-func (c Container) parseStatusPodman(output []byte) (*containerInfo, error) {
-
-	containers := make([]containerInfo, 0)
-
-	if err := json.Unmarshal(output, &containers); err != nil {
-		return nil, err
-	}
-
-	if len(containers) == 0 {
-		return new(containerInfo), nil
-	}
-
-	return &containers[0], nil
-}
-
-// getStatusDocker returns a status for a container using docker command.
-func (c Container) parseStatusDocker(output []byte) (*containerInfo, error) {
-
-	var dockerContainer struct {
-		ID     string `json:"ID"`
-		Labels string `json:"Labels"`
-		State  string `json:"State"`
-	}
-
-	if err := json.Unmarshal(output, &dockerContainer); err != nil {
-		return nil, err
-	}
-
-	ci := new(containerInfo)
-
-	ci.Labels = make(map[string]string)
-	ci.ID = dockerContainer.ID
-	ci.State = dockerContainer.State
-
-	for _, label := range strings.Split(dockerContainer.Labels, ",") {
-		parts := strings.Split(label, "=")
-		if len(parts) != 2 {
-			continue
-		}
-
-		ci.Labels[parts[0]] = parts[1]
-	}
-	return ci, nil
-}
-
-// RegistryAuth defines credentials for docker registry authentication.
-type RegistryAuth struct {
-	// ContainerRuntime defines the container runtime to be used.
-	ContainerRuntime string `json:"-"`
-
-	// Server hostname of the registry.
-	// When server is empty, we will use Docker Hub: https://registry-1.docker.io/v2/
-	Server string `json:"server"`
-
-	// Username for the registry.
-	Username string `json:"username"`
-
-	// Password for the Username.
-	Password string `json:"password"`
-
-	// ExecUser defines the user to execute the container as. Podman only.
-	ExecUser string `json:"exec_user,omitempty"`
-
-	user *user.User
-}
-
-const dockerHubURL = "https://index.docker.io/v1/"
-const dockerConfigFilename = "/root/.docker/config.json"
-const podmanConfigFilename = "/run/containers/0/auth.json"
 
 // DockerConfig is used to read-only data about docker repository auths.
 type DockerConfig struct {
@@ -449,15 +113,15 @@ type DockerConfig struct {
 	} `json:"auths"`
 }
 
-func (a RegistryAuth) execute(ctx context.Context, dockerBin string) error {
+func executeAuth(ctx context.Context, dockerBin string, a container.RegistryAuth) error {
 	dockerConfig := new(DockerConfig)
 
-	if err := a.userCheck(); err != nil {
+	if err := a.UserCheck(); err != nil {
 		ReportError(ctx, err, "Cannot check user for registry %s.", a.URL())
 		return err
 	}
 
-	configFilename := a.getConfigFilename()
+	configFilename := a.GetConfigFilename()
 
 	// read and parse existing config file
 	dockerConfigData, err := os.ReadFile(configFilename)
@@ -474,13 +138,13 @@ func (a RegistryAuth) execute(ctx context.Context, dockerBin string) error {
 	}
 
 	// if we have matching credentials set for a registry, we can return
-	if encodedCredentials, ok := dockerConfig.Auths[a.URL()]; ok && a.matches(encodedCredentials.Auth) {
+	if encodedCredentials, ok := dockerConfig.Auths[a.URL()]; ok && a.Matches(encodedCredentials.Auth) {
 		return nil
 	}
 
 	// otherwise we need to add those credentials with login command
 	cmd := []string{dockerBin, "login", "--username", a.Username, "--password", a.Password, a.URL()}
-	output, err := a.execLogin(ctx, cmd)
+	output, err := a.ExecLogin(ctx, cmd)
 	if err != nil {
 		ReportError(ctx, err, "Unable to authenticate with %s repository.", a.URL())
 		return err
@@ -490,70 +154,126 @@ func (a RegistryAuth) execute(ctx context.Context, dockerBin string) error {
 	return nil
 }
 
-func (a RegistryAuth) execLogin(ctx context.Context, cmd []string) ([]byte, error) {
-	if a.user != nil {
-		return utils.RunCommandAsUser(ctx, cmd, a.user)
-	}
-	return utils.RunCommand(ctx, cmd)
+func executeCompose(ctx context.Context, srv *Service, project container.Compose) error {
 
-}
-
-// URL returns registry server, unless it's empty, then the default docker hub URL.
-func (a RegistryAuth) URL() string {
-	if a.Server == "" {
-		return dockerHubURL
-	}
-
-	return a.Server
-}
-
-// userCheck checks if the user exists and sets it to the container.
-func (a *RegistryAuth) userCheck() error {
-	if a.ExecUser == "" {
+	if !CheckPreCondition(ctx, project.PreCondition) {
 		return nil
 	}
 
-	u, err := user.Lookup(a.ExecUser)
+	created, err := composeGetResources(ctx, srv, project)
 	if err != nil {
+		ReportError(ctx, err, "Cannot get resources for compose project %s", project.Name)
 		return err
 	}
 
-	if u.Uid == "0" {
+	if !created {
 		return nil
 	}
 
-	a.user = u
+	output, err := project.ComposeStart(ctx)
+	if err != nil {
+		ReportError(ctx, err, "Cannot start compose project %s", project.Name)
+		return err
+	}
+
+	ReportInfo(ctx, output, "Started compose project %s", project.Name)
 	return nil
 }
 
-// matches checks whether current RegistryAuth matches provided encoded credentials.
-func (a RegistryAuth) matches(encodedCredentials string) bool {
-	encoded := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", a.Username, a.Password)))
+func composeGetResources(ctx context.Context, srv *Service, compose container.Compose) (bool, error) {
+	downloadedComposeFile, err := composeGetComposeFile(ctx, srv, compose)
+	if err != nil {
+		return false, err
+	}
 
-	return encoded == encodedCredentials
+	downloadedContextFile, err := composeGetContext(ctx, srv, compose)
+	if err != nil {
+		return false, err
+	}
+
+	return downloadedComposeFile || downloadedContextFile, nil
 }
 
-func (a RegistryAuth) getConfigFilename() string {
+func composeGetComposeFile(ctx context.Context, srv *Service, project container.Compose) (bool, error) {
+	projectDirectory := project.ComposeGetProjectDirectory()
+	if err := os.MkdirAll(projectDirectory, 0700); err != nil {
+		ReportError(ctx, err, "Cannot create directory for compose project %s", project.Name)
+		return false, err
+	}
 
-	if a.ContainerRuntime == podmanRuntimeType {
-		if a.user != nil {
-			return a.getPodmanUserConfigFile()
+	composeFilePath := filepath.Join(projectDirectory, container.ComposeFile)
+
+	return srv.downloadFile(ctx, "", project.File, composeFilePath)
+}
+
+func composeGetContext(ctx context.Context, service *Service, project container.Compose) (bool, error) {
+
+	if project.Context == "" {
+		return false, nil
+	}
+
+	if !utils.IsSupportedTarExtension(project.Context) {
+		return false, fmt.Errorf("unsupported context file extension %s", project.Context)
+	}
+
+	contextState := filepath.Join(project.ComposeGetProjectDirectory(), "context-metadata.json")
+
+	contextTmpFilename := strings.Join([]string{container.ComposeContext, utils.GetTarExtension(project.Context)}, ".")
+	contextDst := filepath.Join(project.ComposeGetProjectDirectory(), "_tmp", contextTmpFilename)
+
+	downloaded, err := downloadStateFileCompare(ctx, service, contextState, project.Context, contextDst)
+
+	if err != nil {
+		return false, err
+	}
+
+	if !downloaded {
+		return false, nil
+	}
+
+	contextUnpackDir := filepath.Join(project.ComposeGetProjectDirectory(), container.ComposeContext)
+
+	if err := utils.UnpackTar(contextDst, contextUnpackDir); err != nil {
+		return false, err
+	}
+
+	if err := os.Remove(contextDst); err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+func composeClean(ctx context.Context, cachepath, userCachePath string, configuredProjects map[string]container.Compose, runTimeType container.ContainerRuntimeType) error {
+
+	if _, err := os.Stat(cachepath); err != nil {
+		if os.IsNotExist(err) {
+			return nil
 		}
-		return podmanConfigFilename
+		return err
 	}
 
-	if a.user != nil {
-		return filepath.Join(a.user.HomeDir, ".docker", "config.json")
-	}
-	return dockerConfigFilename
-}
-
-func (a RegistryAuth) getPodmanUserConfigFile() string {
-
-	configFile := filepath.Join("/run", "user", a.user.Uid, "containers", "auth.json")
-	if _, err := os.Stat(configFile); err == nil {
-		return configFile
+	cachePathProjects, err := os.ReadDir(cachepath)
+	if err != nil {
+		return fmt.Errorf("cannot list cache directory: %w", err)
 	}
 
-	return filepath.Join("/tmp", "podman-run-"+a.user.Uid, "containers", "auth.json")
+	for _, path := range cachePathProjects {
+		if !path.IsDir() {
+			continue
+		}
+
+		if _, ok := configuredProjects[path.Name()]; ok {
+			continue
+		}
+
+		output, err := container.ComposeRemoveProject(ctx, userCachePath, path.Name(), runTimeType)
+		if err != nil {
+			ReportError(ctx, err, "Cannot remove compose project %s", path.Name())
+			return err
+		}
+
+		ReportInfo(ctx, output, "Removed unconfigured compose project %s", path.Name())
+	}
+	return nil
 }

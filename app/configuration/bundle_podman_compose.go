@@ -19,7 +19,6 @@ package configuration
 import (
 	"context"
 	"path/filepath"
-	"regexp"
 
 	"go.qbee.io/agent/app/container"
 	"go.qbee.io/agent/app/utils"
@@ -50,7 +49,7 @@ We need some way of unpacking context
 //	}
 
 // DockerComposeBundle controls docker compose projects running in the system.
-type DockerComposeBundle struct {
+type PodmanComposeBundle struct {
 	Metadata
 
 	// DockerCompose projects to be running in the system.
@@ -63,34 +62,19 @@ type DockerComposeBundle struct {
 	Clean bool `json:"clean,omitempty"`
 }
 
-var dockerComposeVersionRE = regexp.MustCompile(`Docker Compose version v([0-9.]+)`)
-
-const dockerComposeMinimumVersion = "2.0.0"
-
 // Execute docker compose configuration bundle on the system.
-func (c DockerComposeBundle) Execute(ctx context.Context, service *Service) error {
+func (c PodmanComposeBundle) Execute(ctx context.Context, service *Service) error {
 
 	configuredProjects := make(map[string]container.Compose)
 
-	output, err := utils.RunCommand(ctx, []string{"docker", "compose", "version"})
+	_, err := utils.RunCommand(ctx, []string{"podman-compose", "version"})
 	if err != nil {
 		ReportError(ctx, err, "Docker Compose is not installed")
 		return err
 	}
 
-	if !dockerComposeVersionRE.MatchString(string(output)) {
-		ReportError(ctx, err, "Docker Compose version could not be determined")
-		return err
-	}
-
-	version := dockerComposeVersionRE.FindStringSubmatch(string(output))[1]
-	if !utils.IsNewerVersionOrEqual(version, dockerComposeMinimumVersion) {
-		ReportError(ctx, err, "Docker Compose version %s is not supported. Minimum version is %s", version, dockerComposeMinimumVersion)
-		return err
-	}
-
 	for _, project := range c.Projects {
-		project.ContainerRuntime = container.DockerRuntimeType
+		project.ContainerRuntime = container.PodmanRuntimeType
 		project.Name = resolveParameters(ctx, project.Name)
 		project.File = resolveParameters(ctx, project.File)
 		project.Context = resolveParameters(ctx, project.Context)
@@ -99,17 +83,17 @@ func (c DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 		configuredProjects[project.Name] = project
 	}
 
-	cacheDirectory := filepath.Join(service.cacheDirectory, DockerComposeDirectory)
-	userCacheDirectory := filepath.Join(service.userCacheDirectory, DockerComposeDirectory)
+	cacheDirectory := filepath.Join(service.cacheDirectory, PodmanComposeDirectory)
+	userCacheDirectory := filepath.Join(service.userCacheDirectory, PodmanComposeDirectory)
 
 	if c.Clean {
-		if err := composeClean(ctx, cacheDirectory, userCacheDirectory, configuredProjects, container.DockerRuntimeType); err != nil {
+		if err := composeClean(ctx, cacheDirectory, userCacheDirectory, configuredProjects, container.PodmanRuntimeType); err != nil {
 			ReportError(ctx, err, "Cannot clean up compose projects")
 			return err
 		}
 	}
 
-	for _, project := range c.Projects {
+	for _, project := range configuredProjects {
 
 		project.SetCacheDirectory(cacheDirectory, userCacheDirectory)
 

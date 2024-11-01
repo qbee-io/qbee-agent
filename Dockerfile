@@ -23,6 +23,7 @@ ARG version
 
 # add qbee-dev apt repo
 COPY test/resources/debian /apt-repo
+COPY test/resources/compose /compose
 RUN echo "deb [trusted=yes] file:/apt-repo/repo ./" > /etc/apt/sources.list.d/qbee-dev.list
 
 # Install ca-certificates in latest version

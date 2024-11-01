@@ -20,6 +20,9 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"path/filepath"
+
+	"go.qbee.io/agent/app/container"
 )
 
 // PodmanContainerBundle controls docker containers running in the system.
@@ -48,10 +51,10 @@ type PodmanContainerBundle struct {
 	Metadata
 
 	// Containers is a list of containers to be managed.
-	Containers []Container `json:"items"`
+	Containers []container.Container `json:"items"`
 
 	// RegistryAuths is a list of registry authentication credentials.
-	RegistryAuths []RegistryAuth `json:"registry_auths"`
+	RegistryAuths []container.RegistryAuth `json:"registry_auths"`
 }
 
 // Execute ensures that the specified containers are in the desired state.
@@ -63,33 +66,39 @@ func (p PodmanContainerBundle) Execute(ctx context.Context, service *Service) er
 	}
 
 	// populate all registry credentials
-	for _, auth := range p.RegistryAuths {
-		auth.ContainerRuntime = podmanRuntimeType
-		auth.Server = resolveParameters(ctx, auth.Server)
-		auth.Username = resolveParameters(ctx, auth.Username)
-		auth.Password = resolveParameters(ctx, auth.Password)
+	for _, execAuth := range p.RegistryAuths {
+		execAuth.ContainerRuntime = container.PodmanRuntimeType
+		execAuth.Server = resolveParameters(ctx, execAuth.Server)
+		execAuth.Username = resolveParameters(ctx, execAuth.Username)
+		execAuth.Password = resolveParameters(ctx, execAuth.Password)
 
-		if err = auth.execute(ctx, podmanBin); err != nil {
-			ReportError(ctx, err, "Unable to authenticate with %s repository.", auth.URL())
+		if err = executeAuth(ctx, podmanBin, execAuth); err != nil {
+			ReportError(ctx, err, "Unable to authenticate with %s repository.", execAuth.URL())
 			return err
 		}
 	}
 
-	for containerIndex, container := range p.Containers {
-		container.ContainerRuntime = podmanRuntimeType
-		container.Name = resolveParameters(ctx, container.Name)
-		container.Image = resolveParameters(ctx, container.Image)
-		container.Args = resolveParameters(ctx, container.Args)
-		container.EnvFile = resolveParameters(ctx, container.EnvFile)
-		container.Command = resolveParameters(ctx, container.Command)
-		container.PreCondition = resolveParameters(ctx, container.PreCondition)
+	// execute all containers
+	cacheDirectory := filepath.Join(service.cacheDirectory, PodmanContainerDirectory)
+	userCacheDirectory := filepath.Join(service.userCacheDirectory, PodmanContainerDirectory)
+
+	for containerIndex, execContainer := range p.Containers {
+		execContainer.ContainerRuntime = container.PodmanRuntimeType
+		execContainer.Name = resolveParameters(ctx, execContainer.Name)
+		execContainer.Image = resolveParameters(ctx, execContainer.Image)
+		execContainer.Args = resolveParameters(ctx, execContainer.Args)
+		execContainer.EnvFile = resolveParameters(ctx, execContainer.EnvFile)
+		execContainer.Command = resolveParameters(ctx, execContainer.Command)
+		execContainer.PreCondition = resolveParameters(ctx, execContainer.PreCondition)
 
 		// for containers with empty name, use its index
-		if container.Name == "" {
-			container.Name = fmt.Sprintf("%d", containerIndex)
+		if execContainer.Name == "" {
+			execContainer.Name = fmt.Sprintf("%d", containerIndex)
 		}
 
-		if err = container.execute(ctx, service, podmanBin); err != nil {
+		execContainer.SetCacheDirectory(cacheDirectory, userCacheDirectory)
+
+		if err = executeContainer(ctx, service, podmanBin, execContainer); err != nil {
 			return err
 		}
 	}

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"go.qbee.io/agent/app/configuration"
+	"go.qbee.io/agent/app/container"
 	"go.qbee.io/agent/app/utils/assert"
 	"go.qbee.io/agent/app/utils/runner"
 )
@@ -32,7 +33,7 @@ func Test_PodmanContainers_Container_Start(t *testing.T) {
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
 	podmanBundle := configuration.PodmanContainerBundle{
-		Containers: []configuration.Container{
+		Containers: []container.Container{
 			{
 				Name:    containerName,
 				Image:   "alpine:latest",
@@ -66,7 +67,7 @@ func Test_PodmanContainers_Container_Change(t *testing.T) {
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
 	podmanBundle := configuration.PodmanContainerBundle{
-		Containers: []configuration.Container{
+		Containers: []container.Container{
 			{
 				Name:    containerName,
 				Image:   "alpine:latest",
@@ -101,7 +102,7 @@ func Test_PodmanContainers_Container_StartExited(t *testing.T) {
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
 	podmanBundle := configuration.PodmanContainerBundle{
-		Containers: []configuration.Container{
+		Containers: []container.Container{
 			{
 				Name:    containerName,
 				Image:   "alpine:latest",
@@ -121,7 +122,7 @@ func Test_PodmanContainers_Container_StartExited(t *testing.T) {
 
 	// running it the second time re-starts exited container
 	podmanBundle = configuration.PodmanContainerBundle{
-		Containers: []configuration.Container{
+		Containers: []container.Container{
 			{
 				Name:    containerName,
 				Image:   "alpine:latest",
@@ -154,7 +155,7 @@ func Test_PodmanContainers_As_User_Container_Start(t *testing.T) {
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
 	podmanBundle := configuration.PodmanContainerBundle{
-		Containers: []configuration.Container{
+		Containers: []container.Container{
 			{
 				Name:     containerName,
 				Image:    "alpine:latest",

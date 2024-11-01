@@ -20,6 +20,9 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"path/filepath"
+
+	"go.qbee.io/agent/app/container"
 )
 
 // DockerContainersBundle controls docker containers running in the system.
@@ -48,10 +51,10 @@ type DockerContainersBundle struct {
 	Metadata
 
 	// Containers to be running in the system.
-	Containers []Container `json:"items"`
+	Containers []container.Container `json:"items"`
 
 	// RegistryAuths contains credentials to private docker registries.
-	RegistryAuths []RegistryAuth `json:"registry_auths"`
+	RegistryAuths []container.RegistryAuth `json:"registry_auths"`
 }
 
 // Execute docker containers configuration bundle on the system.
@@ -64,32 +67,37 @@ func (d DockerContainersBundle) Execute(ctx context.Context, service *Service) e
 
 	// populate all registry credentials
 	for _, auth := range d.RegistryAuths {
-		auth.ContainerRuntime = dockerRuntimeType
+		auth.ContainerRuntime = container.DockerRuntimeType
 		auth.Server = resolveParameters(ctx, auth.Server)
 		auth.Username = resolveParameters(ctx, auth.Username)
 		auth.Password = resolveParameters(ctx, auth.Password)
 
-		if err = auth.execute(ctx, dockerBin); err != nil {
+		if err = executeAuth(ctx, dockerBin, auth); err != nil {
 			ReportError(ctx, err, "Unable to authenticate with %s repository.", auth.URL())
 			return err
 		}
 	}
 
-	for containerIndex, container := range d.Containers {
-		container.ContainerRuntime = dockerRuntimeType
-		container.Name = resolveParameters(ctx, container.Name)
-		container.Image = resolveParameters(ctx, container.Image)
-		container.Args = resolveParameters(ctx, container.Args)
-		container.EnvFile = resolveParameters(ctx, container.EnvFile)
-		container.Command = resolveParameters(ctx, container.Command)
-		container.PreCondition = resolveParameters(ctx, container.PreCondition)
+	cacheDirectory := filepath.Join(service.cacheDirectory, PodmanContainerDirectory)
+	userCacheDirectory := filepath.Join(service.userCacheDirectory, PodmanContainerDirectory)
+
+	for containerIndex, execContainer := range d.Containers {
+		execContainer.ContainerRuntime = container.DockerRuntimeType
+		execContainer.Name = resolveParameters(ctx, execContainer.Name)
+		execContainer.Image = resolveParameters(ctx, execContainer.Image)
+		execContainer.Args = resolveParameters(ctx, execContainer.Args)
+		execContainer.EnvFile = resolveParameters(ctx, execContainer.EnvFile)
+		execContainer.Command = resolveParameters(ctx, execContainer.Command)
+		execContainer.PreCondition = resolveParameters(ctx, execContainer.PreCondition)
 
 		// for containers with empty name, use its index
-		if container.Name == "" {
-			container.Name = fmt.Sprintf("%d", containerIndex)
+		if execContainer.Name == "" {
+			execContainer.Name = fmt.Sprintf("%d", containerIndex)
 		}
 
-		if err = container.execute(ctx, service, dockerBin); err != nil {
+		execContainer.SetCacheDirectory(cacheDirectory, userCacheDirectory)
+
+		if err = executeContainer(ctx, service, dockerBin, execContainer); err != nil {
 			return err
 		}
 	}

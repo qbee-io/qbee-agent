@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"go.qbee.io/agent/app/configuration"
+	"go.qbee.io/agent/app/container"
 	"go.qbee.io/agent/app/utils/assert"
 	"go.qbee.io/agent/app/utils/runner"
 )
@@ -29,10 +30,10 @@ func Test_Simple_Docker_Compose(t *testing.T) {
 	r := runner.New(t)
 
 	dockerComposeBundle := configuration.DockerComposeBundle{
-		Projects: []configuration.Compose{
+		Projects: []container.Compose{
 			{
 				Name: "project-a",
-				File: "file:///docker-compose/compose-nobuild.yml",
+				File: "file:///compose/compose-nobuild.yml",
 			},
 		},
 	}
@@ -48,7 +49,7 @@ func Test_Simple_Docker_Compose(t *testing.T) {
 
 	reports, _ := configuration.ExecuteTestConfigInDocker(r, config)
 	expectedReports := []string{
-		"[INFO] Successfully downloaded file file:///docker-compose/compose-nobuild.yml to /var/lib/qbee/app_workdir/cache/docker_compose/project-a/compose.yml",
+		"[INFO] Successfully downloaded file file:///compose/compose-nobuild.yml to /var/lib/qbee/app_workdir/cache/docker_compose/project-a/compose.yml",
 		"[INFO] Started compose project project-a",
 	}
 
@@ -59,10 +60,10 @@ func Test_Simple_Docker_Compose(t *testing.T) {
 	assert.Empty(t, reports)
 
 	dockerComposeBundle = configuration.DockerComposeBundle{
-		Projects: []configuration.Compose{
+		Projects: []container.Compose{
 			{
 				Name: "project-b",
-				File: "file:///docker-compose/compose-nobuild.yml",
+				File: "file:///compose/compose-nobuild.yml",
 			},
 		},
 		Clean: true,
@@ -79,12 +80,14 @@ func Test_Simple_Docker_Compose(t *testing.T) {
 
 	reports, _ = configuration.ExecuteTestConfigInDocker(r, config)
 	expectedReports = []string{
-		"[INFO] Successfully downloaded file file:///docker-compose/compose-nobuild.yml to /var/lib/qbee/app_workdir/cache/docker_compose/project-b/compose.yml",
+		"[INFO] Removed unconfigured compose project project-a",
+		"[INFO] Successfully downloaded file file:///compose/compose-nobuild.yml to /var/lib/qbee/app_workdir/cache/docker_compose/project-b/compose.yml",
 		"[INFO] Started compose project project-b",
 	}
 
-	assert.Equal(t, reports, expectedReports)
 	r.MustExec("docker", "compose", "-p", "project-b", "down", "--remove-orphans", "--volumes", "--timeout", "60", "--rmi", "all")
+	assert.Equal(t, reports, expectedReports)
+
 }
 
 func Test_ComposeWithBuildContext(t *testing.T) {
@@ -92,11 +95,11 @@ func Test_ComposeWithBuildContext(t *testing.T) {
 	r := runner.New(t)
 
 	dockerComposeBundle := configuration.DockerComposeBundle{
-		Projects: []configuration.Compose{
+		Projects: []container.Compose{
 			{
 				Name:    "project-a",
-				File:    "file:///docker-compose/compose-build.yml",
-				Context: "file:///docker-compose/context.tar.gz",
+				File:    "file:///compose/compose-build.yml",
+				Context: "file:///compose/context.tar.gz",
 			},
 		},
 	}
@@ -112,8 +115,8 @@ func Test_ComposeWithBuildContext(t *testing.T) {
 
 	reports, _ := configuration.ExecuteTestConfigInDocker(r, config)
 	expectedReports := []string{
-		"[INFO] Successfully downloaded file file:///docker-compose/compose-build.yml to /var/lib/qbee/app_workdir/cache/docker_compose/project-a/compose.yml",
-		"[INFO] Successfully downloaded file file:///docker-compose/context.tar.gz to /var/lib/qbee/app_workdir/cache/docker_compose/project-a/_tmp/context.tar.gz",
+		"[INFO] Successfully downloaded file file:///compose/compose-build.yml to /var/lib/qbee/app_workdir/cache/docker_compose/project-a/compose.yml",
+		"[INFO] Successfully downloaded file file:///compose/context.tar.gz to /var/lib/qbee/app_workdir/cache/docker_compose/project-a/_tmp/context.tar.gz",
 		"[INFO] Started compose project project-a",
 	}
 
@@ -124,11 +127,11 @@ func Test_ComposeWithBuildContext(t *testing.T) {
 	assert.Empty(t, reports)
 
 	dockerComposeBundle = configuration.DockerComposeBundle{
-		Projects: []configuration.Compose{
+		Projects: []container.Compose{
 			{
 				Name:    "project-a",
-				File:    "file:///docker-compose/compose-build.yml",
-				Context: "file:///docker-compose/context.tar.bz2",
+				File:    "file:///compose/compose-build.yml",
+				Context: "file:///compose/context.tar.bz2",
 			},
 		},
 	}
@@ -145,7 +148,7 @@ func Test_ComposeWithBuildContext(t *testing.T) {
 	reports, _ = configuration.ExecuteTestConfigInDocker(r, config)
 
 	expectedReports = []string{
-		"[INFO] Successfully downloaded file file:///docker-compose/context.tar.bz2 to /var/lib/qbee/app_workdir/cache/docker_compose/project-a/_tmp/context.tar.bz2",
+		"[INFO] Successfully downloaded file file:///compose/context.tar.bz2 to /var/lib/qbee/app_workdir/cache/docker_compose/project-a/_tmp/context.tar.bz2",
 		"[INFO] Started compose project project-a",
 	}
 	assert.Equal(t, reports, expectedReports)

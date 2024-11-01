@@ -23,12 +23,14 @@ import (
 	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash"
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -53,6 +55,9 @@ const PodmanContainerDirectory = "podman_containers"
 
 // DockerComposeDirectory is where the agent will download docker-compose related files.
 const DockerComposeDirectory = "docker_compose"
+
+// PodmanComposeDirectory is where the agent will download podman-compose related files.
+const PodmanComposeDirectory = "podman_compose"
 
 // FileMetadata is the metadata of a file.
 type FileMetadata struct {
@@ -552,4 +557,64 @@ func resolveDestinationPath(source, destination string) (string, error) {
 		return filepath.Join(destination, baseName), nil
 	}
 	return destination, nil
+}
+
+func downloadStateFileCompare(
+	ctx context.Context,
+	service *Service,
+	stateFilePath,
+	src,
+	dst string,
+) (bool, error) {
+
+	fileMetadata, err := service.getFileMetadata(ctx, src)
+	if err != nil {
+		return false, err
+	}
+
+	stateDir := path.Dir(stateFilePath)
+	if _, err := os.Stat(stateDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(stateDir, 0700); err != nil {
+			return false, err
+		}
+	}
+
+	doDownload := false
+	if _, err := os.Stat(stateFilePath); os.IsNotExist(err) {
+		doDownload = true
+	} else {
+		stateBytes, err := os.ReadFile(stateFilePath)
+		if err != nil {
+			return false, err
+		}
+
+		var stateData FileMetadata
+		if err := json.Unmarshal(stateBytes, &stateData); err != nil {
+			return false, err
+		}
+
+		if stateData.SHA256() != fileMetadata.SHA256() {
+			doDownload = true
+		}
+	}
+
+	if doDownload {
+		if _, err := service.downloadMetadataCompare(ctx, "", src, dst, fileMetadata); err != nil {
+			return false, err
+		}
+
+		stateBytes, err := json.Marshal(fileMetadata)
+		if err != nil {
+			return false, err
+		}
+
+		if err := os.WriteFile(stateFilePath, stateBytes, 0600); err != nil {
+			return false, err
+		}
+	}
+
+	if _, err := os.Stat(dst); os.IsNotExist(err) {
+		return false, nil
+	}
+	return doDownload, nil
 }

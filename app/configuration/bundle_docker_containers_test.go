@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"go.qbee.io/agent/app/configuration"
+	"go.qbee.io/agent/app/container"
 	"go.qbee.io/agent/app/utils/assert"
 	"go.qbee.io/agent/app/utils/runner"
 )
@@ -37,7 +38,7 @@ func Test_DockerContainers_Auths(t *testing.T) {
 	r := runner.New(t)
 
 	dockerBundle := configuration.DockerContainersBundle{
-		RegistryAuths: []configuration.RegistryAuth{
+		RegistryAuths: []container.RegistryAuth{
 			{
 				Username: os.Getenv("DOCKER_USERNAME"),
 				Password: os.Getenv("DOCKER_PASSWORD"),
@@ -86,7 +87,7 @@ func Test_DockerContainers_Container_Start(t *testing.T) {
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
 	dockerBundle := configuration.DockerContainersBundle{
-		Containers: []configuration.Container{
+		Containers: []container.Container{
 			{
 				Name:    containerName,
 				Image:   runner.Debian,
@@ -119,7 +120,7 @@ func Test_DockerContainers_Container_StartExited(t *testing.T) {
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
 	dockerBundle := configuration.DockerContainersBundle{
-		Containers: []configuration.Container{
+		Containers: []container.Container{
 			{
 				Name:    containerName,
 				Image:   runner.Debian,
@@ -139,7 +140,7 @@ func Test_DockerContainers_Container_StartExited(t *testing.T) {
 
 	// running it the second time re-starts exited container
 	dockerBundle = configuration.DockerContainersBundle{
-		Containers: []configuration.Container{
+		Containers: []container.Container{
 			{
 				Name:    containerName,
 				Image:   runner.Debian,
@@ -166,7 +167,7 @@ func Test_DockerContainers_Container_RestartOnConfigChange(t *testing.T) {
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
 	dockerBundle := configuration.DockerContainersBundle{
-		Containers: []configuration.Container{
+		Containers: []container.Container{
 			{
 				Name:    containerName,
 				Image:   runner.Debian,
@@ -184,7 +185,7 @@ func Test_DockerContainers_Container_RestartOnConfigChange(t *testing.T) {
 
 	// running it the second time re-starts running container
 	dockerBundle = configuration.DockerContainersBundle{
-		Containers: []configuration.Container{
+		Containers: []container.Container{
 			{
 				Name:    containerName,
 				Image:   runner.Debian,
@@ -211,7 +212,7 @@ func Test_DockerContainers_Container_PreCondition(t *testing.T) {
 	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
 	dockerBundleTrue := configuration.DockerContainersBundle{
-		Containers: []configuration.Container{
+		Containers: []container.Container{
 			{
 				Name:         containerName,
 				Image:        runner.Debian,
@@ -235,7 +236,7 @@ func Test_DockerContainers_Container_PreCondition(t *testing.T) {
 	containerName = fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
 	dockerBundleFalse := configuration.DockerContainersBundle{
-		Containers: []configuration.Container{
+		Containers: []container.Container{
 			{
 				Name:         containerName,
 				Image:        runner.Debian,
