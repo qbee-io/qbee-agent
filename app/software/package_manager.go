@@ -32,6 +32,7 @@ const pkgCacheKeyPrefix = "packages"
 var PackageManagers = map[PackageManagerType]PackageManager{
 	PackageManagerTypeDebian: new(DebianPackageManager),
 	PackageManagerTypeRpm:    new(RpmPackageManager),
+	PackageManagerTypeAPK:    new(ApkPackageManager),
 	PackageManagerTypeOpkg:   new(OpkgPackageManager),
 }
 

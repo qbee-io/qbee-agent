@@ -26,6 +26,10 @@ docker-image:
 		--build-arg version=2023.01 \
 		-f Dockerfile.openwrt .
 
+	docker build -t alpine:qbee \
+		--build-arg version=2023.01 \
+		-f Dockerfile.alpine .
+
 test-src:
 	go test ./app/...
 

@@ -1,0 +1,27 @@
+FROM golang:1.22 as builder
+
+ARG version
+ENV VERSION_VAR=go.qbee.io/agent/app.Version
+
+ENV CGO_ENABLED=0
+
+WORKDIR /src
+
+COPY . /src
+
+# build the agent
+RUN --mount=type=cache,target=/go \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go build \
+    -ldflags "-s -w -X ${VERSION_VAR}=$version" \
+    -o /usr/bin/qbee-agent \
+    main.go
+
+
+FROM alpine:latest
+
+RUN mkdir /etc/qbee && echo '{}' > /etc/qbee/qbee-agent.json
+COPY --from=builder /usr/bin/qbee-agent /usr/bin/qbee-agent
+
+WORKDIR /app
+CMD [ "/bin/sh" ]
