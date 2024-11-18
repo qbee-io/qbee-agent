@@ -190,14 +190,23 @@ func (c Container) restart(ctx context.Context, srv *Service, containerBin, cont
 }
 
 type containerInfo struct {
-	ID     string            `json:"ID"`
-	Labels map[string]string `json:"Labels"`
-	State  string            `json:"State"`
+	ID     string            `json:"id"`
+	Labels map[string]string `json:"labels"`
+	State  string            `json:"state"`
 }
 
 // isRunning returns true if container is currently running.
 func (ci *containerInfo) isRunning() bool {
-	return ci.State == "running"
+	if ci.State == "running" {
+		return true
+	}
+
+	// Because of a podman template listing bug, we need to check for "up" as well.
+	// podman in some versions will show Status instead of State.
+	if strings.HasPrefix(strings.ToLower(ci.State), "up") {
+		return true
+	}
+	return false
 }
 
 // exists returns true if container exists (regardless of its state).
@@ -218,13 +227,19 @@ func (ci *containerInfo) argsMatch(args string) bool {
 // getStatus returns a status for
 func (c Container) getStatus(ctx context.Context, containerBin string) (*containerInfo, error) {
 
+	format := `{"id":"{{.ID}}","labels":"{{.Labels}}","state":"{{.State}}"}`
+
+	if c.ContainerRuntime == podmanRuntimeType {
+		format = `{"id":"{{.ID}}","labels":{{.Labels | json}},"state":"{{.State}}"}`
+	}
+
 	cmd := []string{
 		containerBin,
 		"container", "ls",
 		"--all",
 		"--no-trunc",
 		"--filter", fmt.Sprintf("label=qbee-docker-id=%s", c.Name),
-		"--format", "{{json .}}",
+		"--format", format,
 	}
 
 	var err error
@@ -254,26 +269,22 @@ func (c Container) getStatus(ctx context.Context, containerBin string) (*contain
 // parseStatusPodman returns a status for a container using podman command.
 func (c Container) parseStatusPodman(output []byte) (*containerInfo, error) {
 
-	containers := make([]containerInfo, 0)
+	ci := new(containerInfo)
 
-	if err := json.Unmarshal(output, &containers); err != nil {
+	if err := json.Unmarshal(output, &ci); err != nil {
 		return nil, err
 	}
 
-	if len(containers) == 0 {
-		return new(containerInfo), nil
-	}
-
-	return &containers[0], nil
+	return ci, nil
 }
 
 // getStatusDocker returns a status for a container using docker command.
 func (c Container) parseStatusDocker(output []byte) (*containerInfo, error) {
 
 	var dockerContainer struct {
-		ID     string `json:"ID"`
-		Labels string `json:"Labels"`
-		State  string `json:"State"`
+		ID     string `json:"id"`
+		Labels string `json:"labels"`
+		State  string `json:"state"`
 	}
 
 	if err := json.Unmarshal(output, &dockerContainer); err != nil {
