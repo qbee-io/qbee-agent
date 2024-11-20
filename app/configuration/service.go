@@ -506,6 +506,12 @@ func (srv *Service) persistConfig(cfg *CommittedConfig) {
 		log.Errorf("failed to marshal config: %v", err)
 		return
 	}
+
+	// sync disk writes to avoid data loss
+	if err = fp.Sync(); err != nil {
+		log.Errorf("failed to sync config file: %v", err)
+		return
+	}
 }
 
 // loadConfig loads the agent configuration from the cache file.
