@@ -56,7 +56,7 @@ func (srv *Service) getWithRetry(ctx context.Context) (*CommittedConfig, error) 
 	var err error
 	cfg := new(CommittedConfig)
 
-	if srv.firstRunRetryCounter < 1 {
+	if srv.firstRunRetryCounter == 0 {
 		err = srv.api.Get(ctx, deviceConfigurationAPIPath, cfg)
 		return cfg, err
 	}
@@ -72,6 +72,8 @@ func (srv *Service) getWithRetry(ctx context.Context) (*CommittedConfig, error) 
 			time.Sleep(time.Duration(reconnectIn) * time.Second)
 			continue
 		}
+		// successful connection, set retry counter to 0
+		srv.firstRunRetryCounter = 0
 		return cfg, nil
 	}
 	return nil, err
