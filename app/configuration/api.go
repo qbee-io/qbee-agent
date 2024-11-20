@@ -68,7 +68,7 @@ func (srv *Service) getWithRetry(ctx context.Context) (*CommittedConfig, error) 
 		if err != nil {
 			attempts := defaultFirstRunRetryCounter - srv.firstRunRetryCounter
 			reconnectIn := minReconnectDelay + rand.Int63n(maxReconnectDelay-minReconnectDelay)
-			log.Errorf("error getting configuration (%d): %v - reconnecting in %d seconds", attempts, err, reconnectIn)
+			log.Infof("error getting configuration (%d): %v - reconnecting in %d seconds", attempts, err, reconnectIn)
 			time.Sleep(time.Duration(reconnectIn) * time.Second)
 			continue
 		}
