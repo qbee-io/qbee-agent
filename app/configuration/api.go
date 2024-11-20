@@ -56,11 +56,7 @@ func (srv *Service) getWithRetry(ctx context.Context) (*CommittedConfig, error) 
 	var err error
 	cfg := new(CommittedConfig)
 
-<<<<<<< HEAD
-	if srv.firstRunRetryCounter < 1 {
-=======
 	if srv.firstRunRetryCounter == 0 {
->>>>>>> main
 		err = srv.api.Get(ctx, deviceConfigurationAPIPath, cfg)
 		return cfg, err
 	}
@@ -72,19 +68,12 @@ func (srv *Service) getWithRetry(ctx context.Context) (*CommittedConfig, error) 
 		if err != nil {
 			attempts := defaultFirstRunRetryCounter - srv.firstRunRetryCounter
 			reconnectIn := minReconnectDelay + rand.Int63n(maxReconnectDelay-minReconnectDelay)
-<<<<<<< HEAD
-			log.Errorf("error getting configuration (%d): %v - reconnecting in %d seconds", attempts, err, reconnectIn)
-			time.Sleep(time.Duration(reconnectIn) * time.Second)
-			continue
-		}
-=======
 			log.Infof("error getting configuration (%d): %v - reconnecting in %d seconds", attempts, err, reconnectIn)
 			time.Sleep(time.Duration(reconnectIn) * time.Second)
 			continue
 		}
 		// successful connection, set retry counter to 0
 		srv.firstRunRetryCounter = 0
->>>>>>> main
 		return cfg, nil
 	}
 	return nil, err
