@@ -2,6 +2,7 @@ package utils
 
 import "os"
 
+// WriteFileSync writes data to a file named by filename and syncs to disk.
 func WriteFileSync(name string, data []byte, perm os.FileMode) error {
 	var err error
 	var f *os.File
