@@ -61,6 +61,26 @@ type FileMetadata struct {
 	Tags         map[string]string `json:"tags,omitempty"`
 }
 
+// TemplateParameter defines a single parameter used to replace placeholder in a template.
+type TemplateParameter struct {
+	// Key of the parameter used in files.
+	Key string `json:"key"`
+
+	// Value of the parameter which will replace Key placeholders.
+	Value string `json:"value"`
+}
+
+// ParametersMap returns TemplateParameters as map.
+func TemplateParametersMap(templateParameters []TemplateParameter) map[string]string {
+	parameters := make(map[string]string)
+
+	for _, param := range templateParameters {
+		parameters[param.Key] = param.Value
+	}
+
+	return parameters
+}
+
 const fileDigestSHA256Tag = "qbee_digest_sha256"
 
 // SHA256 returns hex-encoded sha256 digest of the file (if present), otherwise an empty string.

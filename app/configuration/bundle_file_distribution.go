@@ -70,17 +70,6 @@ type FileSet struct {
 	PreCondition string `json:"pre_condition" bson:"pre_condition"`
 }
 
-// ParametersMap returns TemplateParameters as map.
-func (fs *FileSet) ParametersMap() map[string]string {
-	parameters := make(map[string]string)
-
-	for _, param := range fs.TemplateParameters {
-		parameters[param.Key] = param.Value
-	}
-
-	return parameters
-}
-
 // File defines a single file parameters.
 type File struct {
 	// Source full file path from the file manager.
@@ -93,15 +82,6 @@ type File struct {
 	IsTemplate bool `json:"is_template"`
 }
 
-// TemplateParameter defines a single parameter used to replace placeholder in a template.
-type TemplateParameter struct {
-	// Key of the parameter used in files.
-	Key string `json:"key"`
-
-	// Value of the parameter which will replace Key placeholders.
-	Value string `json:"value"`
-}
-
 // Execute file distribution config on the system.
 func (fd FileDistributionBundle) Execute(ctx context.Context, service *Service) error {
 	for _, fileSet := range fd.FileSets {
@@ -109,7 +89,7 @@ func (fd FileDistributionBundle) Execute(ctx context.Context, service *Service) 
 			continue
 		}
 
-		parameters := fileSet.ParametersMap()
+		parameters := TemplateParametersMap(fileSet.TemplateParameters)
 		anythingChanged := false
 
 		for _, file := range fileSet.Files {
