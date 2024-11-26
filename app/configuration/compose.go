@@ -15,7 +15,7 @@ type Compose struct {
 	PreCondition string `json:"pre_condition,omitempty"`
 
 	// Parameters are the parameters that can be used in the compose file.
-	Parameters []Parameter `json:"parameters,omitempty"`
+	Parameters []TemplateParameter `json:"parameters,omitempty"`
 }
 
 const composeFile = "compose.yml"
