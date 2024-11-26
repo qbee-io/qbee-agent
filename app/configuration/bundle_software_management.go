@@ -155,7 +155,7 @@ func (s Software) Execute(ctx context.Context, srv *Service, pkgManager software
 	for _, cfgFile := range s.ConfigFiles {
 		var created bool
 
-		parameters := TemplateParametersMap(s.Parameters)
+		parameters := templateParametersMap(s.Parameters)
 		created, err = srv.downloadTemplateFile(ctx, "", cfgFile.ConfigTemplate, cfgFile.ConfigLocation, parameters)
 		if err != nil {
 			return err

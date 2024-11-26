@@ -29,19 +29,6 @@ import (
 	"go.qbee.io/agent/app/utils"
 )
 
-/*
-
-passing context:
-
-docker compose --project-name testing --file $(pwd)/compose.yml --project-directory $(pwd)/context up --wait --force-recreate
-
-We need some way of unpacking context
-- new context means re-create
-- new compose file means re-create
-- store context hash in a file, delete tarball after unpacking
-- Remove context if changed to make sure we have clean
-*/
-
 // Example payload:
 //
 //	{
@@ -180,6 +167,11 @@ func dockerComposeGetComposeFile(ctx context.Context, service *Service, project 
 
 	composeFilePath := filepath.Join(projectDirectory, composeFile)
 
+	parameters := templateParametersMap(project.Parameters)
+
+	if len(parameters) > 0 {
+		return service.downloadTemplateFile(ctx, "", project.File, composeFilePath, parameters)
+	}
 	return service.downloadFile(ctx, "", project.File, composeFilePath)
 }
 

@@ -71,7 +71,7 @@ type TemplateParameter struct {
 }
 
 // ParametersMap returns TemplateParameters as map.
-func TemplateParametersMap(templateParameters []TemplateParameter) map[string]string {
+func templateParametersMap(templateParameters []TemplateParameter) map[string]string {
 	parameters := make(map[string]string)
 
 	for _, param := range templateParameters {

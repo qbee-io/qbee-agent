@@ -89,7 +89,7 @@ func (fd FileDistributionBundle) Execute(ctx context.Context, service *Service) 
 			continue
 		}
 
-		parameters := TemplateParametersMap(fileSet.TemplateParameters)
+		parameters := templateParametersMap(fileSet.TemplateParameters)
 		anythingChanged := false
 
 		for _, file := range fileSet.Files {

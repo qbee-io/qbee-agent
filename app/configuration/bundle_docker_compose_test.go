@@ -87,6 +87,48 @@ func Test_Simple_Docker_Compose(t *testing.T) {
 	r.MustExec("docker", "compose", "-p", "project-b", "down", "--remove-orphans", "--volumes", "--timeout", "60", "--rmi", "all")
 }
 
+func Test_ComposeWithParams(t *testing.T) {
+
+	r := runner.New(t)
+
+	dockerComposeBundle := configuration.DockerComposeBundle{
+		Projects: []configuration.Compose{
+			{
+				Name: "project-a",
+				File: "file:///docker-compose/compose-nobuild.yml.template",
+				Parameters: []configuration.TemplateParameter{
+					{
+						Key:   "param1",
+						Value: "value1",
+					},
+				},
+			},
+		},
+	}
+
+	dockerComposeBundle.Enabled = true
+
+	config := configuration.CommittedConfig{
+		Bundles: []string{configuration.BundleDockerCompose},
+		BundleData: configuration.BundleData{
+			DockerCompose: &dockerComposeBundle,
+		},
+	}
+
+	reports, _ := configuration.ExecuteTestConfigInDocker(r, config)
+	expectedReports := []string{
+		"[INFO] Successfully rendered template file file:///docker-compose/compose-nobuild.yml.template to /var/lib/qbee/app_workdir/cache/docker_compose/project-a/compose.yml",
+		"[INFO] Started compose project project-a",
+	}
+
+	assert.Equal(t, reports, expectedReports)
+
+	reports, _ = configuration.ExecuteTestConfigInDocker(r, config)
+
+	assert.Empty(t, reports)
+	r.MustExec("docker", "compose", "-p", "project-a", "down", "--remove-orphans", "--volumes", "--timeout", "60", "--rmi", "all")
+}
+
 func Test_ComposeWithBuildContext(t *testing.T) {
 
 	r := runner.New(t)
