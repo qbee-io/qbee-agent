@@ -47,3 +47,6 @@ WORKDIR /app
 
 # copy the agent
 COPY --from=builder /usr/sbin/qbee-agent /usr/sbin/qbee-agent
+
+# add docker-compose files
+COPY test/resources/docker-compose /docker-compose
