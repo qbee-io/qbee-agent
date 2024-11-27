@@ -20,9 +20,54 @@ import (
 	"testing"
 
 	"go.qbee.io/agent/app/configuration"
+	"go.qbee.io/agent/app/utils"
 	"go.qbee.io/agent/app/utils/assert"
 	"go.qbee.io/agent/app/utils/runner"
 )
+
+func Test_Version_Parse(t *testing.T) {
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+		isCompat bool
+	}{
+		{
+			name:     "v2.0.0",
+			input:    "Docker Compose version v2.0.0",
+			expected: "2.0.0",
+			isCompat: true,
+		},
+		{
+			name:     "2.0.0",
+			input:    "Docker Compose version 2.0.0",
+			expected: "2.0.0",
+			isCompat: true,
+		},
+		{
+			name:     "2.0.0",
+			input:    "Docker Compose version 2.24.6+ds1-0ubuntu1~22.04.1",
+			expected: "2.24.6",
+			isCompat: true,
+		},
+		{
+			name:     "1.1.1",
+			input:    "Docker Compose version 1.1.1",
+			expected: "1.1.1",
+			isCompat: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			version, err := configuration.DockerComposeParseVersion(tt.input)
+			assert.Empty(t, err)
+			assert.Equal(t, version, tt.expected)
+			assert.Equal(t, utils.IsNewerVersionOrEqual(version, configuration.DockerComposeMinimumVersion), tt.isCompat)
+		})
+	}
+}
 
 func Test_Simple_Docker_Compose(t *testing.T) {
 

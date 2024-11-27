@@ -54,9 +54,9 @@ type DockerComposeBundle struct {
 	Clean bool `json:"clean,omitempty"`
 }
 
-var dockerComposeVersionRE = regexp.MustCompile(`Docker Compose version v([0-9.]+)`)
+var dockerComposeVersionRE = regexp.MustCompile(`Docker Compose version v?([0-9.]+)`)
 
-const dockerComposeMinimumVersion = "2.0.0"
+const DockerComposeMinimumVersion = "2.0.0"
 
 // Execute docker compose configuration bundle on the system.
 func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) error {
@@ -69,14 +69,14 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 		return err
 	}
 
-	if !dockerComposeVersionRE.MatchString(string(output)) {
-		ReportError(ctx, err, "Docker Compose version could not be determined")
+	version, err := DockerComposeParseVersion(string(output))
+	if err != nil {
+		ReportError(ctx, err, "Cannot parse Docker Compose version")
 		return err
 	}
 
-	version := dockerComposeVersionRE.FindStringSubmatch(string(output))[1]
-	if !utils.IsNewerVersionOrEqual(version, dockerComposeMinimumVersion) {
-		ReportError(ctx, err, "Docker Compose version %s is not supported. Minimum version is %s", version, dockerComposeMinimumVersion)
+	if !utils.IsNewerVersionOrEqual(version, DockerComposeMinimumVersion) {
+		ReportError(ctx, err, "Docker Compose version %s is not supported. Minimum version is %s", version, DockerComposeMinimumVersion)
 		return err
 	}
 
@@ -142,6 +142,16 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 // dockerComposeProject is a project that is running in the system.
 type dockerComposeProject struct {
 	Name string `json:"Name"`
+}
+
+func DockerComposeParseVersion(output string) (string, error) {
+
+	matches := dockerComposeVersionRE.FindStringSubmatch(string(output))
+	if len(matches) < 2 {
+		return "", fmt.Errorf("cannot determine docker compose version")
+	}
+
+	return matches[1], nil
 }
 
 func dockerComposeGetResources(ctx context.Context, service *Service, project Compose) (bool, error) {
