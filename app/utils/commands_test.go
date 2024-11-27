@@ -78,3 +78,64 @@ func TestCommandTimeout(t *testing.T) {
 		})
 	}
 }
+
+func TestParseCommandLine(t *testing.T) {
+	tests := []struct {
+		name     string
+		command  string
+		expected []string
+	}{
+		{
+			name:     "simple command",
+			command:  "echo hello",
+			expected: []string{"echo", "hello"},
+		},
+		{
+			name:     "command with quotes",
+			command:  "echo 'hello world'",
+			expected: []string{"echo", "hello world"},
+		},
+		{
+			name:     "command with escaped quotes",
+			command:  "echo \"hello world\"",
+			expected: []string{"echo", "hello world"},
+		},
+		{
+			name:     "command with escaped quotes and spaces",
+			command:  "echo \"hello world\" 'and more'",
+			expected: []string{"echo", "hello world", "and more"},
+		},
+		{
+			name:     "command with flags",
+			command:  "echo -n 'hello world'",
+			expected: []string{"echo", "-n", "hello world"},
+		},
+		{
+			name:     "parse empty command",
+			command:  "",
+			expected: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+
+		t.Run(tt.name, func(t *testing.T) {
+
+			result, err := ParseCommandLine(tt.command)
+			if err != nil {
+				t.Fatalf("%s: unexpected error: %v", tt.name, err)
+			}
+
+			if len(result) != len(tt.expected) {
+				t.Fatalf("%s: unexpected result length: %v", tt.name, result)
+			}
+
+			for i, arg := range result {
+				if arg != tt.expected[i] {
+					t.Fatalf("%s: unexpected result: %v", tt.name, result)
+				}
+			}
+
+		})
+	}
+}
