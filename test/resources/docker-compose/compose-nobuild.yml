@@ -3,6 +3,6 @@ services:
   web:
     image: nginx:alpine
     ports:
-      - "8000:5000"
+      - "80:80"
   redis:
     image: redis:alpine
