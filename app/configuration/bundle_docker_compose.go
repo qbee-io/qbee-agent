@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -61,7 +62,11 @@ const DockerComposeMinimumVersion = "2.0.0"
 // Execute docker compose configuration bundle on the system.
 func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) error {
 
-	configuredProjects := make(map[string]Compose)
+	dockerBin, err := exec.LookPath("docker")
+	if err != nil {
+		ReportError(ctx, nil, "Docker compose configuration configured, but no docker executable found on system")
+		return fmt.Errorf("docker compose not supported: %v", err)
+	}
 
 	output, err := utils.RunCommand(ctx, []string{"docker", "compose", "version"})
 	if err != nil {
@@ -80,6 +85,20 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 		return err
 	}
 
+	// populate all registry credentials
+	for _, auth := range d.RegistryAuths {
+		auth.ContainerRuntime = dockerRuntimeType
+		auth.Server = resolveParameters(ctx, auth.Server)
+		auth.Username = resolveParameters(ctx, auth.Username)
+		auth.Password = resolveParameters(ctx, auth.Password)
+
+		if err = auth.execute(ctx, dockerBin); err != nil {
+			ReportError(ctx, err, "Unable to authenticate with %s repository.", auth.URL())
+			return err
+		}
+	}
+
+	configuredProjects := make(map[string]Compose)
 	for _, project := range d.Projects {
 		project.Name = resolveParameters(ctx, project.Name)
 		project.File = resolveParameters(ctx, project.File)
@@ -89,8 +108,14 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 		configuredProjects[project.Name] = project
 	}
 
+	runningProjects, err := d.dockerComposeGetProjectStatus(ctx)
+	if err != nil {
+		ReportError(ctx, err, "Cannot get list of running compose projects")
+		return err
+	}
+
 	// clean projects first to release resources
-	if err := d.dockerComposeClean(ctx, service, configuredProjects); err != nil {
+	if err := d.dockerComposeClean(ctx, service, configuredProjects, runningProjects); err != nil {
 		ReportError(ctx, err, "Cannot clean up compose projects")
 		return err
 	}
@@ -106,7 +131,16 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 			return err
 		}
 
-		if created {
+		restart := false
+		if runningProject, ok := runningProjects[project.Name]; ok {
+			restart = d.needsRestart(runningProject) && !project.SkipRestart
+		}
+
+		if restart {
+			ReportWarning(ctx, nil, "One or more containers in exited state for project %s. Restart scehduled", project.Name)
+		}
+
+		if created || restart {
 			dockerComposeStart := []string{
 				"docker",
 				"compose",
@@ -141,7 +175,8 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 
 // dockerComposeProject is a project that is running in the system.
 type dockerComposeProject struct {
-	Name string `json:"Name"`
+	Name   string `json:"Name"`
+	Status string `json:"Status"`
 }
 
 func DockerComposeParseVersion(output string) (string, error) {
@@ -227,21 +262,35 @@ func dockerComposeGetContext(ctx context.Context, service *Service, project Comp
 	return true, nil
 }
 
-func (d DockerComposeBundle) dockerComposeClean(ctx context.Context, service *Service, configuredProjects map[string]Compose) error {
-	if !d.Clean {
-		return nil
-	}
-
+func (d DockerComposeBundle) dockerComposeGetProjectStatus(ctx context.Context) (map[string]dockerComposeProject, error) {
 	projectListingCmd := []string{"docker", "compose", "ls", "--all", "--format", "json"}
 	output, err := utils.RunCommand(ctx, projectListingCmd)
 
 	if err != nil {
-		return fmt.Errorf("cannot get list of running compose projects: %w", err)
+		return nil, fmt.Errorf("cannot get list of running compose projects: %w", err)
 	}
 
 	var runningProjects []dockerComposeProject
 	if err := json.Unmarshal(output, &runningProjects); err != nil {
-		return fmt.Errorf("cannot parse list of running compose projects: %w", err)
+		return nil, fmt.Errorf("cannot parse list of running compose projects: %w", err)
+	}
+
+	projects := make(map[string]dockerComposeProject)
+	for _, project := range runningProjects {
+		projects[project.Name] = project
+	}
+
+	return projects, nil
+}
+
+func (d DockerComposeBundle) dockerComposeClean(
+	ctx context.Context,
+	service *Service,
+	configuredProjects map[string]Compose,
+	runningProjects map[string]dockerComposeProject,
+) error {
+	if !d.Clean {
+		return nil
 	}
 
 	for _, project := range runningProjects {
@@ -261,6 +310,10 @@ func (d DockerComposeBundle) dockerComposeClean(ctx context.Context, service *Se
 	}
 
 	return nil
+}
+
+func (d DockerComposeBundle) needsRestart(project dockerComposeProject) bool {
+	return strings.Contains(project.Status, "exited")
 }
 
 func dockerComposeRemoveProject(ctx context.Context, service *Service, projectName string) ([]byte, error) {
