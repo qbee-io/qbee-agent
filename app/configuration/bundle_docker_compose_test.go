@@ -17,6 +17,7 @@
 package configuration_test
 
 import (
+	"strings"
 	"testing"
 
 	"go.qbee.io/agent/app/configuration"
@@ -237,4 +238,123 @@ func Test_ComposeWithBuildContext(t *testing.T) {
 	}
 	assert.Equal(t, reports, expectedReports)
 	r.MustExec("docker", "compose", "-p", "project-b", "down", "--remove-orphans", "--volumes", "--timeout", "60", "--rmi", "all")
+}
+
+func Test_ComposeWithPreCondition(t *testing.T) {
+
+	r := runner.New(t)
+
+	dockerComposeBundle := configuration.DockerComposeBundle{
+		Projects: []configuration.Compose{
+			{
+				Name:         "project-a",
+				File:         "file:///docker-compose/compose-nobuild.yml",
+				PreCondition: "/bin/false",
+			},
+		},
+	}
+
+	dockerComposeBundle.Enabled = true
+
+	config := configuration.CommittedConfig{
+		Bundles: []string{configuration.BundleDockerCompose},
+		BundleData: configuration.BundleData{
+			DockerCompose: &dockerComposeBundle,
+		},
+	}
+
+	reports, _ := configuration.ExecuteTestConfigInDocker(r, config)
+
+	assert.Empty(t, reports)
+}
+
+func Test_ComposeWithSkipRestart(t *testing.T) {
+
+	r := runner.New(t)
+
+	dockerComposeBundle := configuration.DockerComposeBundle{
+		Projects: []configuration.Compose{
+			{
+				Name:        "project-a",
+				File:        "file:///docker-compose/compose-nobuild.yml",
+				SkipRestart: true,
+			},
+		},
+	}
+
+	dockerComposeBundle.Enabled = true
+
+	config := configuration.CommittedConfig{
+		Bundles: []string{configuration.BundleDockerCompose},
+		BundleData: configuration.BundleData{
+			DockerCompose: &dockerComposeBundle,
+		},
+	}
+
+	reports, _ := configuration.ExecuteTestConfigInDocker(r, config)
+	expectedReports := []string{
+		"[INFO] Successfully downloaded file file:///docker-compose/compose-nobuild.yml to /var/lib/qbee/app_workdir/cache/docker_compose/project-a/compose.yml",
+		"[INFO] Started compose project project-a",
+	}
+	assert.Equal(t, reports, expectedReports)
+
+	r.MustExec("docker", "kill", "project-a-web-1")
+
+	reports, _ = configuration.ExecuteTestConfigInDocker(r, config)
+
+	assert.Empty(t, reports)
+
+	dockerComposeBundle.Projects[0].SkipRestart = false
+
+	reports, _ = configuration.ExecuteTestConfigInDocker(r, config)
+	expectedReports = []string{
+		"[WARN] One or more containers in exited state for project project-a. Restart scehduled",
+		"[INFO] Started compose project project-a",
+	}
+
+	assert.Equal(t, reports, expectedReports)
+	r.MustExec("docker", "compose", "-p", "project-a", "down", "--remove-orphans", "--volumes", "--timeout", "60", "--rmi", "all")
+
+}
+
+func Test_ComposeWithClean(t *testing.T) {
+
+	r := runner.New(t)
+
+	dockerComposeBundle := configuration.DockerComposeBundle{
+		Projects: []configuration.Compose{
+			{
+				Name: "project-a",
+				File: "file:///docker-compose/compose-nobuild.yml",
+			},
+		},
+	}
+
+	dockerComposeBundle.Enabled = true
+
+	config := configuration.CommittedConfig{
+		Bundles: []string{configuration.BundleDockerCompose},
+		BundleData: configuration.BundleData{
+			DockerCompose: &dockerComposeBundle,
+		},
+	}
+
+	reports, _ := configuration.ExecuteTestConfigInDocker(r, config)
+	expectedReports := []string{
+		"[INFO] Successfully downloaded file file:///docker-compose/compose-nobuild.yml to /var/lib/qbee/app_workdir/cache/docker_compose/project-a/compose.yml",
+		"[INFO] Started compose project project-a",
+	}
+	assert.Equal(t, reports, expectedReports)
+
+	dockerComposeBundle.Clean = true
+	dockerComposeBundle.Projects = []configuration.Compose{}
+
+	reports, _ = configuration.ExecuteTestConfigInDocker(r, config)
+	assert.Empty(t, reports)
+
+	output := r.MustExec("docker", "compose", "ls", "--all")
+
+	exists := strings.Contains(string(output), "project-a")
+
+	assert.False(t, exists)
 }
