@@ -21,6 +21,9 @@ type Compose struct {
 
 	// Parameters are the parameters that can be used in the compose file.
 	Parameters []TemplateParameter `json:"parameters,omitempty"`
+
+	// UseContext defines if build context should be used.
+	UseContext bool `json:"use_context,omitempty"`
 }
 
 const composeFile = "compose.yml"

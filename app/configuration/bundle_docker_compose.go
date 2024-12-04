@@ -204,6 +204,7 @@ func dockerComposeGetResources(ctx context.Context, service *Service, project Co
 }
 
 func dockerComposeGetComposeFile(ctx context.Context, service *Service, project Compose) (bool, error) {
+
 	projectDirectory := dockerComposeGetProjectDirectory(service, project)
 	if err := os.MkdirAll(projectDirectory, 0700); err != nil {
 		ReportError(ctx, err, "Cannot create directory for compose project %s", project.Name)
@@ -225,6 +226,10 @@ func dockerComposeGetProjectDirectory(service *Service, project Compose) string 
 }
 
 func dockerComposeGetContext(ctx context.Context, service *Service, project Compose) (bool, error) {
+
+	if !project.UseContext {
+		return false, nil
+	}
 
 	if project.Context == "" {
 		return false, nil

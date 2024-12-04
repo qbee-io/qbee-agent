@@ -182,9 +182,10 @@ func Test_ComposeWithBuildContext(t *testing.T) {
 	dockerComposeBundle := configuration.DockerComposeBundle{
 		Projects: []configuration.Compose{
 			{
-				Name:    "project-a",
-				File:    "file:///docker-compose/compose-build.yml",
-				Context: "file:///docker-compose/context.tar.gz",
+				Name:       "project-a",
+				File:       "file:///docker-compose/compose-build.yml",
+				Context:    "file:///docker-compose/context.tar.gz",
+				UseContext: true,
 			},
 		},
 	}
@@ -214,9 +215,10 @@ func Test_ComposeWithBuildContext(t *testing.T) {
 	dockerComposeBundle = configuration.DockerComposeBundle{
 		Projects: []configuration.Compose{
 			{
-				Name:    "project-a",
-				File:    "file:///docker-compose/compose-build.yml",
-				Context: "file:///docker-compose/context.tar.bz2",
+				Name:       "project-a",
+				File:       "file:///docker-compose/compose-build.yml",
+				Context:    "file:///docker-compose/context.tar.bz2",
+				UseContext: true,
 			},
 		},
 	}
