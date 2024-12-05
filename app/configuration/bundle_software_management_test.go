@@ -204,7 +204,7 @@ func Test_SoftwareManagementBundle_InstallPackage_WithConfigFileTemplate(t *test
 								ConfigLocation: "/etc/config.test",
 							},
 						},
-						Parameters: []configuration.ConfigFileParameter{
+						Parameters: []configuration.TemplateParameter{
 							{Key: "k1", Value: "test-value"},
 							{Key: "k2", Value: "$(p1)"},
 						},
