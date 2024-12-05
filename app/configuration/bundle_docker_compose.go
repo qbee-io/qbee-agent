@@ -58,7 +58,7 @@ type DockerComposeBundle struct {
 var dockerComposeVersionRE = regexp.MustCompile(`Docker Compose version v?([0-9.]+)`)
 
 // DockerComposeMinimumVersion is the minimum version of docker compose that is supported.
-const DockerComposeMinimumVersion = "2.0.0"
+const dockerComposeMinimumVersion = "2.0.0"
 
 // Execute docker compose configuration bundle on the system.
 func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) error {
@@ -75,14 +75,14 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 		return err
 	}
 
-	version, err := DockerComposeParseVersion(string(output))
+	version, err := d.ParseVersion(string(output))
 	if err != nil {
 		ReportError(ctx, err, "Cannot parse Docker Compose version")
 		return err
 	}
 
-	if !utils.IsNewerVersionOrEqual(version, DockerComposeMinimumVersion) {
-		ReportError(ctx, err, "Docker Compose version %s is not supported. Minimum version is %s", version, DockerComposeMinimumVersion)
+	if !utils.IsNewerVersionOrEqual(version, dockerComposeMinimumVersion) {
+		ReportError(ctx, err, "Docker Compose version %s is not supported. Minimum version is %s", version, dockerComposeMinimumVersion)
 		return err
 	}
 
@@ -109,7 +109,7 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 		configuredProjects[project.Name] = project
 	}
 
-	runningProjects, err := d.dockerComposeGetProjectStatus(ctx)
+	runningProjects, err := d.getProjectStatus(ctx)
 	if err != nil {
 		ReportError(ctx, err, "Cannot get list of running compose projects")
 		return err
@@ -126,7 +126,7 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 			continue
 		}
 
-		created, err := dockerComposeGetResources(ctx, service, project)
+		created, err := project.getResources(ctx, service)
 		if err != nil {
 			ReportError(ctx, err, "Cannot get resources for compose project %s", project.Name)
 			return err
@@ -134,7 +134,7 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 
 		restart := false
 		if runningProject, ok := runningProjects[project.Name]; ok {
-			restart = d.needsRestart(runningProject) && !project.SkipRestart
+			restart = project.needsRestart(runningProject) && !project.SkipRestart
 		}
 
 		if restart {
@@ -174,14 +174,20 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 	return nil
 }
 
-// dockerComposeProject is a project that is running in the system.
-type dockerComposeProject struct {
+// projectStatus is a project that is running in the system.
+type projectStatus struct {
 	Name   string `json:"Name"`
 	Status string `json:"Status"`
 }
 
-// DockerComposeParseVersion parses the version of docker compose from the output.
-func DockerComposeParseVersion(output string) (string, error) {
+// GetMinimumVersion returns the minimum version of docker compose that is supported.
+
+func (d DockerComposeBundle) GetMinimumVersion() string {
+	return dockerComposeMinimumVersion
+}
+
+// ParseVersion parses the version of docker compose from the output.
+func (d DockerComposeBundle) ParseVersion(output string) (string, error) {
 
 	matches := dockerComposeVersionRE.FindStringSubmatch(string(output))
 	if len(matches) < 2 {
@@ -191,13 +197,13 @@ func DockerComposeParseVersion(output string) (string, error) {
 	return matches[1], nil
 }
 
-func dockerComposeGetResources(ctx context.Context, service *Service, project Compose) (bool, error) {
-	downloadedComposeFile, err := dockerComposeGetComposeFile(ctx, service, project)
+func (c Compose) getResources(ctx context.Context, service *Service) (bool, error) {
+	downloadedComposeFile, err := c.getComposeFile(ctx, service)
 	if err != nil {
 		return false, err
 	}
 
-	downloadedContextFile, err := dockerComposeGetContext(ctx, service, project)
+	downloadedContextFile, err := c.getContext(ctx, service)
 	if err != nil {
 		return false, err
 	}
@@ -205,48 +211,48 @@ func dockerComposeGetResources(ctx context.Context, service *Service, project Co
 	return downloadedComposeFile || downloadedContextFile, nil
 }
 
-func dockerComposeGetComposeFile(ctx context.Context, service *Service, project Compose) (bool, error) {
+func (c Compose) getComposeFile(ctx context.Context, service *Service) (bool, error) {
 
-	projectDirectory := dockerComposeGetProjectDirectory(service, project)
+	projectDirectory := c.getProjectDirectory(service)
 	if err := os.MkdirAll(projectDirectory, 0700); err != nil {
-		ReportError(ctx, err, "Cannot create directory for compose project %s", project.Name)
+		ReportError(ctx, err, "Cannot create directory for compose project %s", c.Name)
 		return false, err
 	}
 
 	composeFilePath := filepath.Join(projectDirectory, composeFile)
 
-	parameters := templateParametersMap(project.Parameters)
+	parameters := templateParametersMap(c.Parameters)
 
 	if len(parameters) > 0 {
-		return service.downloadTemplateFile(ctx, "", project.File, composeFilePath, parameters)
+		return service.downloadTemplateFile(ctx, "", c.File, composeFilePath, parameters)
 	}
-	return service.downloadFile(ctx, "", project.File, composeFilePath)
+	return service.downloadFile(ctx, "", c.File, composeFilePath)
 }
 
-func dockerComposeGetProjectDirectory(service *Service, project Compose) string {
-	return filepath.Join(service.cacheDirectory, DockerComposeDirectory, project.Name)
+func (c Compose) getProjectDirectory(service *Service) string {
+	return filepath.Join(service.cacheDirectory, DockerComposeDirectory, c.Name)
 }
 
-func dockerComposeGetContext(ctx context.Context, service *Service, project Compose) (bool, error) {
+func (c Compose) getContext(ctx context.Context, service *Service) (bool, error) {
 
-	if !project.UseContext {
+	if !c.UseContext {
 		return false, nil
 	}
 
-	if project.Context == "" {
+	if c.Context == "" {
 		return false, nil
 	}
 
-	if !utils.IsSupportedTarExtension(project.Context) {
-		return false, fmt.Errorf("unsupported context file extension %s", project.Context)
+	if !utils.IsSupportedTarExtension(c.Context) {
+		return false, fmt.Errorf("unsupported context file extension %s", c.Context)
 	}
 
-	contextState := filepath.Join(dockerComposeGetProjectDirectory(service, project), "context-metadata.json")
+	contextState := filepath.Join(c.getProjectDirectory(service), "context-metadata.json")
 
-	contextTmpFilename := strings.Join([]string{composeContext, utils.GetTarExtension(project.Context)}, ".")
-	contextDst := filepath.Join(dockerComposeGetProjectDirectory(service, project), "_tmp", contextTmpFilename)
+	contextTmpFilename := strings.Join([]string{composeContext, utils.GetTarExtension(c.Context)}, ".")
+	contextDst := filepath.Join(c.getProjectDirectory(service), "_tmp", contextTmpFilename)
 
-	downloaded, err := downloadStateFileCompare(ctx, service, contextState, project.Context, contextDst)
+	downloaded, err := downloadStateFileCompare(ctx, service, contextState, c.Context, contextDst)
 
 	if err != nil {
 		return false, err
@@ -256,7 +262,7 @@ func dockerComposeGetContext(ctx context.Context, service *Service, project Comp
 		return false, nil
 	}
 
-	contextUnpackDir := filepath.Join(dockerComposeGetProjectDirectory(service, project), composeContext)
+	contextUnpackDir := filepath.Join(c.getProjectDirectory(service), composeContext)
 
 	if err := utils.UnpackTar(contextDst, contextUnpackDir); err != nil {
 		return false, err
@@ -269,7 +275,7 @@ func dockerComposeGetContext(ctx context.Context, service *Service, project Comp
 	return true, nil
 }
 
-func (d DockerComposeBundle) dockerComposeGetProjectStatus(ctx context.Context) (map[string]dockerComposeProject, error) {
+func (d DockerComposeBundle) getProjectStatus(ctx context.Context) (map[string]projectStatus, error) {
 	projectListingCmd := []string{"docker", "compose", "ls", "--all", "--format", "json"}
 	output, err := utils.RunCommand(ctx, projectListingCmd)
 
@@ -277,12 +283,12 @@ func (d DockerComposeBundle) dockerComposeGetProjectStatus(ctx context.Context) 
 		return nil, fmt.Errorf("cannot get list of running compose projects: %w", err)
 	}
 
-	var runningProjects []dockerComposeProject
+	var runningProjects []projectStatus
 	if err := json.Unmarshal(output, &runningProjects); err != nil {
 		return nil, fmt.Errorf("cannot parse list of running compose projects: %w", err)
 	}
 
-	projects := make(map[string]dockerComposeProject)
+	projects := make(map[string]projectStatus)
 	for _, project := range runningProjects {
 		projects[project.Name] = project
 	}
@@ -294,7 +300,7 @@ func (d DockerComposeBundle) dockerComposeClean(
 	ctx context.Context,
 	service *Service,
 	configuredProjects map[string]Compose,
-	runningProjects map[string]dockerComposeProject,
+	runningProjects map[string]projectStatus,
 ) error {
 	if !d.Clean {
 		return nil
@@ -306,11 +312,11 @@ func (d DockerComposeBundle) dockerComposeClean(
 		}
 
 		// Skip projects not deployed by qbee
-		if !dockerComposeIsDeployed(project.Name, service) {
+		if !project.isDeployed(service) {
 			continue
 		}
 
-		_, err := dockerComposeRemoveProject(ctx, service, project.Name)
+		_, err := project.remove(ctx, service, project.Name)
 		if err != nil {
 			return fmt.Errorf("cannot stop compose project %s: %w", project.Name, err)
 		}
@@ -319,11 +325,11 @@ func (d DockerComposeBundle) dockerComposeClean(
 	return nil
 }
 
-func (d DockerComposeBundle) needsRestart(project dockerComposeProject) bool {
+func (d Compose) needsRestart(project projectStatus) bool {
 	return strings.Contains(project.Status, "exited")
 }
 
-func dockerComposeRemoveProject(ctx context.Context, service *Service, projectName string) ([]byte, error) {
+func (p projectStatus) remove(ctx context.Context, service *Service, projectName string) ([]byte, error) {
 	dockerComposeStop := []string{
 		"docker",
 		"compose",
@@ -349,8 +355,8 @@ func dockerComposeRemoveProject(ctx context.Context, service *Service, projectNa
 	return nil, nil
 }
 
-func dockerComposeIsDeployed(projectName string, service *Service) bool {
-	if _, err := os.Stat(filepath.Join(service.cacheDirectory, DockerComposeDirectory, projectName)); err != nil {
+func (p projectStatus) isDeployed(service *Service) bool {
+	if _, err := os.Stat(filepath.Join(service.cacheDirectory, DockerComposeDirectory, p.Name)); err != nil {
 		return false
 	}
 	return true

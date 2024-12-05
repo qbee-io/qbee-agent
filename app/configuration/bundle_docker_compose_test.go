@@ -60,12 +60,14 @@ func Test_Version_Parse(t *testing.T) {
 		},
 	}
 
+	conf := configuration.DockerComposeBundle{}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			version, err := configuration.DockerComposeParseVersion(tt.input)
+			version, err := conf.ParseVersion(tt.input)
 			assert.Empty(t, err)
 			assert.Equal(t, version, tt.expected)
-			assert.Equal(t, utils.IsNewerVersionOrEqual(version, configuration.DockerComposeMinimumVersion), tt.isCompat)
+			assert.Equal(t, utils.IsNewerVersionOrEqual(version, conf.GetMinimumVersion()), tt.isCompat)
 		})
 	}
 }
