@@ -57,6 +57,7 @@ type DockerComposeBundle struct {
 
 var dockerComposeVersionRE = regexp.MustCompile(`Docker Compose version v?([0-9.]+)`)
 
+// DockerComposeMinimumVersion is the minimum version of docker compose that is supported.
 const DockerComposeMinimumVersion = "2.0.0"
 
 // Execute docker compose configuration bundle on the system.
@@ -179,6 +180,7 @@ type dockerComposeProject struct {
 	Status string `json:"Status"`
 }
 
+// DockerComposeParseVersion parses the version of docker compose from the output.
 func DockerComposeParseVersion(output string) (string, error) {
 
 	matches := dockerComposeVersionRE.FindStringSubmatch(string(output))
