@@ -109,14 +109,14 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 		configuredProjects[project.Name] = project
 	}
 
-	runningProjects, err := d.getProjectStatus(ctx)
+	runningProjects, err := d.getLocalStatus(ctx)
 	if err != nil {
 		ReportError(ctx, err, "Cannot get list of running compose projects")
 		return err
 	}
 
 	// clean projects first to release resources
-	if err := d.dockerComposeClean(ctx, service, configuredProjects, runningProjects); err != nil {
+	if err := d.clean(ctx, service, configuredProjects, runningProjects); err != nil {
 		ReportError(ctx, err, "Cannot clean up compose projects")
 		return err
 	}
@@ -275,7 +275,7 @@ func (c Compose) getContext(ctx context.Context, service *Service) (bool, error)
 	return true, nil
 }
 
-func (d DockerComposeBundle) getProjectStatus(ctx context.Context) (map[string]projectStatus, error) {
+func (d DockerComposeBundle) getLocalStatus(ctx context.Context) (map[string]projectStatus, error) {
 	projectListingCmd := []string{"docker", "compose", "ls", "--all", "--format", "json"}
 	output, err := utils.RunCommand(ctx, projectListingCmd)
 
@@ -296,7 +296,7 @@ func (d DockerComposeBundle) getProjectStatus(ctx context.Context) (map[string]p
 	return projects, nil
 }
 
-func (d DockerComposeBundle) dockerComposeClean(
+func (d DockerComposeBundle) clean(
 	ctx context.Context,
 	service *Service,
 	configuredProjects map[string]Compose,
