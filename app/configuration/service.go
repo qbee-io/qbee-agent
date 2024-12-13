@@ -33,6 +33,7 @@ import (
 )
 
 const defaultAgentInterval = 5 // minutes
+const defaultFirstRunRetryCounter = 5
 
 // Service provides configuration management functionality for the agent.
 type Service struct {
@@ -43,6 +44,9 @@ type Service struct {
 
 	// cacheDirectory is a directory where the agent stores its cache data
 	cacheDirectory string
+
+	// userCacheDirectory is a directory where the agent stores its non-root user cache data
+	userCacheDirectory string
 
 	// currentCommitID represents commit ID of committed device config currently applied to the system
 	currentCommitID string
@@ -70,6 +74,9 @@ type Service struct {
 
 	// metrics service
 	metrics *metrics.Service
+
+	// firstRun is true if the agent is running for the first time after startup
+	firstRunRetryCounter int
 }
 
 // New returns a new instance of configuration Service.
@@ -83,12 +90,19 @@ func New(apiClient *api.Client, appDirectory, cacheDirectory string) *Service {
 		// this will notify the main agent loop about changes to the agent run interval
 		// we don't expect more than a single consumer of this, that's why a buffered channel is used
 		runIntervalChangeNotifier: make(chan time.Duration, 1),
+		firstRunRetryCounter:      defaultFirstRunRetryCounter,
 	}
 }
 
 // WithURLSigner sets the URL signer for the service.
 func (srv *Service) WithURLSigner(urlSigner URLSigner) *Service {
 	srv.urlSigner = urlSigner
+	return srv
+}
+
+// WithUserCacheDirectory sets the user cache directory for the service.
+func (srv *Service) WithUserCacheDirectory(userCacheDirectory string) *Service {
+	srv.userCacheDirectory = userCacheDirectory
 	return srv
 }
 
@@ -499,6 +513,12 @@ func (srv *Service) persistConfig(cfg *CommittedConfig) {
 
 	if err = json.NewEncoder(fp).Encode(cfg); err != nil {
 		log.Errorf("failed to marshal config: %v", err)
+		return
+	}
+
+	// sync disk writes to avoid data loss
+	if err = fp.Sync(); err != nil {
+		log.Errorf("failed to sync config file: %v", err)
 		return
 	}
 }

@@ -350,3 +350,19 @@ func (rpm *RpmPackageManager) ParsePackageFile(ctx context.Context, filePath str
 		Architecture: parts[2],
 	}, nil
 }
+
+// IsSupportedArchitecture returns true if architecture is supported by the system
+func (rpm *RpmPackageManager) IsSupportedArchitecture(arch string) error {
+	mainArch, err := rpm.PackageArchitecture()
+	if err != nil {
+		return err
+	}
+
+	allArchitectures := []string{mainArch, "noarch"}
+	for _, supportedArch := range allArchitectures {
+		if supportedArch == arch {
+			return nil
+		}
+	}
+	return fmt.Errorf("architecture %s is not supported by the system", arch)
+}

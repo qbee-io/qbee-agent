@@ -23,7 +23,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
+	"time"
 
 	"go.qbee.io/agent/app/api"
 	"go.qbee.io/agent/app/log"
@@ -33,9 +35,7 @@ const deviceConfigurationAPIPath = "/v1/org/device/auth/config"
 
 // get retrieves currently committed device configuration from the device hub API.
 func (srv *Service) get(ctx context.Context) (*CommittedConfig, error) {
-	cfg := new(CommittedConfig)
-
-	err := srv.api.Get(ctx, deviceConfigurationAPIPath, cfg)
+	cfg, err := srv.getWithRetry(ctx)
 
 	srv.reportAPIError(ctx, err)
 
@@ -44,6 +44,39 @@ func (srv *Service) get(ctx context.Context) (*CommittedConfig, error) {
 	}
 
 	return cfg, nil
+}
+
+const (
+	minReconnectDelay = 6
+	maxReconnectDelay = 10
+)
+
+func (srv *Service) getWithRetry(ctx context.Context) (*CommittedConfig, error) {
+
+	var err error
+	cfg := new(CommittedConfig)
+
+	if srv.firstRunRetryCounter == 0 {
+		err = srv.api.Get(ctx, deviceConfigurationAPIPath, cfg)
+		return cfg, err
+	}
+
+	// retry on first run as network might not be ready yet
+	for srv.firstRunRetryCounter > 0 {
+		srv.firstRunRetryCounter--
+		err = srv.api.Get(ctx, deviceConfigurationAPIPath, cfg)
+		if err != nil {
+			attempts := defaultFirstRunRetryCounter - srv.firstRunRetryCounter
+			reconnectIn := minReconnectDelay + rand.Int63n(maxReconnectDelay-minReconnectDelay)
+			log.Infof("error getting configuration (%d): %v - reconnecting in %d seconds", attempts, err, reconnectIn)
+			time.Sleep(time.Duration(reconnectIn) * time.Second)
+			continue
+		}
+		// successful connection, set retry counter to 0
+		srv.firstRunRetryCounter = 0
+		return cfg, nil
+	}
+	return nil, err
 }
 
 const fileManagerMetadataAPIPath = "/v1/org/device/auth/filemetadata/%s"

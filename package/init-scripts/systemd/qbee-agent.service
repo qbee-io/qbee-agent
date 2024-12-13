@@ -4,6 +4,7 @@ After=network.target
 ConditionPathExists=/etc/qbee/qbee-agent.json
 
 [Service]
+EnvironmentFile=-/etc/default/qbee-agent
 ExecStart=/usr/bin/qbee-agent start
 ExecReload=/bin/kill -HUP $MAINPID
 KillMode=process

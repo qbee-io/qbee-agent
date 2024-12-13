@@ -1,4 +1,4 @@
-FROM golang:1.21 as builder
+FROM golang:1.22 as builder
 
 ARG version
 ENV VERSION_VAR=go.qbee.io/agent/app.Version
@@ -22,8 +22,8 @@ FROM debian:stable
 ARG version
 
 # add qbee-dev apt repo
-COPY app/software/test_repository/debian /apt-repo
-RUN echo "deb [trusted=yes] file:/apt-repo ./" > /etc/apt/sources.list.d/qbee-dev.list
+COPY test/resources/debian /apt-repo
+RUN echo "deb [trusted=yes] file:/apt-repo/repo ./" > /etc/apt/sources.list.d/qbee-dev.list
 
 # Install ca-certificates in latest version
 RUN apt-get update && apt-get install -y ca-certificates curl
@@ -35,6 +35,10 @@ RUN echo "deb [trusted=yes] http://download.docker.com/linux/debian bullseye sta
 
 # update apt cache
 RUN apt-get update && apt-get upgrade -y
+RUN apt-get install docker-ce-cli podman -y 
+
+# install docker cli
+RUN apt-get install docker-ce-cli -y
 
 # create empty agent configuration directory
 RUN mkdir /etc/qbee && echo '{}' > /etc/qbee/qbee-agent.json
@@ -43,3 +47,6 @@ WORKDIR /app
 
 # copy the agent
 COPY --from=builder /usr/sbin/qbee-agent /usr/sbin/qbee-agent
+
+# add docker-compose files
+COPY test/resources/docker-compose /docker-compose

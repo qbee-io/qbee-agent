@@ -30,7 +30,7 @@ import (
 func Test_FileDistributionBundle(t *testing.T) {
 	r := runner.New(t)
 
-	localFileRef := "file:///apt-repo/qbee-test_2.1.1_all.deb"
+	localFileRef := "file:///apt-repo/repo/qbee-test_2.1.1_all.deb"
 
 	agentConfig := configuration.CommittedConfig{
 		Bundles: []string{configuration.BundleFileDistribution},
@@ -143,7 +143,7 @@ func Test_FileDistributionBundle_TemplateUsingParameters(t *testing.T) {
 func Test_FileDistributionBundle_AfterCommand(t *testing.T) {
 	r := runner.New(t)
 
-	localFileRef := "file:///apt-repo/qbee-test_2.1.1_all.deb"
+	localFileRef := "file:///apt-repo/repo/qbee-test_2.1.1_all.deb"
 
 	agentConfig := configuration.CommittedConfig{
 		Bundles: []string{configuration.BundleFileDistribution},
@@ -182,7 +182,7 @@ func Test_FileDistributionBundle_AfterCommand(t *testing.T) {
 func Test_FileDistributionBundle_PreCondition_True(t *testing.T) {
 	r := runner.New(t)
 
-	localFileRef := "file:///apt-repo/qbee-test_2.1.1_all.deb"
+	localFileRef := "file:///apt-repo/repo/qbee-test_2.1.1_all.deb"
 
 	// commit config for the device
 	agentConfig := configuration.CommittedConfig{
@@ -219,7 +219,7 @@ func Test_FileDistributionBundle_PreCondition_True(t *testing.T) {
 func Test_FileDistributionBundle_PreCondition_False(t *testing.T) {
 	r := runner.New(t)
 
-	localFileRef := "file:///apt-repo/qbee-test_2.1.1_all.deb"
+	localFileRef := "file:///apt-repo/repo/qbee-test_2.1.1_all.deb"
 
 	// commit config for the device
 	agentConfig := configuration.CommittedConfig{
@@ -253,7 +253,7 @@ func Test_FileDistributionBundle_Destination_Dirname_Exists(t *testing.T) {
 
 	destDir := "/tmp/"
 	filename := "qbee-test_2.1.1_all.deb"
-	localFileRef := "file:///apt-repo/" + filename
+	localFileRef := "file:///apt-repo/repo/" + filename
 
 	agentConfig := configuration.CommittedConfig{
 		Bundles: []string{configuration.BundleFileDistribution},
@@ -289,7 +289,7 @@ func Test_FileDistributionBundle_Destination_Dirname_Exists(t *testing.T) {
 func Test_FileDistributionBundle_Destination_Regular_Path(t *testing.T) {
 	r := runner.New(t)
 
-	localFileRef := "file:///apt-repo/qbee-test_2.1.1_all.deb"
+	localFileRef := "file:///apt-repo/repo/qbee-test_2.1.1_all.deb"
 	destFile := "/tmp/qbee-test_2.1.1_all.deb"
 
 	agentConfig := configuration.CommittedConfig{
@@ -328,7 +328,7 @@ func Test_FileDistributionBundle_Destination_Regular_Path(t *testing.T) {
 func Test_FileDistributionBundle_Destination_Dirname_NotExists(t *testing.T) {
 	r := runner.New(t)
 
-	localFileRef := "file:///apt-repo/qbee-test_2.1.1_all.deb"
+	localFileRef := "file:///apt-repo/repo/qbee-test_2.1.1_all.deb"
 	destDir := "/tmp/doesnotexist/"
 
 	agentConfig := configuration.CommittedConfig{
@@ -358,7 +358,7 @@ func Test_FileDistributionBundle_Destination_Dirname_NotExists(t *testing.T) {
 func Test_FileDistributionBundle_Destination_Is_Empty(t *testing.T) {
 	r := runner.New(t)
 
-	localFileRef := "file:///apt-repo/qbee-test_2.1.1_all.deb"
+	localFileRef := "file:///apt-repo/repo/qbee-test_2.1.1_all.deb"
 	destDir := ""
 
 	agentConfig := configuration.CommittedConfig{

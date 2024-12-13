@@ -77,6 +77,9 @@ type PackageManager interface {
 	// PackageArchitecture returns the architecture of the package manager
 	PackageArchitecture() (string, error)
 
+	// IsSupportedArchitecture returns true if architecture is supported by the system
+	IsSupportedArchitecture(arch string) error
+
 	// ParsePackageFile returns a package from a file path.
 	ParsePackageFile(ctx context.Context, filePath string) (*Package, error)
 }

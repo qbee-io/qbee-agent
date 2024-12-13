@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"go.qbee.io/agent/app/utils"
 )
 
 // Default connectivity settings
@@ -119,9 +121,9 @@ func (agent *Agent) saveConfig() error {
 
 	configPath := filepath.Join(agent.cfg.Directory, configFileName)
 
-	if err = os.WriteFile(configPath, config, configFileMode); err != nil {
+	// Write file with sync to ensure data is written to disk
+	if err = utils.WriteFileSync(configPath, config, configFileMode); err != nil {
 		return fmt.Errorf("error writing config file %s: %w", configPath, err)
 	}
-
 	return nil
 }
