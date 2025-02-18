@@ -140,7 +140,7 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 			restart = !project.SkipRestart
 		}
 
-		if restart {
+		if restart && !created {
 			ReportWarning(ctx, nil, "One or more containers in exited state for project %s. Restart scheduled", project.Name)
 		}
 
