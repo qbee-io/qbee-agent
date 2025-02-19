@@ -184,7 +184,6 @@ type projectStatus struct {
 }
 
 // GetMinimumVersion returns the minimum version of docker compose that is supported.
-
 func (d DockerComposeBundle) GetMinimumVersion() string {
 	return dockerComposeMinimumVersion
 }
@@ -328,7 +327,7 @@ func (d DockerComposeBundle) clean(
 	return nil
 }
 
-func (d Compose) needsRestart(project projectStatus) bool {
+func (c Compose) needsRestart(project projectStatus) bool {
 	return strings.Contains(project.Status, "exited")
 }
 
