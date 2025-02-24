@@ -312,7 +312,7 @@ func Test_ComposeWithSkipRestart(t *testing.T) {
 
 	reports, _ = configuration.ExecuteTestConfigInDocker(r, config)
 	expectedReports = []string{
-		"[WARN] One or more containers in exited state for project project-a. Restart scehduled",
+		"[WARN] One or more containers in exited state for project project-a. Restart scheduled",
 		"[INFO] Started compose project project-a",
 	}
 

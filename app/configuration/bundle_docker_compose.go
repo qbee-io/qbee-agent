@@ -135,10 +135,13 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 		restart := false
 		if runningProject, ok := runningProjects[project.Name]; ok {
 			restart = project.needsRestart(runningProject) && !project.SkipRestart
+		} else {
+			// if project is not running, we should start it
+			restart = !project.SkipRestart
 		}
 
-		if restart {
-			ReportWarning(ctx, nil, "One or more containers in exited state for project %s. Restart scehduled", project.Name)
+		if restart && !created {
+			ReportWarning(ctx, nil, "One or more containers in exited state for project %s. Restart scheduled", project.Name)
 		}
 
 		if created || restart {
@@ -181,7 +184,6 @@ type projectStatus struct {
 }
 
 // GetMinimumVersion returns the minimum version of docker compose that is supported.
-
 func (d DockerComposeBundle) GetMinimumVersion() string {
 	return dockerComposeMinimumVersion
 }
@@ -325,7 +327,7 @@ func (d DockerComposeBundle) clean(
 	return nil
 }
 
-func (d Compose) needsRestart(project projectStatus) bool {
+func (c Compose) needsRestart(project projectStatus) bool {
 	return strings.Contains(project.Status, "exited")
 }
 
