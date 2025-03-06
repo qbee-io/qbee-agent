@@ -38,17 +38,17 @@ func Test_SoftwareManagementBundle_InstallPackageFromFile(t *testing.T) {
 	}{
 		{
 			name:     "deb",
-			filename: "file:///apt-repo/qbee-test_2.1.1_all.deb",
+			filename: "file:///apt-repo/repo/qbee-test_2.1.1_all.deb",
 			runner:   runner.New(t),
 		},
 		{
 			name:     "rpm",
-			filename: "file:///yum-repo/qbee-test-2.1.1-1.noarch.rpm",
+			filename: "file:///yum-repo/repo/qbee-test-2.1.1-1.noarch.rpm",
 			runner:   runner.NewRHELRunner(t),
 		},
 		{
 			name:     "opkg",
-			filename: "file:///opkg-repo/qbee-test_2.1.1_all.ipk",
+			filename: "file:///opkg-repo/repo/qbee-test_2.1.1_all.ipk",
 			runner:   runner.NewOpenWRTRunner(t),
 		},
 	}
@@ -93,12 +93,12 @@ func Test_SoftwareManagementBundle_InstallPackageFromFile_WithConflicts(t *testi
 	}{
 		{
 			name:     "deb",
-			filename: "file:///apt-repo/qbee-test-conflicts_1.0.0_all.deb",
+			filename: "file:///apt-repo/repo/qbee-test-conflicts_1.0.0_all.deb",
 			runner:   runner.New(t),
 		},
 		{
 			name:     "rpm",
-			filename: "file:///yum-repo/qbee-test-conflicts-1.0.0-1.noarch.rpm",
+			filename: "file:///yum-repo/repo/qbee-test-conflicts-1.0.0-1.noarch.rpm",
 			runner:   runner.NewRHELRunner(t),
 		},
 	}
@@ -133,17 +133,17 @@ func Test_SoftwareManagementBundle_InstallPackageFromFile_WithDependencies(t *te
 	}{
 		{
 			name:     "deb",
-			filename: "file:///apt-repo/qbee-test-dep_1.0.0_all.deb",
+			filename: "file:///apt-repo/repo/qbee-test-dep_1.0.0_all.deb",
 			runner:   runner.New(t),
 		},
 		{
 			name:     "rpm",
-			filename: "file:///yum-repo/qbee-test-dep-1.0.0-1.noarch.rpm",
+			filename: "file:///yum-repo/repo/qbee-test-dep-1.0.0-1.noarch.rpm",
 			runner:   runner.NewRHELRunner(t),
 		},
 		{
 			name:     "opkg",
-			filename: "file:///opkg-repo/qbee-test-dep_1.0.0_all.ipk",
+			filename: "file:///opkg-repo/repo/qbee-test-dep_1.0.0_all.ipk",
 			runner:   runner.NewOpenWRTRunner(t),
 		},
 	}
@@ -206,7 +206,7 @@ func Test_SoftwareManagementBundle_InstallPackage_WithConfigFileTemplate(t *test
 								ConfigLocation: "/etc/config.test",
 							},
 						},
-						Parameters: []configuration.ConfigFileParameter{
+						Parameters: []configuration.TemplateParameter{
 							{Key: "k1", Value: "test-value"},
 							{Key: "k2", Value: "$(p1)"},
 						},
@@ -346,6 +346,55 @@ func Test_SoftwareManagementBundle_InstallPackage_PreCondition(t *testing.T) {
 			assert.Equal(t, reports, testCase.expectedReports)
 		})
 	}
+}
+
+func Test_SoftwareManagementBundle_InstallPackage_Unsupported_Architecture(t *testing.T) {
+
+	tt := []struct {
+		name     string
+		filename string
+		runner   *runner.Runner
+	}{
+		{
+			name:     "deb",
+			filename: "file:///apt-repo/unsupported-archs/arch-test_1.0.0_unsupported.deb",
+			runner:   runner.New(t),
+		},
+		{
+			name:     "rpm",
+			filename: "file:///yum-repo/unsupported-archs/arch-test-1.0.0-1.unsupported.rpm",
+			runner:   runner.NewRHELRunner(t),
+		},
+		{
+			name:     "opkg",
+			filename: "file:///opkg-repo/unsupported-archs/arch-test_1.0.0_unsupported.ipk",
+			runner:   runner.NewOpenWRTRunner(t),
+		},
+	}
+
+	wg := sync.WaitGroup{}
+
+	for _, test := range tt {
+		wg.Add(1)
+		go func(r *runner.Runner, filename string) {
+			defer wg.Done()
+			packages := []configuration.Software{
+				{
+					Package:     filename,
+					ServiceName: "qbee-test-dep",
+				},
+			}
+
+			// execute configuration bundles
+			reports := executeSoftwareManagementBundle(r, packages)
+			expectedReports := []string{
+				"[ERR] Unable to determine supported architecture for package arch-test",
+			}
+			assert.Equal(t, reports, expectedReports)
+		}(test.runner, test.filename)
+	}
+	wg.Wait()
+
 }
 
 // executeSoftwareManagementBundle is a helper method to quickly execute software management bundle.

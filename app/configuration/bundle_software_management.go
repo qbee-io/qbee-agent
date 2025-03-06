@@ -92,15 +92,6 @@ type ConfigFile struct {
 	ConfigLocation string `json:"config_location"`
 }
 
-// ConfigFileParameter defines parameter to be used in ConfigFile.
-type ConfigFileParameter struct {
-	// Key defines parameters name.
-	Key string `json:"key"`
-
-	// Value defines parameters value.
-	Value string `json:"value"`
-}
-
 // Software defines software to be maintained in the system.
 type Software struct {
 	// Package defines a package name to install.
@@ -116,7 +107,7 @@ type Software struct {
 	ConfigFiles []ConfigFile `json:"config_files"`
 
 	// Parameters for the ConfigFiles templating.
-	Parameters []ConfigFileParameter `json:"parameters"`
+	Parameters []TemplateParameter `json:"parameters"`
 }
 
 func (s Software) serviceName(ctx context.Context, srv *Service) string {
@@ -166,7 +157,8 @@ func (s Software) Execute(ctx context.Context, srv *Service, pkgManager software
 	for _, cfgFile := range s.ConfigFiles {
 		var created bool
 
-		created, err = srv.downloadTemplateFile(ctx, "", cfgFile.ConfigTemplate, cfgFile.ConfigLocation, s.parametersMap())
+		parameters := templateParametersMap(s.Parameters)
+		created, err = srv.downloadTemplateFile(ctx, "", cfgFile.ConfigTemplate, cfgFile.ConfigLocation, parameters)
 		if err != nil {
 			return err
 		}
@@ -202,6 +194,18 @@ func (s Software) installFromFile(ctx context.Context, srv *Service, pkgManager 
 	// get package info
 	pkgInfo, err := software.DefaultPackageManager.ParsePackageFile(ctx, pkgFileCachePath)
 	if err != nil {
+		return false, err
+	}
+
+	// check non-empty architecture
+	if pkgInfo.Architecture == "" {
+		ReportError(ctx, nil, "Package %s reports empty architecture", pkgInfo.Name)
+		return false, fmt.Errorf("package %s reports empty architecture", pkgInfo.Name)
+	}
+
+	// check package architecture
+	if err := pkgManager.IsSupportedArchitecture(pkgInfo.Architecture); err != nil {
+		ReportError(ctx, err, "Unable to determine supported architecture for package %s", pkgInfo.Name)
 		return false, err
 	}
 
@@ -284,17 +288,6 @@ func (s Software) installFromRepository(ctx context.Context, pkgManager software
 	ReportInfo(ctx, output, "Successfully installed '%s'", s.Package)
 
 	return true, nil
-}
-
-// parametersMap returns a key->value map of defined file template parameters
-func (s Software) parametersMap() map[string]string {
-	parametersMap := make(map[string]string)
-
-	for _, parameter := range s.Parameters {
-		parametersMap[parameter.Key] = parameter.Value
-	}
-
-	return parametersMap
 }
 
 // restart restarts the service

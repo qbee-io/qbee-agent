@@ -20,6 +20,8 @@ package software
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -117,6 +119,46 @@ func TestOpkgPackageManager_parsePackageFile(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got, _ := opkg.ParsePackageFile(ctx, tt.file); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("parsePackageFile() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestOpkgPackageManager_getInfoPath(t *testing.T) {
+
+	configFileContents := `
+option lists_dir /usr/share/opkg/lists
+option status_file /usr/share/opkg/status
+option info_dir /usr/share/opkg/info
+`
+	tmpDir := t.TempDir()
+
+	confFile := filepath.Join(tmpDir, "opkg.conf")
+
+	if err := os.WriteFile(confFile, []byte(configFileContents), 0644); err != nil {
+		t.Fatalf("error writing opkg.conf file: %v", err)
+	}
+
+	tests := []struct {
+		name       string
+		configPath string
+		want       string
+	}{
+		{
+			name:       "test",
+			configPath: "",
+			want:       "/usr/lib/opkg/info",
+		},
+		{
+			name:       "test-with-config",
+			configPath: confFile,
+			want:       "/usr/share/opkg/info",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := resolveOpkgInfoPath(tt.configPath); got != tt.want {
+				t.Errorf("getInfoPath() = %v, want %v", got, tt.want)
 			}
 		})
 	}

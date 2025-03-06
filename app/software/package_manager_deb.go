@@ -377,3 +377,20 @@ func (deb *DebianPackageManager) ParsePackageFile(ctx context.Context, pkgFilePa
 
 	return pkg, nil
 }
+
+// IsSupportedArchitecture returns true if architecture is supported by the system
+func (deb *DebianPackageManager) IsSupportedArchitecture(arch string) error {
+	mainArch, err := deb.PackageArchitecture()
+	if err != nil {
+		return err
+	}
+
+	allArchs := []string{mainArch, "all"}
+	for _, supportedArch := range allArchs {
+		if supportedArch == arch {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("architecture %s is not supported by the system", arch)
+}

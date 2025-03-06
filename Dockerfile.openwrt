@@ -1,4 +1,4 @@
-FROM golang:1.21 as builder
+FROM golang:1.22 as builder
 
 ARG version
 ENV VERSION_VAR=go.qbee.io/agent/app.Version
@@ -28,9 +28,9 @@ RUN mkdir -p /var/lock
 
 RUN sed -i '/^exit 0/i cat \/tmp\/resolv.conf > \/etc\/resolv.conf' /etc/rc.local
 
-COPY app/software/test_repository/opkg /opkg-repo
+COPY test/resources/opkg /opkg-repo
 
-RUN echo "src/gz qbee file:///opkg-repo" >> /etc/opkg/customfeeds.conf
+RUN echo "src/gz qbee file:///opkg-repo/repo" >> /etc/opkg/customfeeds.conf
 RUN sed -i '/option check_signature/d' /etc/opkg.conf
 
 RUN mkdir /etc/qbee && echo '{}' > /etc/qbee/qbee-agent.json

@@ -26,7 +26,7 @@ docker-image:
 		--build-arg version=2023.01 \
 		-f Dockerfile.openwrt .
 
-test:
+test-src:
 	go test ./app/...
 
 lint:

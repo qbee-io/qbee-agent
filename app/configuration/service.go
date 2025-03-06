@@ -17,6 +17,7 @@
 package configuration
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -28,9 +29,11 @@ import (
 
 	"go.qbee.io/agent/app/api"
 	"go.qbee.io/agent/app/log"
+	"go.qbee.io/agent/app/metrics"
 )
 
 const defaultAgentInterval = 5 // minutes
+const defaultFirstRunRetryCounter = 5
 
 // Service provides configuration management functionality for the agent.
 type Service struct {
@@ -41,6 +44,9 @@ type Service struct {
 
 	// cacheDirectory is a directory where the agent stores its cache data
 	cacheDirectory string
+
+	// userCacheDirectory is a directory where the agent stores its non-root user cache data
+	userCacheDirectory string
 
 	// currentCommitID represents commit ID of committed device config currently applied to the system
 	currentCommitID string
@@ -65,6 +71,12 @@ type Service struct {
 	// 0 -> disabled
 	connectivityWatchdogThreshold int
 	failedConnectionsCount        int
+
+	// metrics service
+	metrics *metrics.Service
+
+	// firstRun is true if the agent is running for the first time after startup
+	firstRunRetryCounter int
 }
 
 // New returns a new instance of configuration Service.
@@ -78,12 +90,25 @@ func New(apiClient *api.Client, appDirectory, cacheDirectory string) *Service {
 		// this will notify the main agent loop about changes to the agent run interval
 		// we don't expect more than a single consumer of this, that's why a buffered channel is used
 		runIntervalChangeNotifier: make(chan time.Duration, 1),
+		firstRunRetryCounter:      defaultFirstRunRetryCounter,
 	}
 }
 
 // WithURLSigner sets the URL signer for the service.
 func (srv *Service) WithURLSigner(urlSigner URLSigner) *Service {
 	srv.urlSigner = urlSigner
+	return srv
+}
+
+// WithUserCacheDirectory sets the user cache directory for the service.
+func (srv *Service) WithUserCacheDirectory(userCacheDirectory string) *Service {
+	srv.userCacheDirectory = userCacheDirectory
+	return srv
+}
+
+// WithMetricsService sets the metrics service for the service.
+func (srv *Service) WithMetricsService(metricsService *metrics.Service) *Service {
+	srv.metrics = metricsService
 	return srv
 }
 
@@ -141,6 +166,14 @@ func (srv *Service) UpdateSettings(configData *CommittedConfig) {
 	}
 
 	configData.BundleData.Settings.Execute(srv)
+}
+
+// UpdateMetricsMonitorState deletes the monitor state if the metrics monitor bundle is disabled
+// or not configured in the provided config data.
+func (srv *Service) UpdateMetricsMonitorState(configData *CommittedConfig) {
+	if !configData.HasBundle(BundleMetricsMonitor) || !configData.BundleData.MetricsMonitor.Enabled {
+		deleteMetricsMonitorState()
+	}
 }
 
 const executeTimeout = time.Hour
@@ -321,6 +354,11 @@ func (srv *Service) addReportsToBuffer(reports []Report) error {
 		}
 	}
 
+	// sync disk writes to avoid data loss
+	if err = fp.Sync(); err != nil {
+		return fmt.Errorf("failed to sync reports buffer file: %v", err)
+	}
+
 	return nil
 }
 
@@ -343,14 +381,35 @@ func (srv *Service) readReportsBuffer() ([]Report, error) {
 
 	reportsExpirationCutoff := time.Now().Add(-reportsBufferExpiration).Unix()
 
-	for {
+	for decoder.More() {
+		var offset int64
 		var report Report
 		if err := decoder.Decode(&report); err != nil {
-			if errors.Is(err, io.EOF) {
-				break
+
+			var serr *json.SyntaxError
+			var ok bool
+			if serr, ok = err.(*json.SyntaxError); !ok {
+				log.Errorf("failed to decode report: %v", err)
+				return reports, nil
 			}
 
-			return nil, fmt.Errorf("failed to decode report: %v", err)
+			offset = offset + serr.Offset
+			log.Errorf("syntax error at offset %d, trying to recover: %v", offset, err)
+			buffer, err := io.ReadAll(decoder.Buffered())
+
+			if err != nil {
+				log.Errorf("readall error: %v\n", err)
+				return reports, nil
+			}
+
+			if serr.Offset > int64(len(buffer)) {
+				log.Errorf("offset %d is beyond buffer length %d", serr.Offset, len(buffer))
+				return reports, nil
+			}
+
+			buffer = buffer[serr.Offset:]
+			decoder = json.NewDecoder(io.MultiReader(bytes.NewBuffer(buffer), fp))
+			continue
 		}
 
 		// don't return reports that are too old
@@ -454,6 +513,12 @@ func (srv *Service) persistConfig(cfg *CommittedConfig) {
 
 	if err = json.NewEncoder(fp).Encode(cfg); err != nil {
 		log.Errorf("failed to marshal config: %v", err)
+		return
+	}
+
+	// sync disk writes to avoid data loss
+	if err = fp.Sync(); err != nil {
+		log.Errorf("failed to sync config file: %v", err)
 		return
 	}
 }

@@ -186,11 +186,13 @@ func (systemInfo *SystemInfo) gatherNetworkInfo() error {
 	return nil
 }
 
+const defaultPlatformInfo = "unknown"
+
 // parseOSRelease extracts flavor and os_version information from os-release file.
 func (systemInfo *SystemInfo) parseOSRelease() error {
 	// Set defaults to unknown
-	systemInfo.Flavor = "unknown"
-	systemInfo.OSVersion = "unknown"
+	systemInfo.Flavor = defaultPlatformInfo
+	systemInfo.OSVersion = defaultPlatformInfo
 
 	data, err := utils.ParseEnvFile("/etc/os-release")
 
@@ -207,24 +209,25 @@ func (systemInfo *SystemInfo) parseOSRelease() error {
 		return nil
 	}
 
+	systemInfo.Flavor = canonify(strings.ToLower(data["ID"]))
+
+	if _, ok := data["VERSION"]; ok {
+		idUppercaseFirst := []rune(data["ID"])
+		idUppercaseFirst[0] = unicode.ToUpper(idUppercaseFirst[0])
+		systemInfo.OSVersion = fmt.Sprintf("%s %s", string(idUppercaseFirst), data["VERSION"])
+	}
+
 	if _, ok := data["VERSION_ID"]; !ok {
 		return nil
 	}
 
-	id := canonify(strings.ToLower(data["ID"]))
 	versionID := canonify(data["VERSION_ID"])
 	version := strings.Split(versionID, "_")
-	systemInfo.Flavor = fmt.Sprintf("%s_%s", id, version[0])
+	systemInfo.Flavor = fmt.Sprintf("%s_%s", systemInfo.Flavor, version[0])
 
-	if _, ok := data["VERSION"]; ok {
-
-		idUppercaseFirst := []rune(data["ID"])
-		idUppercaseFirst[0] = unicode.ToUpper(idUppercaseFirst[0])
-		systemInfo.OSVersion = fmt.Sprintf("%s %s", string(idUppercaseFirst), data["VERSION"])
-		return nil
+	if systemInfo.OSVersion == defaultPlatformInfo {
+		systemInfo.OSVersion = fmt.Sprintf("%s %s", strings.ToTitle(data["ID"]), data["VERSION_ID"])
 	}
-
-	systemInfo.OSVersion = fmt.Sprintf("%s %s", strings.ToTitle(data["ID"]), data["VERSION_ID"])
 	return nil
 }
 

@@ -52,11 +52,34 @@ const DockerContainerDirectory = "docker_containers"
 // PodmanContainerDirectory is where the agent will download podman related files.
 const PodmanContainerDirectory = "podman_containers"
 
+// DockerComposeDirectory is where the agent will download docker-compose related files.
+const DockerComposeDirectory = "docker_compose"
+
 // FileMetadata is the metadata of a file.
 type FileMetadata struct {
 	MD5          string            `json:"md5"`
 	LastModified int64             `json:"last_modified"`
 	Tags         map[string]string `json:"tags,omitempty"`
+}
+
+// TemplateParameter defines a single parameter used to replace placeholder in a template.
+type TemplateParameter struct {
+	// Key of the parameter used in files.
+	Key string `json:"key"`
+
+	// Value of the parameter which will replace Key placeholders.
+	Value string `json:"value"`
+}
+
+// ParametersMap returns TemplateParameters as map.
+func templateParametersMap(templateParameters []TemplateParameter) map[string]string {
+	parameters := make(map[string]string)
+
+	for _, param := range templateParameters {
+		parameters[param.Key] = param.Value
+	}
+
+	return parameters
 }
 
 const fileDigestSHA256Tag = "qbee_digest_sha256"

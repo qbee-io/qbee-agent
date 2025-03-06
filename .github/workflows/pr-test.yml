@@ -14,15 +14,15 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.21.11
+          go-version: 1.22.12
 
       - name: Build and test
-        run: make docker-image test
+        run: make docker-image test-src
 
       - id: govulncheck
         uses: golang/govulncheck-action@v1
         with:
-          go-version-input: 1.21.11
+          go-version-input: 1.22.12
           go-package: ./...
 
       - name: golint

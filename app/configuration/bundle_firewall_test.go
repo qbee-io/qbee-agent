@@ -29,6 +29,9 @@ import (
 func Test_Firewall_NoIPTablesInstalled(t *testing.T) {
 	r := runner.New(t)
 
+	// Remove any installed iptables
+	r.MustExec("rm", "-f", "/sbin/iptables", "/usr/sbin/iptables")
+
 	reports := executeFirewallBundle(r, configuration.FirewallBundle{
 		Tables: map[configuration.FirewallTableName]configuration.FirewallTable{
 			configuration.Filter: {

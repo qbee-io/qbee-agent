@@ -30,6 +30,7 @@ import (
 	"path/filepath"
 
 	"go.qbee.io/agent/app/log"
+	"go.qbee.io/agent/app/utils"
 )
 
 const (
@@ -40,8 +41,12 @@ const (
 )
 
 // loadCACertificatesPool loads trusted CA certificate.
-func (agent *Agent) loadCACertificatesPool() error {
+func (agent *Agent) loadCACertificatesPool(caCert string) error {
 	caCertPath := filepath.Join(agent.cfg.Directory, credentialsDirectory, caCertFilename)
+
+	if caCert != "" {
+		caCertPath = caCert
+	}
 
 	agent.caCertPool = x509.NewCertPool()
 
@@ -114,8 +119,8 @@ func (agent *Agent) createPrivateKey() error {
 	pemBytes := pem.EncodeToMemory(pemBlock)
 	keyPath := filepath.Join(agent.cfg.Directory, credentialsDirectory, privateKeyFilename)
 
-	if err = os.WriteFile(keyPath, pemBytes, credentialsFileMode); err != nil {
-		return fmt.Errorf("")
+	if err = utils.WriteFileSync(keyPath, pemBytes, credentialsFileMode); err != nil {
+		return fmt.Errorf("unable to write private key to %s: %w", keyPath, err)
 	}
 
 	agent.privateKey = privateKey
@@ -174,7 +179,7 @@ func (agent *Agent) saveCertificate(pemCertificate []byte) error {
 
 	keyPath := filepath.Join(agent.cfg.Directory, credentialsDirectory, certificateFilename)
 
-	if err = os.WriteFile(keyPath, pemCertificate, credentialsFileMode); err != nil {
+	if err = utils.WriteFileSync(keyPath, pemCertificate, credentialsFileMode); err != nil {
 		return fmt.Errorf("error writing certificate: %w", err)
 	}
 

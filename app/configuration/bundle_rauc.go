@@ -65,6 +65,19 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return nil
 	}
 
+	raucVersion, err := image.GetRaucVersion(ctx)
+
+	if err != nil {
+		ReportError(ctx, err, "Failed to get RAUC version")
+		return err
+	}
+
+	isCompatible := image.IsRaucCompatible(raucVersion)
+	if !isCompatible {
+		ReportError(ctx, nil, "RAUC version '%s' is not compatible with the agent", raucVersion)
+		return err
+	}
+
 	if !CheckPreCondition(ctx, r.PreCondition) {
 		return nil
 	}
@@ -75,6 +88,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return err
 	}
 
+	r.RaucBundle = resolveParameters(ctx, r.RaucBundle)
 	raucPath, err := r.resolveRaucPath(ctx, service)
 	if err != nil {
 		ReportError(ctx, err, "Failed to resolve RAUC bundle path")
@@ -223,8 +237,6 @@ func getCurrentSlot(localRaucInfo *image.RaucStatus) (string, *image.SlotData, e
 
 func (r *RaucBundle) resolveRaucPath(ctx context.Context, service *Service) (string, error) {
 
-	raucBundle := resolveParameters(ctx, r.RaucBundle)
-
 	if r.Download {
 
 		raucDownloadPath := defaultDownloadPath
@@ -232,9 +244,9 @@ func (r *RaucBundle) resolveRaucPath(ctx context.Context, service *Service) (str
 			raucDownloadPath = resolveParameters(ctx, r.DownloadPath)
 		}
 
-		return downloadRaucBundle(ctx, service, raucBundle, raucDownloadPath)
+		return downloadRaucBundle(ctx, service, r.RaucBundle, raucDownloadPath)
 	}
-	return generateStreamingURL(service, raucBundle)
+	return generateStreamingURL(service, r.RaucBundle)
 }
 
 func downloadRaucBundle(ctx context.Context, service *Service, raucPath, raucDownloadPath string) (string, error) {
