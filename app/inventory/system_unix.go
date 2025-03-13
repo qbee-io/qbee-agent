@@ -92,6 +92,11 @@ func CollectSystemInventory(tpmEnabled bool) (*System, error) {
 
 // getDefaultNetworkInterface returns a default network interface name.
 func (systemInfo *SystemInfo) getDefaultNetworkInterface() (string, error) {
+
+	if runtime.GOOS != "linux" {
+		return "", nil
+	}
+
 	routeFilePath := filepath.Join(linux.ProcFS, "net", "route")
 
 	defaultInterface := ""
@@ -233,6 +238,9 @@ func (systemInfo *SystemInfo) parseOSRelease() error {
 
 // parseCPUInfo parses /proc/cpuinfo for extra details re. CPU.
 func (systemInfo *SystemInfo) parseCPUInfo() error {
+	if runtime.GOOS != "linux" {
+		return nil
+	}
 	filePath := filepath.Join(linux.ProcFS, "cpuinfo")
 
 	const expectedLineSubstrings = 2

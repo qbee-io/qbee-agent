@@ -17,6 +17,7 @@
 package metrics
 
 import (
+	"runtime"
 	"sync"
 	"time"
 
@@ -72,6 +73,11 @@ var metricsCacheTTL = 60 * time.Second
 // Collect system metrics.
 // If any errors are encountered, they'll be logged, but won't interrupt the process.
 func (s *Service) Collect() []Metric {
+	if runtime.GOOS != "linux" {
+		log.Debugf("metrics collection is not supported on %s", runtime.GOOS)
+		return nil
+	}
+
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
