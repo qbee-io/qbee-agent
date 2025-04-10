@@ -268,32 +268,6 @@ func (systemInfo *SystemInfo) parseCPUInfo() error {
 	})
 }
 
-// parseSysinfoSyscall populates system info from sysinfo system call.
-func (systemInfo *SystemInfo) parseSysinfoSyscall() error {
-	/*
-		now := time.Now()
-		sysinfo, err := getSysinfo()
-		if err != nil {
-			return err
-		}
-	*/
-	systemInfo.BootTime = fmt.Sprintf("%d", 0)
-
-	return nil
-}
-
-/*
-// getSysinfo returns sysinfo struct.
-
-	func getSysinfo() (*syscall.Sysinfo_t, error) {
-		sysinfo := new(syscall.Sysinfo_t)
-		if err := syscall.Sysinfo(sysinfo); err != nil {
-			return nil, fmt.Errorf("error calling sysinfo syscall: %w", err)
-		}
-
-		return sysinfo, nil
-	}
-*/
 var nonAlphaNumRE = regexp.MustCompile("[^a-zA-Z0-9]")
 
 // canonify replaces all non-alphanumeric characters with underscore (_).
