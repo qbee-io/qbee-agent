@@ -34,6 +34,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"sync"
 
 	"go.qbee.io/agent/app/metrics"
@@ -89,6 +90,11 @@ func init() {
 
 // Execute the metrics monitor bundle.
 func (m *MetricsMonitorBundle) Execute(ctx context.Context, service *Service) error {
+
+	// TODO: implement metrics for other platforms
+	if runtime.GOOS != "linux" {
+		return nil
+	}
 
 	collectedMetrics := service.metrics.Collect()
 
