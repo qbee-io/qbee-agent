@@ -61,6 +61,11 @@ func (s SettingsBundle) Execute(service *Service) {
 	service.softwareInventoryEnabled = s.EnableSoftwareInventory
 	service.processInventoryEnabled = s.EnableProcessInventory
 
+	// Do not accept run interval smaller than the default agent interval.
+	if s.RunInterval < minimumAgentInterval {
+		return
+	}
+
 	if service.runInterval != s.RunInterval {
 		service.runIntervalChangeNotifier <- time.Duration(s.RunInterval) * time.Minute
 	}
