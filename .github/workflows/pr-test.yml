@@ -14,7 +14,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.22.12
+          go-version: 1.23.8
 
       - name: Build and test
         run: make docker-image test-src
@@ -22,7 +22,7 @@ jobs:
       - id: govulncheck
         uses: golang/govulncheck-action@v1
         with:
-          go-version-input: 1.22.12
+          go-version-input: 1.23.8
           go-package: ./...
 
       - name: golint
