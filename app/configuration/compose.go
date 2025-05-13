@@ -19,6 +19,10 @@ type Compose struct {
 	// SkipRestart skips the restart of the container.
 	SkipRestart bool `json:"skip_restart,omitempty"`
 
+	// NoForceRecreate skips the force recreation of containers
+	// whose configuration has not changed upon changes in project resources
+	NoForceRecreate bool `json:"no_force_restart,omitempty"`
+
 	// Parameters are the parameters that can be used in the compose file.
 	Parameters []TemplateParameter `json:"parameters,omitempty"`
 

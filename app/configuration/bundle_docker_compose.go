@@ -161,7 +161,10 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 				"--timeout",
 				dockerComposeTimeout,
 				"--timestamps",
-				"--force-recreate",
+			}
+
+			if !project.NoForceRecreate {
+				dockerComposeStart = append(dockerComposeStart, "--force-recreate")
 			}
 
 			output, err := utils.RunCommand(ctx, dockerComposeStart)
