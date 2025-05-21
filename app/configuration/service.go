@@ -33,6 +33,7 @@ import (
 )
 
 const defaultAgentInterval = 5 // minutes
+const minimumAgentInterval = 5 // minute
 const defaultFirstRunRetryCounter = 5
 
 // Service provides configuration management functionality for the agent.

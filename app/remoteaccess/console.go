@@ -111,6 +111,11 @@ func getCurrentUserShell() string {
 	_ = utils.ForLinesInFile(inventory.PasswdFilePath, func(line string) error {
 		fields := strings.Split(line, ":")
 
+		// check if the line has enough fields to be a valid passwd entry
+		if len(fields) < 7 {
+			return nil
+		}
+
 		uid, err := strconv.Atoi(fields[2])
 		if err != nil {
 			return nil
