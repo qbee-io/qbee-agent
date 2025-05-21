@@ -106,7 +106,7 @@ func (srv *Service) downloadFile(ctx context.Context, label, src, dst string) (b
 		}
 	}()
 
-	if !strings.HasPrefix(dst, "/") {
+	if !filepath.IsAbs(dst) {
 		err = fmt.Errorf("absolute file path required, got %s", dst)
 		return false, err
 	}
