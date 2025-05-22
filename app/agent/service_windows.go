@@ -29,6 +29,9 @@ func (agent *Agent) Execute(args []string, r <-chan svc.ChangeRequest, status ch
 	stopSignalCh := make(chan os.Signal, 1)
 	signal.Notify(stopSignalCh, os.Interrupt, syscall.SIGTERM)
 
+	// ticker won't trigger the first run immediately, so let's do that ourselves
+	go agent.RunOnce(ctx, FullRun)
+
 loop:
 	for {
 		select {
