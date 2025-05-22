@@ -7,6 +7,12 @@ import (
 	"go.qbee.io/agent/app/utils/cmd"
 )
 
+/*
+# install the service
+
+$ sc create qbee-agent binPath= "C:\Users\jonhenrik\qbee-agent service --start" start= auto
+*/
+
 var serviceCommand = cmd.Command{
 	Description: "Manage the agent service (windows only).",
 	Options: []cmd.Option{
