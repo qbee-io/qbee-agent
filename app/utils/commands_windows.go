@@ -30,7 +30,16 @@ func RunCommand(ctx context.Context, cmd []string) ([]byte, error) {
 
 // GenerateServiceCommand generates a command to start or stop a service.
 func GenerateServiceCommand(ctx context.Context, serviceName, action string) ([]string, error) {
-	return nil, nil
+	if action != "start" && action != "stop" {
+		return nil, fmt.Errorf("invalid action: %s", action)
+	}
+	if action == "start" {
+		return []string{"sc", "start", serviceName}, nil
+	}
+	if action == "stop" {
+		return []string{"sc", "stop", serviceName}, nil
+	}
+	return nil, fmt.Errorf("unsupported action: %s", action)
 }
 
 func RebootCommand() ([]string, error) {

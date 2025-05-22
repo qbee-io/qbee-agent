@@ -62,6 +62,7 @@ var Main = cmd.Command{
 		"inventory": inventoryCommand,
 		"start":     startCommand,
 		"version":   versionCommand,
+		"service":   serviceCommand,
 	},
 }
 
