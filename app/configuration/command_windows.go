@@ -19,14 +19,46 @@
 package configuration
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"os/exec"
+
+	"go.qbee.io/agent/app/utils"
 )
 
+const commandOutputLinesLimit = 100
+
 func RunCommand(ctx context.Context, command string) ([]byte, error) {
-	return nil, fmt.Errorf("command execution is not supported on Windows")
+	command = resolveParameters(ctx, command)
+
+	shell := getShell()
+	if shell == "" {
+		return nil, fmt.Errorf("cannot execute command '%s', no supported shell found", command)
+	}
+
+	cmd := exec.Command(shell, "-Command ", command)
+
+	// set pgid, so we can terminate all subprocesses as well
+
+	// explicitly set working directory to root
+	cmd.Dir = `C:\`
+
+	// append tail buffer to Stdout to collect only most recent lines
+	tailBuffer := utils.NewTailBuffer(commandOutputLinesLimit)
+
+	cmd.Stdout = tailBuffer
+	cmd.Stderr = tailBuffer
+
+	// run the command
+	err := cmd.Run()
+	// grab tail of the output
+	outputLines := tailBuffer.Close()
+	output := bytes.Join(outputLines, []byte("\n"))
+
+	return output, err
 }
 
 func getShell() string {
-	return ""
+	return "powershell.exe"
 }

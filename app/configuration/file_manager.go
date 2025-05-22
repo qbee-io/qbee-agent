@@ -30,6 +30,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"go.qbee.io/agent/app/utils"
@@ -106,7 +107,7 @@ func (srv *Service) downloadFile(ctx context.Context, label, src, dst string) (b
 		}
 	}()
 
-	if !filepath.IsAbs(dst) {
+	if !strings.HasPrefix(dst, "/") {
 		err = fmt.Errorf("absolute file path required, got %s", dst)
 		return false, err
 	}
@@ -414,6 +415,11 @@ func createFile(path string, permission os.FileMode) (*os.File, error) {
 	var file *os.File
 	if file, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, permission); err != nil {
 		return nil, fmt.Errorf("error creating file %s: %w", path, err)
+	}
+
+	if runtime.GOOS == "windows" {
+		// Windows doesn't support changing file owner and group
+		return file, nil
 	}
 
 	if err = file.Chown(uid, gid); err != nil {
