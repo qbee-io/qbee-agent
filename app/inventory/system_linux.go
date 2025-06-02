@@ -20,8 +20,13 @@ package inventory
 
 import (
 	"fmt"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
+
+	"go.qbee.io/agent/app/inventory/linux"
+	"go.qbee.io/agent/app/utils"
 )
 
 // parseSysinfoSyscall populates system info from sysinfo system call.
@@ -45,4 +50,64 @@ func getSysinfo() (*syscall.Sysinfo_t, error) {
 	}
 
 	return sysinfo, nil
+}
+
+// getDefaultNetworkInterface returns a default network interface name.
+func (systemInfo *SystemInfo) getDefaultNetworkInterface() (string, error) {
+
+	routeFilePath := filepath.Join(linux.ProcFS, "net", "route")
+
+	defaultInterface := ""
+
+	err := utils.ForLinesInFile(routeFilePath, func(line string) error {
+		fields := strings.Fields(line)
+		if fields[1] == "Destination" {
+			return nil
+		}
+
+		if defaultInterface == "" {
+			defaultInterface = fields[0]
+		}
+
+		if fields[1] == "00000000" && defaultInterface == "" {
+			defaultInterface = fields[0]
+		}
+
+		return nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("error getting default network interface: %w", err)
+	}
+
+	return defaultInterface, nil
+}
+
+// parseCPUInfo parses /proc/cpuinfo for extra details re. CPU.
+func (systemInfo *SystemInfo) parseCPUInfo() error {
+
+	filePath := filepath.Join(linux.ProcFS, "cpuinfo")
+
+	const expectedLineSubstrings = 2
+
+	return utils.ForLinesInFile(filePath, func(line string) error {
+		line = strings.TrimSpace(line)
+
+		substrings := strings.SplitN(line, ":", expectedLineSubstrings)
+		if len(substrings) != expectedLineSubstrings {
+			return nil
+		}
+
+		key := strings.TrimSpace(substrings[0])
+
+		switch key {
+		case "Serial":
+			systemInfo.CPUSerialNumber = strings.TrimSpace(substrings[1])
+		case "Hardware":
+			systemInfo.CPUHardware = strings.TrimSpace(substrings[1])
+		case "Revision":
+			systemInfo.CPURevision = strings.TrimSpace(substrings[1])
+		}
+
+		return nil
+	})
 }

@@ -67,7 +67,7 @@ func NewCommand(ctx context.Context, cmd []string) *exec.Cmd {
 
 // GenerateServiceCommand generates a service command based on the service name and command
 func GenerateServiceCommand(ctx context.Context, serviceName, command string) ([]string, error) {
-	// up%s is only used on linux
+	// return if running on a non-Linux OS as this is generally not supported
 	if runtime.GOOS != "linux" {
 		return nil, fmt.Errorf("unsupported OS: %s", runtime.GOOS)
 	}

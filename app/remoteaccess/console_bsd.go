@@ -16,32 +16,11 @@
 
 //go:build freebsd || openbsd || netbsd
 
-package inventory
+package remoteaccess
 
-import (
-	"fmt"
-
-	"golang.org/x/sys/unix"
-)
-
-func (systemInfo *SystemInfo) parseSysinfoSyscall() error {
-	tv, err := unix.SysctlTimeval("kern.boottime")
-	if err != nil {
-		return err
-	}
-
-	systemInfo.BootTime = fmt.Sprintf("%d", tv.Sec)
-
-	return nil
-}
-
-func (systemInfo *SystemInfo) getDefaultNetworkInterface() (string, error) {
-	// not implemented for BSD systems
-	return "", nil
-}
-
-// parseCPUInfo parses /proc/cpuinfo for extra details re. CPU.
-func (systemInfo *SystemInfo) parseCPUInfo() error {
-	// not implemented for BSD systems
+func setConsoleNonBlock(fd int) error {
+	// On BSD systems, we do not set the console to non-blocking mode.
+	// This is because the pty package does not support non-blocking mode on BSD.
+	// If you need non-blocking behavior, consider using a different approach.
 	return nil
 }

@@ -21,14 +21,12 @@ package inventory
 import (
 	"fmt"
 	"net"
-	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
 	"unicode"
 
 	"go.qbee.io/agent/app"
-	"go.qbee.io/agent/app/inventory/linux"
 	"go.qbee.io/agent/app/log"
 	"go.qbee.io/agent/app/utils"
 	"go.qbee.io/agent/app/utils/cache"
@@ -88,40 +86,6 @@ func CollectSystemInventory(tpmEnabled bool) (*System, error) {
 	cache.Set(systemInventoryCacheKey, systemInventory, systemInventoryCacheTTL)
 
 	return systemInventory, nil
-}
-
-// getDefaultNetworkInterface returns a default network interface name.
-func (systemInfo *SystemInfo) getDefaultNetworkInterface() (string, error) {
-
-	if runtime.GOOS != "linux" {
-		return "", nil
-	}
-
-	routeFilePath := filepath.Join(linux.ProcFS, "net", "route")
-
-	defaultInterface := ""
-
-	err := utils.ForLinesInFile(routeFilePath, func(line string) error {
-		fields := strings.Fields(line)
-		if fields[1] == "Destination" {
-			return nil
-		}
-
-		if defaultInterface == "" {
-			defaultInterface = fields[0]
-		}
-
-		if fields[1] == "00000000" && defaultInterface == "" {
-			defaultInterface = fields[0]
-		}
-
-		return nil
-	})
-	if err != nil {
-		return "", fmt.Errorf("error getting default network interface: %w", err)
-	}
-
-	return defaultInterface, nil
 }
 
 // gatherNetworkInfo gathers system's networking configuration.
@@ -234,38 +198,6 @@ func (systemInfo *SystemInfo) parseOSRelease() error {
 		systemInfo.OSVersion = fmt.Sprintf("%s %s", strings.ToTitle(data["ID"]), data["VERSION_ID"])
 	}
 	return nil
-}
-
-// parseCPUInfo parses /proc/cpuinfo for extra details re. CPU.
-func (systemInfo *SystemInfo) parseCPUInfo() error {
-	if runtime.GOOS != "linux" {
-		return nil
-	}
-	filePath := filepath.Join(linux.ProcFS, "cpuinfo")
-
-	const expectedLineSubstrings = 2
-
-	return utils.ForLinesInFile(filePath, func(line string) error {
-		line = strings.TrimSpace(line)
-
-		substrings := strings.SplitN(line, ":", expectedLineSubstrings)
-		if len(substrings) != expectedLineSubstrings {
-			return nil
-		}
-
-		key := strings.TrimSpace(substrings[0])
-
-		switch key {
-		case "Serial":
-			systemInfo.CPUSerialNumber = strings.TrimSpace(substrings[1])
-		case "Hardware":
-			systemInfo.CPUHardware = strings.TrimSpace(substrings[1])
-		case "Revision":
-			systemInfo.CPURevision = strings.TrimSpace(substrings[1])
-		}
-
-		return nil
-	})
 }
 
 var nonAlphaNumRE = regexp.MustCompile("[^a-zA-Z0-9]")
