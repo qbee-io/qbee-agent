@@ -28,11 +28,6 @@ const (
 	mainLogLevel        = "log-level"
 )
 
-const (
-	defaultConfigDir = "/etc/qbee"
-	defaultStateDir  = "/var/lib/qbee"
-)
-
 // Main is the main command of the agent.
 var Main = cmd.Command{
 	Description: "Qbee Agent Command-Line Tool",
