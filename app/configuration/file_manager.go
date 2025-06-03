@@ -107,7 +107,11 @@ func (srv *Service) downloadFile(ctx context.Context, label, src, dst string) (b
 		}
 	}()
 
-	if !strings.HasPrefix(dst, "/") {
+	if dst, err = filepath.Abs(filepath.Clean(dst)); err != nil {
+		return false, fmt.Errorf("error resolving absolute path for destination %s: %w", dst, err)
+	}
+
+	if !filepath.IsAbs(dst) {
 		err = fmt.Errorf("absolute file path required, got %s", dst)
 		return false, err
 	}
@@ -421,8 +425,7 @@ func createFile(path string, permission os.FileMode) (*os.File, error) {
 		// Windows doesn't support changing file owner and group
 		return file, nil
 	}
-
-	if err = file.Chown(uid, gid); err != nil {
+	if err = chown(file, uid, gid); err != nil {
 		_ = file.Close()
 		return nil, fmt.Errorf("error setting owner on %s: %w", path, err)
 	}
