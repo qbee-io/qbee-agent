@@ -17,33 +17,9 @@ var serviceCommand = cmd.Command{
 	Description: "Manage the agent service (windows only).",
 	Options: []cmd.Option{
 		{
-			Name:  "install",
-			Short: "i",
-			Help:  "Install the agent service.",
-			Flag:  "true",
-		},
-		{
-			Name:  "uninstall",
-			Short: "u",
-			Help:  "Uninstall the agent service.",
-			Flag:  "true",
-		},
-		{
 			Name:  "start",
 			Short: "s",
 			Help:  "Start the agent service.",
-			Flag:  "true",
-		},
-		{
-			Name:  "stop",
-			Short: "t",
-			Help:  "Stop the agent service.",
-			Flag:  "true",
-		},
-		{
-			Name:  "restart",
-			Short: "r",
-			Help:  "Restart the agent service.",
 			Flag:  "true",
 		},
 	},
