@@ -487,7 +487,7 @@ func makeDirectories(dst string, permissions os.FileMode, uid, gid int) error {
 			return fmt.Errorf("cannot create directorty %s: %w", dirPath, err)
 		}
 
-		if err = os.Chown(dirPath, uid, gid); err != nil {
+		if err = chownPath(dirPath, uid, gid); err != nil {
 			return fmt.Errorf("cannot change owner of %s: %w", dirPath, err)
 		}
 

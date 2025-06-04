@@ -9,3 +9,9 @@ func chown(file *os.File, uid, gid int) error {
 	// This function is a no-op on Windows.
 	return nil
 }
+
+func chownPath(path string, uid, gid int) error {
+	// Windows does not have a direct equivalent to Unix file permissions.
+	// This function is a no-op on Windows.
+	return nil
+}
