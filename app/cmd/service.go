@@ -10,7 +10,7 @@ import (
 /*
 # install the service
 
-$ sc create qbee-agent binPath= "C:\Users\jonhenrik\qbee-agent service --start" start= auto
+$ sc create qbee-agent binPath= "C:\Program Files\qbee\qbee-agent.exe service --start" start= auto
 */
 
 var serviceCommand = cmd.Command{
