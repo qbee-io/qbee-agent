@@ -2,7 +2,7 @@ module go.qbee.io/agent
 
 go 1.23.0
 
-toolchain go1.23.8
+toolchain go1.23.10
 
 require (
 	github.com/creack/pty v1.1.21
