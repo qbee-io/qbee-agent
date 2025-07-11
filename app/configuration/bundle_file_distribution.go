@@ -129,7 +129,7 @@ func (fd FileDistributionBundle) Execute(ctx context.Context, service *Service) 
 				return err
 			}
 
-			ReportInfo(ctx, output, msgWithLabel(fileSet.Label, "Successfully executed after command"))
+			ReportInfo(ctx, output, "%s", msgWithLabel(fileSet.Label, "Successfully executed after command"))
 		}
 	}
 
