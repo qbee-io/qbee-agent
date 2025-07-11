@@ -55,7 +55,7 @@ func CollectCPU() (*CPUValues, error) {
 		return nil, fmt.Errorf("error reading %s: %w", filePath, err)
 	}
 
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// we don't need to read the whole file, we only care about the first line
 	buf := make([]byte, 512)

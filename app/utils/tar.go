@@ -33,7 +33,7 @@ func UnpackTar(tarPath string, destPath string) error {
 	if err != nil {
 		return err
 	}
-	defer tarFile.Close()
+	defer func() { _ = tarFile.Close() }()
 
 	switch GetTarExtension(tarPath) {
 	case "tar":
@@ -46,7 +46,7 @@ func UnpackTar(tarPath string, destPath string) error {
 		if err != nil {
 			return err
 		}
-		defer gzReader.Close()
+		defer func() { _ = gzReader.Close() }()
 		return unpackTar(gzReader, destPath)
 	default:
 		return fmt.Errorf("unsupported tar format: %s", tarPath)
@@ -98,7 +98,7 @@ func unpackTar(reader io.Reader, destPath string) error {
 			if err != nil {
 				return err
 			}
-			defer targetFile.Close()
+			defer func() { _ = targetFile.Close() }()
 
 			if _, err := io.Copy(targetFile, tarReader); err != nil {
 				return err

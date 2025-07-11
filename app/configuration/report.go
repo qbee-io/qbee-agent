@@ -107,12 +107,12 @@ const (
 )
 
 // msgWithLabel returns a message with a label (if provided).
-func msgWithLabel(label, msgFmt string, args ...any) string {
+func msgWithLabel(label, msg string) string {
 	if label == "" {
-		return fmt.Sprintf(msgFmt, args...)
+		return msg
 	}
 
-	return fmt.Sprintf("[%s] %s", label, fmt.Sprintf(msgFmt, args...))
+	return "[" + label + "] " + msg
 }
 
 // ReportInfo adds an info message to the reporter instance set in context.

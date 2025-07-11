@@ -102,7 +102,7 @@ func (m *MetricsMonitorBundle) Execute(ctx context.Context, service *Service) er
 	}
 
 	for _, report := range reports {
-		addReport(ctx, report.Severity, nil, report.Text)
+		addReport(ctx, report.Severity, nil, "%s", report.Text)
 	}
 	return nil
 }

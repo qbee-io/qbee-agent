@@ -89,7 +89,7 @@ func checkPackageManagerLockFile(lockPath string, lockMode os.FileMode) (bool, e
 		return false, fmt.Errorf("cannot open file %s: %w", lockPath, err)
 	}
 
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	flockT := syscall.Flock_t{
 		Type:   syscall.F_WRLCK,
@@ -253,7 +253,7 @@ func resolveOpkgInfoPath(configPath string) string {
 	if err != nil {
 		return opkgInfoDir
 	}
-	defer configFile.Close()
+	defer func() { _ = configFile.Close() }()
 
 	// read the first 10 lines of the control file
 	scanner := bufio.NewScanner(configFile)
@@ -282,7 +282,7 @@ func (opkg *OpkgPackageManager) resolvePackageArchitecture(packageName string) (
 	if err != nil {
 		return "", fmt.Errorf("error opening package control file: %w", err)
 	}
-	defer controlFile.Close()
+	defer func() { _ = controlFile.Close() }()
 
 	// read the first 10 lines of the control file
 	scanner := bufio.NewScanner(controlFile)

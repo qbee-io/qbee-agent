@@ -195,11 +195,11 @@ func (runner *Runner) CreateFile(path string, contents []byte) {
 		panic(err)
 	}
 
-	defer os.Remove(fd.Name())
+	defer func() { _ = os.Remove(fd.Name()) }()
 
 	_, err = fd.Write(contents)
 
-	fd.Close()
+	_ = fd.Close()
 
 	if err != nil {
 		panic(err)
@@ -220,7 +220,7 @@ func (runner *Runner) ReadFile(path string) []byte {
 	}
 	_ = fd.Close()
 
-	defer os.Remove(fd.Name())
+	defer func() { _ = os.Remove(fd.Name()) }()
 
 	containerPath := fmt.Sprintf("%s:%s", runner.container, path)
 

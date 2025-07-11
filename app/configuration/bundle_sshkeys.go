@@ -127,7 +127,7 @@ func (s SSHKeysBundle) createAuthorizedKeysFile(user *inventory.User, keys []str
 		return false, err
 	}
 
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	if _, err = file.Write(buf.Bytes()); err != nil {
 		return false, fmt.Errorf("cannot write file %s: %w", authorizedKeysFilePath, err)

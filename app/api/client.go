@@ -114,7 +114,7 @@ func (cli *Client) Make(request *http.Request, dst any) error {
 		return err
 	}
 
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 
 	if response.StatusCode >= http.StatusBadRequest {
 		return NewError(response.StatusCode, response.Body)

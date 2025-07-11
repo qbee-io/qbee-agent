@@ -123,7 +123,7 @@ func TestInvalidBytesReportsBuffer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open reports buffer: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	_, _ = f.Write(invalidChars)
 
