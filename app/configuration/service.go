@@ -345,7 +345,7 @@ func (srv *Service) addReportsToBuffer(reports []Report) error {
 	if err != nil {
 		return fmt.Errorf("failed to open reports buffer file: %v", err)
 	}
-	defer fp.Close()
+	defer func() { _ = fp.Close() }()
 
 	encoder := json.NewEncoder(fp)
 
@@ -375,7 +375,7 @@ func (srv *Service) readReportsBuffer() ([]Report, error) {
 
 		return nil, fmt.Errorf("failed to open reports buffer file: %v", err)
 	}
-	defer fp.Close()
+	defer func() { _ = fp.Close() }()
 
 	var reports []Report
 	decoder := json.NewDecoder(fp)

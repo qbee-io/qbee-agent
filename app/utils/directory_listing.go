@@ -28,7 +28,7 @@ func ListDirectory(dirPath string) ([]string, error) {
 		return nil, fmt.Errorf("error openning %s: %w", dirPath, err)
 	}
 
-	defer dir.Close()
+	defer func() { _ = dir.Close() }()
 
 	var dirNames []string
 	if dirNames, err = dir.Readdirnames(-1); err != nil {

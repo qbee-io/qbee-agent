@@ -125,7 +125,7 @@ func (fd FileDistributionBundle) Execute(ctx context.Context, service *Service) 
 		if anythingChanged && fileSet.AfterCommand != "" {
 			output, err := RunCommand(ctx, fileSet.AfterCommand)
 			if err != nil {
-				ReportError(ctx, output, msgWithLabel(fileSet.Label, "After command failed: %v", err))
+				ReportError(ctx, output, msgWithLabel(fileSet.Label, "After command failed: %v"), err)
 				return err
 			}
 

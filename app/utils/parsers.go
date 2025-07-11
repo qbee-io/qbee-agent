@@ -54,7 +54,7 @@ func ForLinesInFile(filePath string, fn func(string) error) error {
 		return fmt.Errorf("error opening file %s: %w", filePath, err)
 	}
 
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	if err = ForLines(file, fn); err != nil {
 		return fmt.Errorf("error processing file %s: %w", filePath, err)
