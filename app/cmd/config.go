@@ -109,6 +109,8 @@ var configCommand = cmd.Command{
 			return json.NewEncoder(os.Stdout).Encode(configurationData)
 		}
 
+		deviceAgent.Configuration.UpdateSettings(configurationData)
+
 		return deviceAgent.Configuration.Execute(ctx, configurationData)
 	},
 }
