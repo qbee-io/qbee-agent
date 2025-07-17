@@ -150,7 +150,6 @@ func (srv *Service) EnableConsoleReporting() {
 
 // applyDefaultSettings to the agent.
 func (srv *Service) applyDefaultSettings() {
-	srv.reportToConsole = true
 	srv.reportingEnabled = true
 	srv.metricsEnabled = true
 	srv.softwareInventoryEnabled = true

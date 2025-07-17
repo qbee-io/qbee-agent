@@ -177,8 +177,12 @@ func Test_Monitor_State_Delete(t *testing.T) {
 
 func executeMetricMonitorBundle(r *runner.Runner, bundle configuration.MetricsMonitorBundle) []string {
 	config := configuration.CommittedConfig{
-		Bundles: []string{configuration.BundleMetricsMonitor},
+		Bundles: []string{configuration.BundleMetricsMonitor, configuration.BundleSettings},
 		BundleData: configuration.BundleData{
+			Settings: configuration.SettingsBundle{
+				Metadata:      configuration.Metadata{Enabled: true},
+				EnableReports: false,
+			},
 			MetricsMonitor: &bundle,
 		},
 	}
