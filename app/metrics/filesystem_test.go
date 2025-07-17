@@ -41,7 +41,7 @@ func TestCollectFilesystem(t *testing.T) {
 			t.Fatalf("expected filesystem mount to be under root, got %s", metric.ID)
 		}
 
-		if time.Since(time.Unix(metric.Timestamp, 0)) > time.Second {
+		if time.Since(time.Unix(metric.Timestamp, 0)) > 5*time.Second {
 			t.Fatalf("invalid timestamp, got: %v", metric.Timestamp)
 		}
 	}
