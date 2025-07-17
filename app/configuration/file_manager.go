@@ -93,7 +93,7 @@ func (md *FileMetadata) SHA256() string {
 }
 
 // downloadFile and return true when file was created. In case the right file already existed, return false.
-func (srv *Service) downloadFile(ctx context.Context, label, src, dst string) (bool, error) {
+func (srv *Service) downloadFile(ctx context.Context, label, src, dst, digest string) (bool, error) {
 	var err error
 
 	src = resolveParameters(ctx, src)
@@ -111,7 +111,13 @@ func (srv *Service) downloadFile(ctx context.Context, label, src, dst string) (b
 	}
 
 	var fileMetadata *FileMetadata
-	if fileMetadata, err = srv.getFileMetadata(ctx, src); err != nil {
+	if digest != "" {
+		fileMetadata = &FileMetadata{
+			Tags: map[string]string{
+				fileDigestSHA256Tag: digest,
+			},
+		}
+	} else if fileMetadata, err = srv.getFileMetadata(ctx, src); err != nil {
 		return false, err
 	}
 
@@ -213,6 +219,7 @@ func (srv *Service) downloadTemplateFile(
 	label string,
 	src string,
 	dst string,
+	digest string,
 	params map[string]string,
 ) (bool, error) {
 	var err error
@@ -237,7 +244,7 @@ func (srv *Service) downloadTemplateFile(
 	} else {
 		cacheSrc = filepath.Join(srv.cacheDirectory, FileDistributionCacheDirectory, src)
 
-		if _, err = srv.downloadFile(ctx, label, src, cacheSrc); err != nil {
+		if _, err = srv.downloadFile(ctx, label, src, cacheSrc, digest); err != nil {
 			return false, err
 		}
 	}
