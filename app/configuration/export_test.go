@@ -17,6 +17,7 @@
 package configuration
 
 import (
+	"slices"
 	"strings"
 
 	"go.qbee.io/agent/app/utils/runner"
@@ -29,6 +30,16 @@ func (srv *Service) ResetRebootAfterRun() {
 
 // ExecuteTestConfigInDocker executes provided config inside a docker container and returns reports and logs.
 func ExecuteTestConfigInDocker(r *runner.Runner, config CommittedConfig) ([]string, []string) {
+	// if settings bundle is not set, add it to the config to stop the agent from reporting back to the device hub
+	if !slices.Contains(config.Bundles, BundleSettings) {
+		config.Bundles = append(config.Bundles, BundleSettings)
+
+		config.BundleData.Settings = SettingsBundle{
+			Metadata: Metadata{Enabled: true},
+			EnableReports: false,
+		}
+	}
+
 	r.CreateJSON("/app/config.json", config)
 
 	return ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r", "-f", "/app/config.json"))
