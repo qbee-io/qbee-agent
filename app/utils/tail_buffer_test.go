@@ -24,13 +24,13 @@ import (
 func TestTailBuffer(t *testing.T) {
 	tests := []struct {
 		name          string
-		maxLines      int
+		maxBytes      int
 		chunksToWrite [][]byte
 		wantLines     [][]byte
 	}{
 		{
 			name:     "single line in chunks",
-			maxLines: 1,
+			maxBytes: 1024, // Changed from maxLines: 1 to reasonable byte limit
 			chunksToWrite: [][]byte{
 				[]byte("thi"),
 				[]byte("s is one"),
@@ -42,7 +42,7 @@ func TestTailBuffer(t *testing.T) {
 		},
 		{
 			name:     "single line without new-line character",
-			maxLines: 1,
+			maxBytes: 1024, // Changed from maxLines: 1
 			chunksToWrite: [][]byte{
 				[]byte("this is one line"),
 			},
@@ -52,7 +52,7 @@ func TestTailBuffer(t *testing.T) {
 		},
 		{
 			name:     "two lines",
-			maxLines: 2,
+			maxBytes: 1024, // Changed from maxLines: 2
 			chunksToWrite: [][]byte{
 				[]byte("this is one line\n"),
 				[]byte("this is another line\n"),
@@ -63,8 +63,8 @@ func TestTailBuffer(t *testing.T) {
 			},
 		},
 		{
-			name:     "two lines with one line limit",
-			maxLines: 1,
+			name:     "two lines with small byte limit",
+			maxBytes: 25, // Changed from maxLines: 1 - should keep only the tail
 			chunksToWrite: [][]byte{
 				[]byte("this is one line\n"),
 				[]byte("this is another line\n"),
@@ -75,7 +75,7 @@ func TestTailBuffer(t *testing.T) {
 		},
 		{
 			name:     "trimming spaces from lines",
-			maxLines: 1,
+			maxBytes: 1024, // Changed from maxLines: 1
 			chunksToWrite: [][]byte{
 				[]byte(" this is one line \r\n"),
 			},
@@ -83,10 +83,24 @@ func TestTailBuffer(t *testing.T) {
 				[]byte("this is one line"),
 			},
 		},
+		{
+			name:     "byte limit enforcement",
+			maxBytes: 50, // Small limit to test truncation
+			chunksToWrite: [][]byte{
+				[]byte("this is the first line that is quite long\n"),
+				[]byte("this is the second line\n"),
+				[]byte("this is the third line\n"),
+			},
+			wantLines: [][]byte{
+				// Should only keep the tail that fits in 50 bytes
+				[]byte("this is the second line"),
+				[]byte("this is the third line"),
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tailBuffer := NewTailBuffer(tt.maxLines)
+			tailBuffer := NewTailBuffer(tt.maxBytes)
 
 			for _, chunk := range tt.chunksToWrite {
 				_, _ = tailBuffer.Write(chunk)
