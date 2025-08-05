@@ -78,10 +78,6 @@ var configCommand = cmd.Command{
 			return fmt.Errorf("error initializing the agent: %w", err)
 		}
 
-		if reportToConsole {
-			deviceAgent.Configuration.EnableConsoleReporting()
-		}
-
 		if err != nil {
 			return fmt.Errorf("error initializing the agent: %w", err)
 		}
@@ -107,6 +103,12 @@ var configCommand = cmd.Command{
 
 		if dryRun {
 			return json.NewEncoder(os.Stdout).Encode(configurationData)
+		}
+
+		deviceAgent.Configuration.UpdateSettings(configurationData)
+
+		if reportToConsole {
+			deviceAgent.Configuration.EnableConsoleReporting()
 		}
 
 		return deviceAgent.Configuration.Execute(ctx, configurationData)

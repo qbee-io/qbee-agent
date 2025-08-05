@@ -16,6 +16,8 @@
 
 package configuration
 
+import "slices"
+
 // Supported configuration bundles.
 const (
 	BundleSettings             = "settings"
@@ -54,13 +56,7 @@ type CommittedConfig struct {
 
 // HasBundle returns true if bundleName is set in the Bundles list.
 func (cc *CommittedConfig) HasBundle(bundleName string) bool {
-	for _, bundle := range cc.Bundles {
-		if bundle == bundleName {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(cc.Bundles, bundleName)
 }
 
 // selectBundleByName returns Bundle by name from the CommittedConfig.
