@@ -16,7 +16,13 @@
 
 package utils
 
-import "testing"
+import (
+	"archive/tar"
+	"bytes"
+	"testing"
+
+	"go.qbee.io/agent/app/utils/assert"
+)
 
 func Test_GetExtension(t *testing.T) {
 	tests := []struct {
@@ -53,4 +59,70 @@ func Test_GetExtension(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_TarZipSlip(t *testing.T) {
+	tt := []struct {
+		name     string
+		filePath string
+		wantErr  bool
+	}{
+		{
+			name:     "valid tar",
+			filePath: "filename.txt",
+			wantErr:  false,
+		},
+		{
+			name:     "zip slip attack",
+			filePath: "../outside.txt",
+			wantErr:  true,
+		},
+		{
+			name:     "nested zip slip attack",
+			filePath: "../../subdir/filename.txt",
+			wantErr:  true,
+		},
+		{
+			name:     "valid nested tar",
+			filePath: "subdir/../filename.txt",
+			wantErr:  false,
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+
+			var tarBuffer bytes.Buffer
+			tw := tar.NewWriter(&tarBuffer)
+
+			header := &tar.Header{
+				Name: tc.filePath,
+				Mode: 0644,
+				Size: int64(len("hello")),
+			}
+
+			err := tw.WriteHeader(header)
+
+			if err != nil {
+				t.Fatalf("failed to write header: %v", err)
+			}
+			_, err = tw.Write([]byte("hello"))
+			if err != nil {
+				t.Fatalf("failed to write file content: %v", err)
+			}
+
+			if err := tw.Close(); err != nil {
+				t.Fatalf("failed to close tar writer: %v", err)
+			}
+
+			err = unpackTar(&tarBuffer, t.TempDir())
+
+			if tc.wantErr {
+				assert.NotEqual(t, err, nil)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+
 }
