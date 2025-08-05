@@ -86,7 +86,23 @@ func unpackTar(reader io.Reader, destPath string) error {
 			return err
 		}
 
-		targetPath := filepath.Join(destPath, header.Name)
+		cleanName := filepath.Clean(header.Name)
+		// Prevent absolute paths and directory traversal
+		if strings.HasPrefix(cleanName, "..") || filepath.IsAbs(cleanName) || strings.Contains(cleanName, string(os.PathSeparator)+".."+string(os.PathSeparator)) {
+			continue // skip potentially dangerous entry
+		}
+		targetPath := filepath.Join(destPath, cleanName)
+		absDest, err := filepath.Abs(destPath)
+		if err != nil {
+			return err
+		}
+		absTarget, err := filepath.Abs(targetPath)
+		if err != nil {
+			return err
+		}
+		if !strings.HasPrefix(absTarget, absDest+string(os.PathSeparator)) && absTarget != absDest {
+			continue // skip files outside destPath
+		}
 
 		switch header.Typeflag {
 		case tar.TypeDir:
@@ -94,6 +110,10 @@ func unpackTar(reader io.Reader, destPath string) error {
 				return err
 			}
 		case tar.TypeReg:
+			// Ensure parent directory exists
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+				return err
+			}
 			targetFile, err := os.Create(targetPath)
 			if err != nil {
 				return err
