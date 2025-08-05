@@ -91,7 +91,7 @@ func (deb *DebianPackageManager) Busy() (bool, error) {
 		return false, fmt.Errorf("cannot open file %s: %w", dpkgLockPath, err)
 	}
 
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	flockT := syscall.Flock_t{
 		Type:   syscall.F_WRLCK,

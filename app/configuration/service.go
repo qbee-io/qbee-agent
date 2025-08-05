@@ -345,7 +345,7 @@ func (srv *Service) addReportsToBuffer(reports []Report) error {
 	if err != nil {
 		return fmt.Errorf("failed to open reports buffer file: %v", err)
 	}
-	defer fp.Close()
+	defer func() { _ = fp.Close() }()
 
 	encoder := json.NewEncoder(fp)
 
@@ -375,7 +375,7 @@ func (srv *Service) readReportsBuffer() ([]Report, error) {
 
 		return nil, fmt.Errorf("failed to open reports buffer file: %v", err)
 	}
-	defer fp.Close()
+	defer func() { _ = fp.Close() }()
 
 	var reports []Report
 	decoder := json.NewDecoder(fp)
@@ -510,7 +510,7 @@ func (srv *Service) persistConfig(cfg *CommittedConfig) {
 		log.Errorf("failed to open config cache file: %v", err)
 		return
 	}
-	defer fp.Close()
+	defer func() { _ = fp.Close() }()
 
 	if err = json.NewEncoder(fp).Encode(cfg); err != nil {
 		log.Errorf("failed to marshal config: %v", err)
@@ -532,7 +532,7 @@ func (srv *Service) loadConfig(cfg *CommittedConfig) error {
 	if err != nil {
 		return fmt.Errorf("failed to open config cache file: %v", err)
 	}
-	defer fp.Close()
+	defer func() { _ = fp.Close() }()
 
 	if err = json.NewDecoder(fp).Decode(cfg); err != nil {
 		return fmt.Errorf("failed to unmarshal config: %v", err)

@@ -101,7 +101,7 @@ func (srv *Service) downloadFile(ctx context.Context, label, src, dst string) (b
 
 	defer func() {
 		if err != nil {
-			ReportError(ctx, err, msgWithLabel(label, "Unable to download file %s to %s", src, dst))
+			ReportError(ctx, err, msgWithLabel(label, "Unable to download file %s to %s"), src, dst)
 		}
 	}()
 
@@ -133,20 +133,20 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 		return false, err
 	}
 
-	defer srcFile.Close()
+	defer func() { _ = srcFile.Close() }()
 
 	var dstFile *os.File
 	if dstFile, err = createFile(dst, fileManagerDefaultFilePermission); err != nil {
 		return false, err
 	}
 
-	defer dstFile.Close()
+	defer func() { _ = dstFile.Close() }()
 
 	if _, err = io.Copy(dstFile, srcFile); err != nil {
 		return false, fmt.Errorf("error writing file %s: %w", dst, err)
 	}
 
-	ReportInfo(ctx, nil, msgWithLabel(label, "Successfully downloaded file %s to %s", src, dst))
+	ReportInfo(ctx, nil, msgWithLabel(label, "Successfully downloaded file %s to %s"), src, dst)
 
 	return true, nil
 }
@@ -174,7 +174,7 @@ func (srv *Service) getFileMetadataFromLocal(src string) (*FileMetadata, error) 
 		return nil, fmt.Errorf("error opening file %s: %w", src, err)
 	}
 
-	defer fp.Close()
+	defer func() { _ = fp.Close() }()
 
 	var fileInfo os.FileInfo
 	if fileInfo, err = fp.Stat(); err != nil {
@@ -226,7 +226,7 @@ func (srv *Service) downloadTemplateFile(
 
 	defer func() {
 		if err != nil {
-			ReportError(ctx, err, msgWithLabel(label, "Unable to render template file %s to %s.", src, dst))
+			ReportError(ctx, err, msgWithLabel(label, "Unable to render template file %s to %s."), src, dst)
 		}
 	}()
 
@@ -257,20 +257,20 @@ func (srv *Service) downloadTemplateFile(
 		return false, fmt.Errorf("error opening template file %s: %w", cacheSrc, err)
 	}
 
-	defer srcFile.Close()
+	defer func() { _ = srcFile.Close() }()
 
 	var dstFile io.WriteCloser
 	if dstFile, err = createFile(dst, fileManagerDefaultFilePermission); err != nil {
 		return false, err
 	}
 
-	defer dstFile.Close()
+	defer func() { _ = dstFile.Close() }()
 
 	if err = renderTemplate(srcFile, params, dstFile); err != nil {
 		return false, err
 	}
 
-	ReportInfo(ctx, nil, msgWithLabel(label, "Successfully rendered template file %s to %s", src, dst))
+	ReportInfo(ctx, nil, msgWithLabel(label, "Successfully rendered template file %s to %s"), src, dst)
 
 	return true, nil
 }
@@ -388,7 +388,7 @@ func calculateTemplateDigest(src string, params map[string]string) (string, erro
 		return "", fmt.Errorf("error opening template file %s: %w", src, err)
 	}
 
-	defer srcFile.Close()
+	defer func() { _ = srcFile.Close() }()
 
 	if err = renderTemplate(srcFile, params, digest); err != nil {
 		return "", fmt.Errorf("digest calculation of the template file %s failed: %w", src, err)
@@ -434,7 +434,7 @@ func isFileReady(path, sha256Digest, md5Digest string) (bool, error) {
 		return false, fmt.Errorf("checking if file is ready failed: %w", err)
 	}
 
-	defer fd.Close()
+	defer func() { _ = fd.Close() }()
 
 	var expectedHexDigest string
 	var digest hash.Hash
