@@ -86,7 +86,12 @@ func unpackTar(reader io.Reader, destPath string) error {
 			return err
 		}
 
-		targetPath := filepath.Join(destPath, header.Name)
+		targetPath := filepath.Clean(filepath.Join(destPath, header.Name))
+		destdirClean := filepath.Clean(destPath)
+
+		if !strings.HasPrefix(targetPath, destdirClean) {
+			return fmt.Errorf("tar entry %s is outside of destination directory %s", targetPath, destdirClean)
+		}
 
 		switch header.Typeflag {
 		case tar.TypeDir:
