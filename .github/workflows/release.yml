@@ -1,0 +1,49 @@
+#
+# Releaser workflow setup
+# https://goreleaser.com/ci/actions/
+#
+name: release
+
+# run only on tags
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # needed to write releases
+  id-token: write # needed for keyless signing
+  attestations: write # needed for provenance
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # this is important, otherwise it won't checkout the full tree (i.e. no previous tags)
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Install Cosign for attestation and signing
+        uses: sigstore/cosign-installer@v3.9.2
+
+      - name: Install Syft for SBOM generation
+        uses: anchore/sbom-action/download-syft@v0.20.4
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attest Build Provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-checksums: ./dist/checksums.txt

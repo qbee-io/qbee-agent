@@ -1,58 +1,71 @@
 version: 2
-before:
-  hooks:
-    - go mod tidy
+
+project_name: qbee-agent
 
 builds:
-  - env:
+  - id: qbee-agent
+
+    env:
       - CGO_ENABLED=0
       - GOARM=5
+
     gcflags:
       - -trimpath
+
     ldflags:
       - -s 
       - -w 
-      - -X github.com/qbee-io/qbee-agent/app.Version={{.Version}}
-      - -X github.com/qbee-io/qbee-agent/app.Commit={{.FullCommit}}
-    targets:
-      - linux_amd64
-      - linux_386
-      - linux_arm
-      - linux_arm64
-      - linux_loong64
-      - linux_mips
-      - linux_mips64
-      - linux_mips64le
-      - linux_mipsle
-      - linux_ppc64
-      - linux_ppc64le
-      - linux_riscv64
-      - linux_s390x
+      - -X go.qbee.io/agent/app.Version={{.Version}}
+      - -X go.qbee.io/agent/app.Commit={{.FullCommit}}
 
-archives:
-   - format: tar.gz
-     name_template: >-
-       {{ .ProjectName }}_
-       {{- title .Os | tolower }}_
-       {{- if eq .Arch "amd64" }}x86_64
-       {{- else if eq .Arch "386" }}i386
-       {{- else }}{{ .Arch }}{{ end }}
-      
+    goos:
+      - linux
+
+    goarch:
+      - 386
+      - amd64
+      - arm
+      - arm64
+      - riscv64
+
+    goarm:
+      - 5
+      - 6
+      - 7
+
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+gomod:
+  proxy: true
+
 changelog:
-  sort: asc
-  filters:
-    exclude:
-      - "^docs:"
-      - "^test:"
+  use: github-native
+
+sboms:
+  - id: archive
+    artifacts: archive
 
 checksum:
-#  name_template: "{{ .ProjectName }}_checksums.txt"
-#  name_template: "{{ .Algorithm | toupper }}SUMS"
-  algorithm: sha256
-  split: true
+  name_template: SHA512SUMS
+  algorithm: sha512
+
+signs:
+  - cmd: cosign
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
+
+archives:
+   - formats: [ 'tar.gz' ]
 
 nfpms:
-  - vendor: qbee.io
+  - vendor: qbee AS
     homepage: https://qbee.io/
     maintainer: The Qbee Team <support@qbee.io>
     license: Apache-2.0
@@ -61,7 +74,11 @@ nfpms:
       Qbee agent
       Qbee is a lightweight system management platform for IoT devices
 
-    file_name_template: "{{.ConventionalFileName }}"
+    file_name_template: >-
+      {{- trimsuffix .ConventionalFileName .ConventionalExtension -}}
+      {{- if and (eq .Arm "5") (eq .ConventionalExtension ".deb") }}5{{ end -}}
+      {{- if and (eq .Arm "6") (eq .ConventionalExtension ".deb") }}6{{ end -}}
+      {{- .ConventionalExtension -}}
 
     priority: extra
     section: default 
@@ -69,8 +86,6 @@ nfpms:
     formats:
       - deb
       - rpm
-#      - apk
-#      - archlinux
     
     contents:
       - src: package/share/
@@ -100,8 +115,9 @@ nfpms:
     scripts:
       preinstall: package/install-scripts/preinst
       postinstall: package/install-scripts/postinst
-#      preremove: package/install-scripts/prerm
-    
+
+    mtime: "{{ .CommitDate }}"
+
     overrides:
       rpm:
         scripts:
