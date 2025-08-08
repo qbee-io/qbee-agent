@@ -8,7 +8,7 @@ name: release
 on:
   push:
     tags:
-      - "v*"
+      - "20*"
 
 permissions:
   contents: write # needed to write releases
@@ -18,11 +18,17 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0 # this is important, otherwise it won't checkout the full tree (i.e. no previous tags)
+
+      - name: Ensure pre-release status on the release
+        run: gh release edit ${{ github.ref_name }} --prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -38,7 +44,7 @@ jobs:
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
-          version: latest
+          version: ~> v2
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -47,3 +53,85 @@ jobs:
         uses: actions/attest-build-provenance@v2
         with:
           subject-checksums: ./dist/checksums.txt
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: qbee-agent-release
+          path: |
+            ./dist/*.deb
+            ./dist/*.rpm
+
+  test:
+    runs-on: ubuntu-24.04-arm
+
+    strategy:
+      matrix:
+        include:
+          - image: debian:stable-slim
+            platform: amd64
+            install: dpkg -i ./dist/qbee-agent_${{ github.ref_name }}.0_amd64.deb
+
+          - image: debian:stable-slim
+            platform: arm64
+            install: dpkg -i ./dist/qbee-agent_${{ github.ref_name }}.0_arm64.deb
+
+          - image: debian:stable-slim
+            platform: arm/v7
+            install: dpkg -i ./dist/qbee-agent_${{ github.ref_name }}.0_armhf.deb
+
+          - image: debian:stable-slim
+            platform: mips64le
+            install: dpkg -i ./dist/qbee-agent_${{ github.ref_name }}.0_mips64el.deb
+
+          - image: debian:testing-slim
+            platform: riscv64
+            install: dpkg -i ./dist/qbee-agent_${{ github.ref_name }}.0_riscv64.deb
+
+          - image: fedora:latest
+            platform: amd64
+            install: dnf -y --nogpgcheck install ./dist/qbee-agent-${{ github.ref_name }}.0-1.x86_64.rpm
+
+          - image: fedora:latest
+            platform: arm64
+            install: dnf -y --nogpgcheck install ./dist/qbee-agent-${{ github.ref_name }}.0-1.aarch64.rpm
+
+    needs: release
+
+    steps:
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: qbee-agent-release
+          path: ./dist
+
+      - name: Start a docker container
+        run: |
+          docker run \
+            --detach \
+            --rm \
+            --name qbee-agent-container \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace \
+            --platform linux/${{ matrix.platform }} \
+            ${{ matrix.image}} \
+            sleep 300
+
+      - name: Install qbee-agent in the container
+        run: docker exec qbee-agent-container ${{ matrix.install }}
+
+      - name: Setup empty qbee-agent config
+        run: docker exec qbee-agent-container bash -c "echo '{}' > /etc/qbee/qbee-agent.json"
+
+      - name: Verify qbee-agent cf_version
+        run: |
+          set -e
+          QBEE_AGENT_VERSION=$(docker exec qbee-agent-container qbee-agent inventory -d | jq -r '.system.cf_version')
+          if [ "$QBEE_AGENT_VERSION" != "${{ github.ref_name }}" ]; then
+            echo "❌ qbee-agent reported version ($QBEE_AGENT_VERSION) does not match expected: ${{ github.ref_name }}"
+            exit 1
+          fi
+          echo "✅ qbee-agent reported version matches expected: ${{ github.ref_name }}"

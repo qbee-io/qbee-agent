@@ -7,7 +7,6 @@ builds:
 
     env:
       - CGO_ENABLED=0
-      - GOARM=5
 
     gcflags:
       - -trimpath
@@ -15,22 +14,20 @@ builds:
     ldflags:
       - -s 
       - -w 
-      - -X go.qbee.io/agent/app.Version={{.Version}}
-      - -X go.qbee.io/agent/app.Commit={{.FullCommit}}
+      - -X github.com/qbee-io/qbee-agent-release-test/app.Version={{.Version}}
+      - -X github.com/qbee-io/qbee-agent-release-test/app.Commit={{.FullCommit}}
 
     goos:
       - linux
 
     goarch:
-      - 386
       - amd64
       - arm
       - arm64
+      - mips64le
       - riscv64
 
     goarm:
-      - 5
-      - 6
       - 7
 
     mod_timestamp: "{{ .CommitTimestamp }}"
@@ -42,12 +39,10 @@ changelog:
   use: github-native
 
 sboms:
-  - id: archive
-    artifacts: archive
+  - artifacts: source
 
 checksum:
-  name_template: SHA512SUMS
-  algorithm: sha512
+  name_template: checksums.txt
 
 signs:
   - cmd: cosign
@@ -60,6 +55,9 @@ signs:
       - "--yes"
     artifacts: checksum
     output: true
+
+source:
+  enabled: true
 
 archives:
    - formats: [ 'tar.gz' ]
@@ -74,11 +72,7 @@ nfpms:
       Qbee agent
       Qbee is a lightweight system management platform for IoT devices
 
-    file_name_template: >-
-      {{- trimsuffix .ConventionalFileName .ConventionalExtension -}}
-      {{- if and (eq .Arm "5") (eq .ConventionalExtension ".deb") }}5{{ end -}}
-      {{- if and (eq .Arm "6") (eq .ConventionalExtension ".deb") }}6{{ end -}}
-      {{- .ConventionalExtension -}}
+    file_name_template: "{{- .ConventionalFileName -}}"
 
     priority: extra
     section: default 
@@ -103,10 +97,9 @@ nfpms:
           mode: 0755
           owner: root
           group: root
-      
-      - src: package/init-scripts/systemd/
-        dst: /lib/systemd/system/
-        type: tree
+
+      - src: package/init-scripts/systemd/qbee-agent.service
+        dst: /lib/systemd/system/qbee-agent.service
         file_info:
           mode: 0644
           owner: root
@@ -122,6 +115,18 @@ nfpms:
       rpm:
         scripts:
           preremove: package/install-scripts/prerm-rpm
+
+        contents:
+          - src: package/init-scripts/systemd/qbee-agent.service
+            dst: /usr/lib/systemd/system/qbee-agent.service
+            file_info:
+              mode: 0644
+              owner: root
+              group: root
       deb: 
         scripts:
           preremove: package/install-scripts/prerm-deb
+
+release:
+  prerelease: true
+  make_latest: false
