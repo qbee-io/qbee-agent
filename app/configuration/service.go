@@ -539,3 +539,9 @@ func (srv *Service) loadConfig(cfg *CommittedConfig) error {
 
 	return nil
 }
+
+// SendReport sends a single report or batch of reports to the backend system.
+func (srv *Service) SendReport(ctx context.Context, reports []Report) error {
+	_, err := srv.sendReports(ctx, reports)
+	return err
+}
