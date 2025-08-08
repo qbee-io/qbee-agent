@@ -60,6 +60,7 @@ var Main = cmd.Command{
 		"bootstrap": bootstrapCommand,
 		"config":    configCommand,
 		"inventory": inventoryCommand,
+		"report":    reportCommand,
 		"start":     startCommand,
 		"version":   versionCommand,
 	},
