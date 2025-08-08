@@ -19,7 +19,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
@@ -49,17 +48,33 @@ func validateSeverity(severity string) error {
 	return nil
 }
 
-// validateBundleName validates the bundle name format
+// validateBundleName validates the bundle name against valid bundle constants
 func validateBundleName(bundle string) error {
 	if strings.TrimSpace(bundle) == "" {
 		return fmt.Errorf("bundle name cannot be empty")
 	}
 	
-	// Bundle names should be lowercase alphanumeric with underscores and hyphens
-	// and should not start/end with special characters
-	bundlePattern := regexp.MustCompile(`^[a-z0-9]([a-z0-9_-]*[a-z0-9])?$`)
-	if !bundlePattern.MatchString(bundle) {
-		return fmt.Errorf("invalid bundle name: %s. Bundle names must be lowercase alphanumeric with underscores/hyphens, and cannot start or end with special characters", bundle)
+	// Valid bundle names for reports (excluding settings and parameters)
+	validBundles := map[string]bool{
+		configuration.BundleFileDistribution:     true,
+		configuration.BundleUsers:                true,
+		configuration.BundleSSHKeys:              true,
+		configuration.BundlePackageManagement:    true,
+		configuration.BundleConnectivityWatchdog: true,
+		configuration.BundleProcessWatch:         true,
+		configuration.BundleNTP:                  true,
+		configuration.BundleSoftwareManagement:   true,
+		configuration.BundleFirewall:             true,
+		configuration.BundlePassword:             true,
+		configuration.BundleDockerContainers:     true,
+		configuration.BundlePodmanContainers:     true,
+		configuration.BundleRauc:                 true,
+		configuration.BundleMetricsMonitor:       true,
+		configuration.BundleDockerCompose:        true,
+	}
+	
+	if !validBundles[bundle] {
+		return fmt.Errorf("invalid bundle name: %s. Must be one of the valid bundle types", bundle)
 	}
 	
 	return nil
@@ -134,11 +149,6 @@ var reportCommand = cmd.Command{
 
 		// Send the report using the configuration service
 		reports := []configuration.Report{report}
-		if err := deviceAgent.Configuration.SendReport(ctx, reports); err != nil {
-			return err
-		}
-
-		fmt.Printf("Report sent successfully: [%s] %s\n", severity, text)
-		return nil
+		return deviceAgent.Configuration.SendReport(ctx, reports)
 	},
 }
