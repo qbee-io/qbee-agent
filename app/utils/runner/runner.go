@@ -140,6 +140,7 @@ func (runner *Runner) FullUpdateCommand() [][]string {
 		return [][]string{
 			{"apt-get", "update"},
 			{"apt-get", "upgrade", "-y"},
+			{"apt-get", "dist-upgrade", "-y"},
 		}
 	case OpenWRT:
 		return [][]string{
