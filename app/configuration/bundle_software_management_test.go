@@ -268,9 +268,6 @@ func Test_SoftwareManagementBundle_InstallPackage_RestartService_NotAService(t *
 func Test_SoftwareManagementBundle_InstallPackage_RestartService_NoServiceName(t *testing.T) {
 	r := runner.New(t)
 
-	// install systemctl
-	r.MustExec("apt-get", "install", "-y", "systemctl")
-
 	// execute configuration bundles
 	items := []configuration.Software{{Package: "qbee-test-service"}}
 
@@ -284,9 +281,6 @@ func Test_SoftwareManagementBundle_InstallPackage_RestartService_NoServiceName(t
 
 func Test_SoftwareManagementBundle_InstallPackage_RestartService_WithServiceName(t *testing.T) {
 	r := runner.New(t)
-
-	// install systemctl
-	r.MustExec("apt-get", "install", "-y", "systemctl")
 
 	// execute configuration bundles
 	items := []configuration.Software{
@@ -331,9 +325,6 @@ func Test_SoftwareManagementBundle_InstallPackage_PreCondition(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			r := runner.New(t)
-
-			// install systemctl
-			r.MustExec("apt-get", "install", "-y", "systemctl")
 
 			// execute configuration bundles
 			items := []configuration.Software{{Package: "qbee-test-service", PreCondition: testCase.preCondition}}
