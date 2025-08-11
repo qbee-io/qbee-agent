@@ -1,0 +1,132 @@
+version: 2
+
+project_name: qbee-agent
+
+builds:
+  - id: qbee-agent
+
+    env:
+      - CGO_ENABLED=0
+
+    gcflags:
+      - -trimpath
+
+    ldflags:
+      - -s 
+      - -w 
+      - -X github.com/qbee-io/qbee-agent-release-test/app.Version={{.Version}}
+      - -X github.com/qbee-io/qbee-agent-release-test/app.Commit={{.FullCommit}}
+
+    goos:
+      - linux
+
+    goarch:
+      - amd64
+      - arm
+      - arm64
+      - mips64le
+      - riscv64
+
+    goarm:
+      - 7
+
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+gomod:
+  proxy: true
+
+changelog:
+  use: github-native
+
+sboms:
+  - artifacts: source
+
+checksum:
+  name_template: checksums.txt
+
+signs:
+  - cmd: cosign
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
+
+source:
+  enabled: true
+
+archives:
+   - formats: [ 'tar.gz' ]
+
+nfpms:
+  - vendor: qbee AS
+    homepage: https://qbee.io/
+    maintainer: The Qbee Team <support@qbee.io>
+    license: Apache-2.0
+
+    description: |-
+      Qbee agent
+      Qbee is a lightweight system management platform for IoT devices
+
+    file_name_template: "{{- .ConventionalFileName -}}"
+
+    priority: extra
+    section: default 
+
+    formats:
+      - deb
+      - rpm
+    
+    contents:
+      - src: package/share/
+        dst: /opt/qbee/share/
+        type: tree
+        file_info:
+          mode: 0644
+          owner: root
+          group: root
+      
+      - src: package/bin/
+        dst: /opt/qbee/bin
+        type: tree
+        file_info:
+          mode: 0755
+          owner: root
+          group: root
+
+      - src: package/init-scripts/systemd/qbee-agent.service
+        dst: /lib/systemd/system/qbee-agent.service
+        file_info:
+          mode: 0644
+          owner: root
+          group: root
+
+    scripts:
+      preinstall: package/install-scripts/preinst
+      postinstall: package/install-scripts/postinst
+
+    mtime: "{{ .CommitDate }}"
+
+    overrides:
+      rpm:
+        scripts:
+          preremove: package/install-scripts/prerm-rpm
+
+        contents:
+          - src: package/init-scripts/systemd/qbee-agent.service
+            dst: /usr/lib/systemd/system/qbee-agent.service
+            file_info:
+              mode: 0644
+              owner: root
+              group: root
+      deb: 
+        scripts:
+          preremove: package/install-scripts/prerm-deb
+
+release:
+  prerelease: true
+  make_latest: false
