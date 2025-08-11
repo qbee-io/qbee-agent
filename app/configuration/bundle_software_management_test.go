@@ -252,9 +252,6 @@ func Test_SoftwareManagementBundle_InstallPackage_RestartService_WithoutSystemct
 func Test_SoftwareManagementBundle_InstallPackage_RestartService_NotAService(t *testing.T) {
 	r := runner.New(t)
 
-	// install systemctl
-	r.MustExec("apt-get", "install", "-y", "systemctl")
-
 	// execute configuration bundles
 	items := []configuration.Software{{Package: "qbee-test"}}
 
@@ -262,6 +259,8 @@ func Test_SoftwareManagementBundle_InstallPackage_RestartService_NotAService(t *
 
 	expectedReports := []string{
 		"[INFO] Successfully installed 'qbee-test'",
+		// since we are not installing systemctl on the test docker image, we will get the following warning
+		"[WARN] Required restart of 'qbee-test' cannot be performed",
 	}
 	assert.Equal(t, reports, expectedReports)
 }
