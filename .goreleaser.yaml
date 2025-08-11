@@ -14,8 +14,8 @@ builds:
     ldflags:
       - -s 
       - -w 
-      - -X github.com/qbee-io/qbee-agent-release-test/app.Version={{.Version}}
-      - -X github.com/qbee-io/qbee-agent-release-test/app.Commit={{.FullCommit}}
+      - -X go.qbee.io/agent/app.Version={{.Version}}
+      - -X go.qbee.io/agent/app.Commit={{.FullCommit}}
 
     goos:
       - linux
