@@ -38,7 +38,7 @@ func Test_PodmanContainers_Container_Start(t *testing.T) {
 			{
 				Name:    containerName,
 				Image:   "alpine:latest",
-				Args:    "--rm",
+				Args:    "--rm --cgroups=disabled",
 				Command: "sleep 5",
 			},
 		},
@@ -74,7 +74,7 @@ func Test_PodmanContainers_Container_Change(t *testing.T) {
 			{
 				Name:    containerName,
 				Image:   "alpine:latest",
-				Args:    "--rm",
+				Args:    "--rm --cgroups=disabled",
 				Command: "sleep 5",
 			},
 		},
@@ -88,7 +88,7 @@ func Test_PodmanContainers_Container_Change(t *testing.T) {
 
 	assert.Equal(t, reports, expectedReports)
 
-	podmanBundle.Containers[0].Args = "--rm -p 8080:80"
+	podmanBundle.Containers[0].Args = fmt.Sprintf("%s -p 8080:80", podmanBundle.Containers[0].Args)
 
 	expectedReports = []string{
 		"[WARN] Container configuration update detected for image alpine:latest.",
@@ -111,6 +111,7 @@ func Test_PodmanContainers_Container_StartExited(t *testing.T) {
 			{
 				Name:    containerName,
 				Image:   "alpine:latest",
+				Args:    "--cgroups=disabled",
 				Command: "echo 1",
 			},
 		},
@@ -131,7 +132,7 @@ func Test_PodmanContainers_Container_StartExited(t *testing.T) {
 			{
 				Name:    containerName,
 				Image:   "alpine:latest",
-				Args:    "--rm",
+				Args:    "--rm --cgroups=disabled",
 				Command: "sleep 5",
 			},
 		},
