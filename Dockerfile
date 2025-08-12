@@ -45,7 +45,6 @@ RUN echo \
   $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
   tee /etc/apt/sources.list.d/docker.list > /dev/null
 # update apt cache
-#RUN apt-get --allow-releaseinfo-change update && apt-get upgrade -y
 RUN apt-get update && apt-get upgrade -y
 RUN apt-get install docker-ce-cli podman -y 
 
