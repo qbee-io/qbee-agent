@@ -1,12 +1,37 @@
 package configuration
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
+	"go.qbee.io/agent/app/api"
 	"go.qbee.io/agent/app/image"
 	"go.qbee.io/agent/app/utils/assert"
 )
+
+func Test_Should_Generate_Rauc_Path(t *testing.T) {
+	apiClient, _ := api.NewMockedClient()
+	appDir := t.TempDir()
+	cacheDir := t.TempDir()
+
+	service := New(apiClient, appDir, cacheDir)
+	service.configEndpointUnreachable = false
+	service.WithURLSigner(new(mockURLSigner))
+
+	raucBundle := RaucBundle{
+		RaucBundle: "/path/to/bundle.raucb",
+	}
+
+	raucPath, err := raucBundle.resolveRaucPath(context.Background(), service)
+	assert.NoError(t, err)
+	assert.True(t, raucPath != "")
+
+	service.configEndpointUnreachable = true
+	raucPath, err = raucBundle.resolveRaucPath(context.Background(), service)
+	assert.NoError(t, err)
+	assert.True(t, raucPath == "")
+}
 
 func Test_IsCompatible(t *testing.T) {
 
