@@ -78,6 +78,9 @@ type Service struct {
 
 	// firstRun is true if the agent is running for the first time after startup
 	firstRunRetryCounter int
+
+	// configEndpointUnreachable is true if the config endpoint is unreachable
+	configEndpointUnreachable bool
 }
 
 // New returns a new instance of configuration Service.
@@ -486,6 +489,7 @@ func (srv *Service) Get(ctx context.Context) (*CommittedConfig, error) {
 		}
 
 		log.Warnf("failed to get config from API: %v", err)
+		srv.configEndpointUnreachable = true
 
 		return cfg, nil
 	}
@@ -538,4 +542,8 @@ func (srv *Service) loadConfig(cfg *CommittedConfig) error {
 	}
 
 	return nil
+}
+
+func (srv *Service) IsConfigEndpointUnreachable() bool {
+	return srv.configEndpointUnreachable
 }
