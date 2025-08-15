@@ -544,6 +544,7 @@ func (srv *Service) loadConfig(cfg *CommittedConfig) error {
 	return nil
 }
 
+// IsConfigEndpointUnreachable returns true if the configuration endpoint is unreachable.
 func (srv *Service) IsConfigEndpointUnreachable() bool {
 	return srv.configEndpointUnreachable
 }
