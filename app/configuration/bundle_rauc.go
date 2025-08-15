@@ -96,7 +96,8 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	}
 
 	// if no errors where return, but raucPath is empty, we can assume that the bundle is already installed
-	// and we can return without doing anything. This only happens for non-streaming installations
+	// (file download) or that we do not have connectivity to the config endpoint (streaming). In these cases
+	// we should return without doing anything
 	if raucPath == "" {
 		return nil
 	}
@@ -309,6 +310,11 @@ func downloadRaucBundle(ctx context.Context, service *Service, raucPath, raucDow
 }
 
 func generateStreamingURL(service *Service, raucBundle string) (string, error) {
+	// do not generate the streaming url if config endpoint is unavailable
+	if service.IsConfigEndpointUnreachable() {
+		return "", nil
+	}
+
 	filePath := path.Join(fileManagerPublicAPIPath, raucBundle)
 	return service.urlSigner.SignURL(filePath)
 }
