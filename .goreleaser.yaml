@@ -117,6 +117,22 @@ nfpms:
           preremove: package/install-scripts/prerm-rpm
 
         contents:
+          - src: package/share/
+            dst: /opt/qbee/share/
+            type: tree
+            file_info:
+              mode: 0644
+              owner: root
+              group: root
+          
+          - src: package/bin/
+            dst: /opt/qbee/bin
+            type: tree
+            file_info:
+              mode: 0755
+              owner: root
+              group: root
+
           - src: package/init-scripts/systemd/qbee-agent.service
             dst: /usr/lib/systemd/system/qbee-agent.service
             file_info:
