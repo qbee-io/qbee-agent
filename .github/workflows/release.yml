@@ -80,7 +80,7 @@ jobs:
             platform: arm/v7
             install: dpkg -i ./dist/qbee-agent_${{ github.ref_name }}.0_armhf.deb
 
-          - image: debian:stable-slim
+          - image: debian:oldstable-slim
             platform: mips64le
             install: dpkg -i ./dist/qbee-agent_${{ github.ref_name }}.0_mips64el.deb
 
