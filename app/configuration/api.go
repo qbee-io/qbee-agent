@@ -108,12 +108,16 @@ const fileManagerAPIPath = "/v1/org/device/auth/files/%s"
 const fileManagerPublicAPIPath = "/v1/org/device/public/files"
 
 // getFile returns file reader.
-func (srv *Service) getFileFromAPI(ctx context.Context, src string) (io.ReadCloser, error) {
+func (srv *Service) getFileFromAPI(ctx context.Context, src string, offset int64) (io.ReadCloser, error) {
 	path := fmt.Sprintf(fileManagerAPIPath, src)
 
 	request, err := srv.api.NewRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if offset > 0 {
+		request.Header.Set("Range", fmt.Sprintf("bytes=%d-", offset))
 	}
 
 	var response *http.Response
