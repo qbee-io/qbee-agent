@@ -19,8 +19,10 @@ package configuration
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func Test_renderTemplate(t *testing.T) {
@@ -201,5 +203,57 @@ func Test_resolveDestinationPath(t *testing.T) {
 				t.Errorf("got = `%s`, want `%s`", got, tt.want)
 			}
 		})
+	}
+}
+
+func Test_deleteFilesOlderThan(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// create files with different modification times
+	files := []struct {
+		name string
+		age  int // in hours
+	}{
+		{"file-new", 1},
+		{"file-old", 3},
+		{".hiddenfile-old", 4},
+		{".hiddenfile-new", 1},
+	}
+
+	for _, file := range files {
+		path := filepath.Join(tempDir, file.name)
+		if err := os.WriteFile(path, []byte("test"), 0644); err != nil {
+			t.Fatalf("failed to create test file: %v", err)
+		}
+		modTime := time.Now().Add(-time.Duration(file.age) * time.Hour)
+		if err := os.Chtimes(path, modTime, modTime); err != nil {
+			t.Fatalf("failed to change file times: %v", err)
+		}
+	}
+
+	// delete files older than 2 hours
+	if err := DeleteFilesOlderThan(tempDir, 2*time.Hour); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// check which files remain
+	remainingFiles, err := os.ReadDir(tempDir)
+	if err != nil {
+		t.Fatalf("failed to read temp dir: %v", err)
+	}
+
+	expectedRemaining := map[string]bool{
+		"file-new":        true,
+		".hiddenfile-new": true,
+	}
+
+	if len(remainingFiles) != len(expectedRemaining) {
+		t.Fatalf("expected %d files remaining, got %d", len(expectedRemaining), len(remainingFiles))
+	}
+
+	for _, file := range remainingFiles {
+		if !expectedRemaining[file.Name()] {
+			t.Errorf("unexpected file remaining: %s", file.Name())
+		}
 	}
 }
