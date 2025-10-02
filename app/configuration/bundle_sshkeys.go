@@ -123,7 +123,7 @@ func (s SSHKeysBundle) createAuthorizedKeysFile(user *inventory.User, keys []str
 
 	// re-create authorized_keys file
 	var file *os.File
-	if file, err = createFile(authorizedKeysFilePath, sshAuthorizedKeysFilePermission); err != nil {
+	if file, err = createFile(authorizedKeysFilePath, sshAuthorizedKeysFilePermission, true); err != nil {
 		return false, err
 	}
 
