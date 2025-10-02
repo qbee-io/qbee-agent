@@ -177,6 +177,7 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 		agent.do(ctx, "config", agent.doConfig(configData))
 		agent.do(ctx, "metrics", agent.doMetrics)
 		agent.do(ctx, "inventories", agent.doInventories)
+		agent.do(ctx, "cleanup", agent.doCleanup)
 	} else {
 		agent.do(ctx, "system-inventory", agent.doSystemInventory)
 	}
@@ -191,6 +192,12 @@ func (agent *Agent) do(ctx context.Context, name string, fn func(ctx context.Con
 	}
 
 	log.Debugf("stopping %s", name)
+}
+
+// doCleanup performs cleanup tasks.
+func (agent *Agent) doCleanup(ctx context.Context) error {
+	agent.Configuration.Cleanup(ctx)
+	return nil
 }
 
 // doMetrics collects system metrics - if enabled - and delivers them to the device hub API.
