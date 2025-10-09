@@ -63,6 +63,7 @@ type FileMetadata struct {
 	MD5          string            `json:"md5"`
 	LastModified int64             `json:"last_modified"`
 	Tags         map[string]string `json:"tags,omitempty"`
+	Size         int64             `json:"size,omitempty"`
 }
 
 // TemplateParameter defines a single parameter used to replace placeholder in a template.
@@ -146,7 +147,7 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 
 	// check if file already exists and has the right contents
 	var fileReady bool
-	if fileReady, err = isFileReady(dst, fileMetadata.SHA256(), fileMetadata.MD5); err != nil || fileReady {
+	if fileReady, err = isFileReady(dst, fileMetadata); err != nil || fileReady {
 		return false, err
 	}
 
@@ -160,6 +161,7 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 		return false, fmt.Errorf("error checking partial download %s: %w", tmpDst, err)
 	}
 
+	// download the file (or remaining part of it)
 	var srcFile io.ReadCloser
 	if srcFile, err = srv.getFile(ctx, src, offset); err != nil {
 		return false, err
@@ -185,12 +187,15 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 		return false, fmt.Errorf("error writing file %s: %w", tmpDst, err)
 	}
 
-	if fileReady, err = isFileReady(tmpDst, fileMetadata.SHA256(), fileMetadata.MD5); err != nil {
+	// check if the download to temporary file was successful
+	if fileReady, err = isFileReady(tmpDst, fileMetadata); err != nil {
 		return false, err
 	}
 
 	if !fileReady {
 		err = fmt.Errorf("downloaded file %s is incomplete or has invalid contents", src)
+		// in case of error, remove the partial file
+		_ = os.Remove(tmpDst)
 		return false, err
 	}
 
@@ -312,8 +317,14 @@ func (srv *Service) downloadTemplateFile(
 		return false, err
 	}
 
+	fileMetadata := &FileMetadata{
+		Tags: map[string]string{
+			fileDigestSHA256Tag: sha256digest,
+		},
+	}
+
 	var fileReady bool
-	if fileReady, err = isFileReady(dst, sha256digest, ""); err != nil || fileReady {
+	if fileReady, err = isFileReady(dst, fileMetadata); err != nil || fileReady {
 		return false, err
 	}
 
@@ -495,11 +506,11 @@ func createFile(path string, permission os.FileMode, truncate bool) (*os.File, e
 }
 
 // isFileReady returns true if provided file exists and has expected contents.
-func isFileReady(path, sha256Digest, md5Digest string) (bool, error) {
+func isFileReady(path string, fileMetadata *FileMetadata) (bool, error) {
 	fd, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return false, nil
+			return false, diskSpaceAvailable(filepath.Dir(path), 0, 0)
 		}
 
 		return false, fmt.Errorf("checking if file is ready failed: %w", err)
@@ -510,11 +521,11 @@ func isFileReady(path, sha256Digest, md5Digest string) (bool, error) {
 	var expectedHexDigest string
 	var digest hash.Hash
 
-	if sha256Digest != "" {
-		expectedHexDigest = sha256Digest
+	if fileMetadata.SHA256() != "" {
+		expectedHexDigest = fileMetadata.SHA256()
 		digest = sha256.New()
 	} else {
-		expectedHexDigest = md5Digest
+		expectedHexDigest = fileMetadata.MD5
 		digest = md5.New()
 	}
 
@@ -527,6 +538,25 @@ func isFileReady(path, sha256Digest, md5Digest string) (bool, error) {
 	fileIsReady := calculatedHexDigest == expectedHexDigest
 
 	return fileIsReady, nil
+}
+
+const freeDiskOverhead = 1024 * 1024 * 10 // 10MB
+
+// diskSpaceAvailable returns the available disk space in bytes.
+func diskSpaceAvailable(path string, fullSize, usedSize int64) error {
+	var stat syscall.Statfs_t
+
+	if err := syscall.Statfs(path, &stat); err != nil {
+		return fmt.Errorf("failed to get disk space information: %w", err)
+	}
+
+	required := fullSize + freeDiskOverhead - usedSize
+	// check if enough space is available
+	if stat.Bavail*uint64(stat.Bsize) < uint64(required) {
+		return fmt.Errorf("not enough disk space available, %d bytes required", required)
+	}
+
+	return nil
 }
 
 // determineFileOwner detects uid and gid for the path.

@@ -111,7 +111,14 @@ func (s SSHKeysBundle) createAuthorizedKeysFile(user *inventory.User, keys []str
 	hexDigest := hex.EncodeToString(digest.Sum(nil))
 
 	// check whether the file has correct contents
-	fileReady, err := isFileReady(authorizedKeysFilePath, hexDigest, "")
+
+	fileMetadata := &FileMetadata{
+		Tags: map[string]string{
+			fileDigestSHA256Tag: hexDigest,
+		},
+	}
+
+	fileReady, err := isFileReady(authorizedKeysFilePath, fileMetadata)
 	if err != nil || fileReady {
 		return false, err
 	}
