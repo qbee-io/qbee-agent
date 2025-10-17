@@ -415,29 +415,25 @@ func Test_FileDistirbution_No_Reports_Connectivity_Issues(t *testing.T) {
 func Test_ResumeDownload(t *testing.T) {
 	r := runner.New(t)
 
-	fileName := "/var/lib/test.txt"
+	sourcePath := "/var/lib/test.txt"
+	destinationPath := fmt.Sprintf("%s.downloaded", sourcePath)
 	partialContents := "this is the cont"
 	fileContents := partialContents + "ents of the file"
 
-	r.CreateFile(fileName, []byte(fileContents))
+	r.CreateFile(sourcePath, []byte(fileContents))
 
-	output := r.MustExec("sha256sum", fileName)
+	originalHash := strings.Fields(string(r.MustExec("sha256sum", sourcePath)))[0]
 
-	originalHash := strings.Fields(string(output))[0]
+	partialFilePath := configuration.GetPartialDownloadFilePath(destinationPath)
 
-	partialFilePath := configuration.GetPartialDownloadFilePath(fileName)
-
-	r.MustExec("mkdir", "-p", filepath.Dir(partialFilePath))
-	r.CreateFile(partialFilePath, []byte(partialContents+" this breaks it"))
-
-	localFileRef := "file://" + fileName
+	localFileRef := "file://" + sourcePath
 	agentConfig := configuration.CommittedConfig{
 		Bundles: []string{configuration.BundleFileDistribution},
 		BundleData: configuration.BundleData{
 			FileDistribution: &configuration.FileDistributionBundle{
 				Metadata: configuration.Metadata{Enabled: true},
 				FileSets: []configuration.FileSet{
-					{Files: []configuration.File{{Source: localFileRef, Destination: fileName + ".downloaded"}}},
+					{Files: []configuration.File{{Source: localFileRef, Destination: sourcePath + ".downloaded"}}},
 				},
 			},
 		},
@@ -456,27 +452,29 @@ func Test_ResumeDownload(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dst := fileName + ".downloaded"
-
-			r.MustExec("rm", "-f", dst)
+			// Remove any file from previous tests
+			r.MustExec("rm", "-f", destinationPath)
 			r.MustExec("rm", "-f", partialFilePath)
 
 			// write partial file to cache
 			r.CreateFile(partialFilePath, []byte(tt.existingContents))
+			output := r.MustExec("cat", partialFilePath)
+			assert.Equal(t, string(output), tt.existingContents)
 
 			reports, _ := configuration.ExecuteTestConfigInDocker(r, agentConfig)
 
 			if tt.expectSuccess {
+				output := r.MustExec("sha256sum", sourcePath+".downloaded")
+				assert.Equal(t, string(output), fmt.Sprintf("%s  %s", originalHash, sourcePath+".downloaded"))
+
 				expectedReports := []string{
-					fmt.Sprintf("[INFO] Successfully downloaded file %[1]s to %s", localFileRef, fileName+".downloaded"),
+					fmt.Sprintf("[INFO] Successfully downloaded file %[1]s to %s", localFileRef, sourcePath+".downloaded"),
 				}
 				assert.Equal(t, reports, expectedReports)
 
-				output := r.MustExec("sha256sum", fileName+".downloaded")
-				assert.Equal(t, string(output), fmt.Sprintf("%s  %s", originalHash, fileName+".downloaded"))
 			} else {
 				expectedReports := []string{
-					fmt.Sprintf("[ERR] Unable to download file %[1]s to %s", localFileRef, fileName+".downloaded"),
+					fmt.Sprintf("[ERR] Unable to download file %[1]s to %s", localFileRef, sourcePath+".downloaded"),
 				}
 				assert.Equal(t, reports, expectedReports)
 			}
