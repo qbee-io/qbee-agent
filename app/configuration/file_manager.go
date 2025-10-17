@@ -32,7 +32,6 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
 )
 
 const (
@@ -54,9 +53,6 @@ const PodmanContainerDirectory = "podman_containers"
 
 // DockerComposeDirectory is where the agent will download docker-compose related files.
 const DockerComposeDirectory = "docker_compose"
-
-// FileDownloadCacheDirectory is where the agent will download files to.
-const DownloadCacheDirectory = "downloads"
 
 // FileMetadata is the metadata of a file.
 type FileMetadata struct {
@@ -152,7 +148,8 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 	}
 
 	// partial download path
-	tmpDst := filepath.Join(srv.cacheDirectory, DownloadCacheDirectory, fmt.Sprintf(".%s.part", fileIdentifier))
+	tmpDst := GetPartialDownloadFilePath(dst)
+
 	// find size of the already downloaded part if it exists
 	var offset int64
 	if fileInfo, err := os.Stat(tmpDst); err == nil {
@@ -675,22 +672,6 @@ func resolveDestinationPath(source, destination string) (string, error) {
 	return destination, nil
 }
 
-func DeleteFilesOlderThan(dir string, age time.Duration) error {
-	cutoff := time.Now().Add(-age)
-
-	return filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if info.IsDir() {
-			return nil
-		}
-		if info.ModTime().Before(cutoff) {
-			if err := os.Remove(path); err != nil {
-				return fmt.Errorf("failed to remove file %s: %w", path, err)
-			}
-		}
-		return nil
-	})
+func GetPartialDownloadFilePath(path string) string {
+	return filepath.Join(filepath.Dir(path), fmt.Sprintf(".%s.part", filepath.Base(path)))
 }

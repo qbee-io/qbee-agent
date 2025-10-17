@@ -548,17 +548,3 @@ func (srv *Service) loadConfig(cfg *CommittedConfig) error {
 func (srv *Service) IsConfigEndpointUnreachable() bool {
 	return srv.configEndpointUnreachable
 }
-
-const partialDownloadTTL = 7 * 24 * time.Hour
-
-// Cleanup performs cleanup tasks.
-func (srv *Service) Cleanup(ctx context.Context) {
-	// currently, we only have cleanup tasks in the configuration service
-	// if we add more cleanup tasks in the future, we can refactor this method
-	log.Debugf("performing cleanup tasks")
-	partialDownloadDir := filepath.Join(srv.cacheDirectory, DownloadCacheDirectory)
-	if err := DeleteFilesOlderThan(partialDownloadDir, partialDownloadTTL); err != nil {
-		log.Errorf("failed to clean cache directory: %v", err)
-	}
-	log.Debugf("cleanup tasks completed successfully")
-}

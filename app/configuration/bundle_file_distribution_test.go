@@ -17,9 +17,9 @@
 package configuration_test
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"go.qbee.io/agent/app/agent"
@@ -421,9 +421,11 @@ func Test_ResumeDownload(t *testing.T) {
 
 	r.CreateFile(fileName, []byte(fileContents))
 
-	// write partial file to cache
-	fileIdentifier := fmt.Sprintf("%x", sha256.Sum256([]byte(fileContents)))
-	partialFilePath := filepath.Join("/var/lib/qbee/app_workdir/cache", configuration.DownloadCacheDirectory, fmt.Sprintf(".%s.part", fileIdentifier))
+	output := r.MustExec("sha256sum", fileName)
+
+	originalHash := strings.Fields(string(output))[0]
+
+	partialFilePath := configuration.GetPartialDownloadFilePath(fileName)
 
 	r.MustExec("mkdir", "-p", filepath.Dir(partialFilePath))
 	r.CreateFile(partialFilePath, []byte(partialContents+" this breaks it"))
@@ -471,7 +473,7 @@ func Test_ResumeDownload(t *testing.T) {
 				assert.Equal(t, reports, expectedReports)
 
 				output := r.MustExec("sha256sum", fileName+".downloaded")
-				assert.Equal(t, string(output), fmt.Sprintf("%s  %s", fileIdentifier, fileName+".downloaded"))
+				assert.Equal(t, string(output), fmt.Sprintf("%s  %s", originalHash, fileName+".downloaded"))
 			} else {
 				expectedReports := []string{
 					fmt.Sprintf("[ERR] Unable to download file %[1]s to %s", localFileRef, fileName+".downloaded"),
