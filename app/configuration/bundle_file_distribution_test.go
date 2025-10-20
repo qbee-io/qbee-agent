@@ -433,7 +433,7 @@ func Test_ResumeDownload(t *testing.T) {
 			FileDistribution: &configuration.FileDistributionBundle{
 				Metadata: configuration.Metadata{Enabled: true},
 				FileSets: []configuration.FileSet{
-					{Files: []configuration.File{{Source: localFileRef, Destination: sourcePath + ".downloaded"}}},
+					{Files: []configuration.File{{Source: localFileRef, Destination: destinationPath}}},
 				},
 			},
 		},
@@ -464,17 +464,17 @@ func Test_ResumeDownload(t *testing.T) {
 			reports, _ := configuration.ExecuteTestConfigInDocker(r, agentConfig)
 
 			if tt.expectSuccess {
-				output := r.MustExec("sha256sum", sourcePath+".downloaded")
-				assert.Equal(t, string(output), fmt.Sprintf("%s  %s", originalHash, sourcePath+".downloaded"))
+				output := r.MustExec("sha256sum", destinationPath)
+				assert.Equal(t, string(output), fmt.Sprintf("%s  %s", originalHash, destinationPath))
 
 				expectedReports := []string{
-					fmt.Sprintf("[INFO] Successfully downloaded file %[1]s to %s", localFileRef, sourcePath+".downloaded"),
+					fmt.Sprintf("[INFO] Successfully downloaded file %[1]s to %s", localFileRef, destinationPath),
 				}
 				assert.Equal(t, reports, expectedReports)
 
 			} else {
 				expectedReports := []string{
-					fmt.Sprintf("[ERR] Unable to download file %[1]s to %s", localFileRef, sourcePath+".downloaded"),
+					fmt.Sprintf("[ERR] Unable to download file %[1]s to %s", localFileRef, destinationPath),
 				}
 				assert.Equal(t, reports, expectedReports)
 			}

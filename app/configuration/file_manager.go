@@ -158,6 +158,11 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 		return false, fmt.Errorf("error checking partial download %s: %w", tmpDst, err)
 	}
 
+	// check disk space for remaining part
+	if err = diskSpaceAvailable(tmpDst, fileMetadata.Size-offset); err != nil {
+		return false, err
+	}
+
 	// download the file (or remaining part of it)
 	var srcFile io.ReadCloser
 	if srcFile, err = srv.getFile(ctx, src, offset); err != nil {
@@ -507,7 +512,7 @@ func isFileReady(path string, fileMetadata *FileMetadata) (bool, error) {
 	fd, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return false, diskSpaceAvailable(filepath.Dir(path), 0, 0)
+			return false, nil
 		}
 
 		return false, fmt.Errorf("checking if file is ready failed: %w", err)
@@ -537,17 +542,17 @@ func isFileReady(path string, fileMetadata *FileMetadata) (bool, error) {
 	return fileIsReady, nil
 }
 
-const freeDiskOverhead = 1024 * 1024 * 10 // 10MB
+const freeDiskOverhead = 1024 * 1024 * 1 // 1MB
 
 // diskSpaceAvailable returns the available disk space in bytes.
-func diskSpaceAvailable(path string, fullSize, usedSize int64) error {
+func diskSpaceAvailable(path string, size int64) error {
 	var stat syscall.Statfs_t
 
 	if err := syscall.Statfs(path, &stat); err != nil {
 		return fmt.Errorf("failed to get disk space information: %w", err)
 	}
 
-	required := fullSize + freeDiskOverhead - usedSize
+	required := size + freeDiskOverhead
 	// check if enough space is available
 	if stat.Bavail*uint64(stat.Bsize) < uint64(required) {
 		return fmt.Errorf("not enough disk space available, %d bytes required", required)
