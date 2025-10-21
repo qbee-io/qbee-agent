@@ -123,6 +123,11 @@ func (s SSHKeysBundle) createAuthorizedKeysFile(user *inventory.User, keys []str
 		return false, err
 	}
 
+	fileCreateData, err := determineFileCreateData(authorizedKeysFilePath)
+	if err != nil {
+		return false, fmt.Errorf("error determining local fs data: %w", err)
+	}
+
 	// ensure .ssh directory exists with the right permissions
 	if err = makeDirectories(authorizedKeysFilePath, sshDirectoryPermission, user.UID, user.UID); err != nil {
 		return false, err
@@ -130,7 +135,7 @@ func (s SSHKeysBundle) createAuthorizedKeysFile(user *inventory.User, keys []str
 
 	// re-create authorized_keys file
 	var file *os.File
-	if file, err = createFile(authorizedKeysFilePath, sshAuthorizedKeysFilePermission, true); err != nil {
+	if file, err = createFile(authorizedKeysFilePath, fileCreateData, sshAuthorizedKeysFilePermission, true); err != nil {
 		return false, err
 	}
 

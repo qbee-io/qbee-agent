@@ -156,7 +156,8 @@ func (s Software) Execute(ctx context.Context, srv *Service, pkgManager software
 		var created bool
 
 		parameters := templateParametersMap(s.Parameters)
-		created, err = srv.downloadTemplateFile(ctx, "", cfgFile.ConfigTemplate, cfgFile.ConfigLocation, "", parameters)
+
+		created, err = srv.downloadTemplateFile(ctx, "", cfgFile.ConfigTemplate, cfgFile.ConfigLocation, File{}, parameters)
 		if err != nil {
 			return err
 		}
@@ -184,7 +185,7 @@ func (s Software) installFromFile(ctx context.Context, srv *Service, pkgManager 
 	} else {
 		pkgFileCachePath = filepath.Join(srv.cacheDirectory, SoftwareCacheDirectory, s.Package)
 
-		if _, err := srv.downloadFile(ctx, "", s.Package, pkgFileCachePath, ""); err != nil {
+		if _, err := srv.downloadFile(ctx, "", s.Package, pkgFileCachePath, File{}); err != nil {
 			return false, err
 		}
 	}

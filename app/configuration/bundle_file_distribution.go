@@ -78,6 +78,9 @@ type File struct {
 	// Digest (SHA256) of the source file.
 	Digest string `json:"digest"`
 
+	// Size of the source file.
+	Size int64 `json:"size"`
+
 	// Destination defines absolute path of the file in the filesystem.
 	Destination string `json:"destination"`
 
@@ -111,9 +114,9 @@ func (fd FileDistributionBundle) Execute(ctx context.Context, service *Service) 
 			var created bool
 
 			if file.IsTemplate {
-				created, err = service.downloadTemplateFile(ctx, fileSet.Label, fileSource, fileDestination, file.Digest, parameters)
+				created, err = service.downloadTemplateFile(ctx, fileSet.Label, fileSource, fileDestination, file, parameters)
 			} else {
-				created, err = service.downloadFile(ctx, fileSet.Label, fileSource, fileDestination, file.Digest)
+				created, err = service.downloadFile(ctx, fileSet.Label, fileSource, fileDestination, file)
 			}
 
 			if err != nil {
