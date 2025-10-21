@@ -94,7 +94,7 @@ func (md *FileMetadata) SHA256() string {
 }
 
 // downloadFile and return true when file was created. In case the right file already existed, return false.
-func (srv *Service) downloadFile(ctx context.Context, label, src, dst, digest string) (bool, error) {
+func (srv *Service) downloadFile(ctx context.Context, label, src, dst string, file File) (bool, error) {
 	var err error
 
 	src = resolveParameters(ctx, src)
@@ -112,11 +112,12 @@ func (srv *Service) downloadFile(ctx context.Context, label, src, dst, digest st
 	}
 
 	var fileMetadata *FileMetadata
-	if digest != "" {
+	if file.Digest != "" {
 		fileMetadata = &FileMetadata{
 			Tags: map[string]string{
-				fileDigestSHA256Tag: digest,
+				fileDigestSHA256Tag: file.Digest,
 			},
+			Size: file.Size,
 		}
 	} else if fileMetadata, err = srv.getFileMetadata(ctx, src); err != nil {
 		return false, err
@@ -158,9 +159,16 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 		return false, fmt.Errorf("error checking partial download %s: %w", tmpDst, err)
 	}
 
-	// check disk space for remaining part
-	if err = diskSpaceAvailable(tmpDst, fileMetadata.Size-offset); err != nil {
-		return false, err
+	// check local file create data
+	fileCreateData, err := determineFileCreateData(dst)
+	if err != nil {
+		return false, fmt.Errorf("error determining local fs data: %w", err)
+	}
+
+	// check if there is enough disk space, do not check if size is zero (unknown)
+	if fileMetadata.Size > 0 && fileMetadata.Size-offset+freeDiskOverhead > fileCreateData.bytesAvail {
+		return false, fmt.Errorf("not enough disk space to download file %s: need %d bytes, have %d bytes",
+			src, fileMetadata.Size-offset+freeDiskOverhead, fileCreateData.bytesAvail)
 	}
 
 	// download the file (or remaining part of it)
@@ -172,7 +180,7 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 	defer func() { _ = srcFile.Close() }()
 
 	var dstFile *os.File
-	if dstFile, err = createFile(tmpDst, fileManagerDefaultFilePermission, offset == 0); err != nil {
+	if dstFile, err = createFile(tmpDst, fileCreateData, fileManagerDefaultFilePermission, offset == 0); err != nil {
 		return false, err
 	}
 
@@ -264,6 +272,7 @@ func (srv *Service) getFileMetadataFromLocal(src string) (*FileMetadata, error) 
 		Tags: map[string]string{
 			fileDigestSHA256Tag: hexDigest,
 		},
+		Size: fileInfo.Size(),
 	}
 
 	return fileMetadata, nil
@@ -284,7 +293,7 @@ func (srv *Service) downloadTemplateFile(
 	label string,
 	src string,
 	dst string,
-	digest string,
+	file File,
 	params map[string]string,
 ) (bool, error) {
 	var err error
@@ -309,7 +318,7 @@ func (srv *Service) downloadTemplateFile(
 	} else {
 		cacheSrc = filepath.Join(srv.cacheDirectory, FileDistributionCacheDirectory, src)
 
-		if _, err = srv.downloadFile(ctx, label, src, cacheSrc, digest); err != nil {
+		if _, err = srv.downloadFile(ctx, label, src, cacheSrc, file); err != nil {
 			return false, err
 		}
 	}
@@ -330,6 +339,11 @@ func (srv *Service) downloadTemplateFile(
 		return false, err
 	}
 
+	fileCreateData, err := determineFileCreateData(dst)
+	if err != nil {
+		return false, fmt.Errorf("error determining local fs data: %w", err)
+	}
+
 	var srcFile io.ReadCloser
 	if srcFile, err = os.Open(cacheSrc); err != nil {
 		return false, fmt.Errorf("error opening template file %s: %w", cacheSrc, err)
@@ -338,7 +352,7 @@ func (srv *Service) downloadTemplateFile(
 	defer func() { _ = srcFile.Close() }()
 
 	var dstFile io.WriteCloser
-	if dstFile, err = createFile(dst, fileManagerDefaultFilePermission, true); err != nil {
+	if dstFile, err = createFile(dst, fileCreateData, fileManagerDefaultFilePermission, true); err != nil {
 		return false, err
 	}
 
@@ -478,13 +492,9 @@ func calculateTemplateDigest(src string, params map[string]string) (string, erro
 }
 
 // createFile under provided path and with provided uid and gid.
-func createFile(path string, permission os.FileMode, truncate bool) (*os.File, error) {
-	uid, gid, err := determineFileOwner(path)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = makeDirectories(path, fileManagerDefaultDirectoryPermission, uid, gid); err != nil {
+func createFile(path string, fileCreateData *fileCreateData, permission os.FileMode, truncate bool) (*os.File, error) {
+	var err error
+	if err = makeDirectories(path, fileManagerDefaultDirectoryPermission, fileCreateData.uid, fileCreateData.gid); err != nil {
 		return nil, err
 	}
 
@@ -499,7 +509,7 @@ func createFile(path string, permission os.FileMode, truncate bool) (*os.File, e
 		return nil, fmt.Errorf("error creating file %s: %w", path, err)
 	}
 
-	if err = file.Chown(uid, gid); err != nil {
+	if err = file.Chown(fileCreateData.uid, fileCreateData.gid); err != nil {
 		_ = file.Close()
 		return nil, fmt.Errorf("error setting owner on %s: %w", path, err)
 	}
@@ -544,25 +554,15 @@ func isFileReady(path string, fileMetadata *FileMetadata) (bool, error) {
 
 const freeDiskOverhead = 1024 * 1024 * 1 // 1MB
 
-// diskSpaceAvailable returns the available disk space in bytes.
-func diskSpaceAvailable(path string, size int64) error {
-	var stat syscall.Statfs_t
-
-	if err := syscall.Statfs(path, &stat); err != nil {
-		return fmt.Errorf("failed to get disk space information: %w", err)
-	}
-
-	required := size + freeDiskOverhead
-	// check if enough space is available
-	if stat.Bavail*uint64(stat.Bsize) < uint64(required) {
-		return fmt.Errorf("not enough disk space available, %d bytes required", required)
-	}
-
-	return nil
+type fileCreateData struct {
+	uid        int
+	gid        int
+	bytesAvail int64
 }
 
-// determineFileOwner detects uid and gid for the path.
-func determineFileOwner(dst string) (int, int, error) {
+// determineFileCreateData detects uid and gid for the path.
+func determineFileCreateData(dst string) (*fileCreateData, error) {
+
 	fileInfo, err := os.Stat(dst)
 	if err != nil {
 		// if path doesn't exist, try to determine owner of the parent directory
@@ -571,24 +571,41 @@ func determineFileOwner(dst string) (int, int, error) {
 
 			if parentDirPath == dst {
 				// this should never happen, but in case it does, use the process uid/gid
-				return os.Geteuid(), os.Getgid(), nil
+				return &fileCreateData{
+					uid:        os.Geteuid(),
+					gid:        os.Getgid(),
+					bytesAvail: 0,
+				}, nil
 			}
 
-			return determineFileOwner(parentDirPath)
+			return determineFileCreateData(parentDirPath)
 		}
 
-		return 0, 0, fmt.Errorf("cannot check file ownership: %s - %w", dst, err)
+		return nil, fmt.Errorf("cannot check file create data: %s - %w", dst, err)
 	}
 
 	// if file exists, use its uid/gid
 	fileStat, ok := fileInfo.Sys().(*syscall.Stat_t)
 	if !ok {
-		return 0, 0, fmt.Errorf("cannot check file ownership: %s - unsupported OS", dst)
+		return nil, fmt.Errorf("cannot check file ownership: %s - unsupported OS", dst)
 	}
 
 	uid, gid := int(fileStat.Uid), int(fileStat.Gid)
 
-	return uid, gid, nil
+	// get diskspace available
+
+	stat := syscall.Statfs_t{}
+	if err = syscall.Statfs(dst, &stat); err != nil {
+		return nil, fmt.Errorf("cannot check disk space: %s - %w", dst, err)
+	}
+
+	bytesAvail := int64(stat.Bavail) * int64(stat.Bsize)
+
+	return &fileCreateData{
+		uid:        uid,
+		gid:        gid,
+		bytesAvail: bytesAvail,
+	}, nil
 }
 
 // makeDirectories checks if all directories for the dst file exist, if not, create them with provided owner and group.
