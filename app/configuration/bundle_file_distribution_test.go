@@ -481,3 +481,36 @@ func Test_ResumeDownload(t *testing.T) {
 		})
 	}
 }
+
+func Test_FileDistributionBundle_NoSpace(t *testing.T) {
+	r := runner.New(t)
+
+	sourcePath := "/var/lib/test.txt"
+	destinationPath := "/proc/test.txt"
+	fileContents := "this is the contents of the file"
+	r.CreateFile(sourcePath, []byte(fileContents))
+
+	localFileRef := "file://" + sourcePath
+
+	agentConfig := configuration.CommittedConfig{
+		Bundles: []string{configuration.BundleFileDistribution},
+		BundleData: configuration.BundleData{
+			FileDistribution: &configuration.FileDistributionBundle{
+				Metadata: configuration.Metadata{Enabled: true},
+				FileSets: []configuration.FileSet{
+					{
+						Files: []configuration.File{
+							{Source: localFileRef, Destination: destinationPath},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	reports, _ := configuration.ExecuteTestConfigInDocker(r, agentConfig)
+
+	assert.Equal(t, reports, []string{
+		fmt.Sprintf("[ERR] Unable to download file %s to %s", localFileRef, destinationPath),
+	})
+}
