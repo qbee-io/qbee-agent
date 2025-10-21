@@ -694,6 +694,7 @@ func resolveDestinationPath(source, destination string) (string, error) {
 	return destination, nil
 }
 
+// GetPartialDownloadFilePath returns the file path for a partial download.
 func GetPartialDownloadFilePath(path string) string {
 	return filepath.Join(filepath.Dir(path), fmt.Sprintf(".%s.part", filepath.Base(path)))
 }
