@@ -132,16 +132,6 @@ func (srv *Service) downloadFile(ctx context.Context, label, src, dst string, fi
 func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst string, fileMetadata *FileMetadata) (bool, error) {
 	var err error
 
-	fileIdentifier := fileMetadata.MD5
-	if fileMetadata.SHA256() != "" {
-		fileIdentifier = fileMetadata.SHA256()
-	}
-
-	if fileIdentifier == "" {
-		err = fmt.Errorf("no valid file identifier (md5 or sha256) found for file %s", src)
-		return false, err
-	}
-
 	// check if file already exists and has the right contents
 	var fileReady bool
 	if fileReady, err = isFileReady(dst, fileMetadata); err != nil || fileReady {
@@ -157,6 +147,15 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 		offset = fileInfo.Size()
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return false, fmt.Errorf("error checking partial download %s: %w", tmpDst, err)
+	}
+
+	// check if offset is not larger than expected file size
+	if offset > fileMetadata.Size {
+		// partial file is larger than expected, remove it and start over
+		if err = os.Remove(tmpDst); err != nil {
+			return false, fmt.Errorf("error removing invalid partial download %s: %w", tmpDst, err)
+		}
+		offset = 0
 	}
 
 	// check local file create data
