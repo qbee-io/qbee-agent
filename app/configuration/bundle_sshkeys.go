@@ -111,9 +111,21 @@ func (s SSHKeysBundle) createAuthorizedKeysFile(user *inventory.User, keys []str
 	hexDigest := hex.EncodeToString(digest.Sum(nil))
 
 	// check whether the file has correct contents
-	fileReady, err := isFileReady(authorizedKeysFilePath, hexDigest, "")
+
+	fileMetadata := &FileMetadata{
+		Tags: map[string]string{
+			fileDigestSHA256Tag: hexDigest,
+		},
+	}
+
+	fileReady, err := isFileReady(authorizedKeysFilePath, fileMetadata)
 	if err != nil || fileReady {
 		return false, err
+	}
+
+	fileCreateData, err := determineFileCreateData(authorizedKeysFilePath)
+	if err != nil {
+		return false, fmt.Errorf("error determining local fs data: %w", err)
 	}
 
 	// ensure .ssh directory exists with the right permissions
@@ -123,7 +135,7 @@ func (s SSHKeysBundle) createAuthorizedKeysFile(user *inventory.User, keys []str
 
 	// re-create authorized_keys file
 	var file *os.File
-	if file, err = createFile(authorizedKeysFilePath, sshAuthorizedKeysFilePermission); err != nil {
+	if file, err = createFile(authorizedKeysFilePath, fileCreateData, sshAuthorizedKeysFilePermission, true); err != nil {
 		return false, err
 	}
 

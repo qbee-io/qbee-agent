@@ -226,9 +226,9 @@ func (c Compose) getComposeFile(ctx context.Context, service *Service) (bool, er
 	parameters := templateParametersMap(c.Parameters)
 
 	if len(parameters) > 0 {
-		return service.downloadTemplateFile(ctx, "", c.File, composeFilePath, "", parameters)
+		return service.downloadTemplateFile(ctx, "", c.File, composeFilePath, File{}, parameters)
 	}
-	return service.downloadFile(ctx, "", c.File, composeFilePath, "")
+	return service.downloadFile(ctx, "", c.File, composeFilePath, File{})
 }
 
 func (c Compose) getProjectDirectory(service *Service) string {

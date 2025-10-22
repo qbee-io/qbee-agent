@@ -76,7 +76,7 @@ func (c Container) execute(ctx context.Context, srv *Service, containerBin strin
 
 	envFilePath := c.localEnvFilePath(srv)
 	if envFilePath != "" {
-		if needRestart, err = srv.downloadFile(ctx, "", c.EnvFile, envFilePath, ""); err != nil {
+		if needRestart, err = srv.downloadFile(ctx, "", c.EnvFile, envFilePath, File{}); err != nil {
 			return err
 		}
 	}

@@ -59,6 +59,7 @@ type FileMetadata struct {
 	MD5          string            `json:"md5"`
 	LastModified int64             `json:"last_modified"`
 	Tags         map[string]string `json:"tags,omitempty"`
+	Size         int64             `json:"size,omitempty"`
 }
 
 // TemplateParameter defines a single parameter used to replace placeholder in a template.
@@ -93,7 +94,7 @@ func (md *FileMetadata) SHA256() string {
 }
 
 // downloadFile and return true when file was created. In case the right file already existed, return false.
-func (srv *Service) downloadFile(ctx context.Context, label, src, dst, digest string) (bool, error) {
+func (srv *Service) downloadFile(ctx context.Context, label, src, dst string, file File) (bool, error) {
 	var err error
 
 	src = resolveParameters(ctx, src)
@@ -111,11 +112,12 @@ func (srv *Service) downloadFile(ctx context.Context, label, src, dst, digest st
 	}
 
 	var fileMetadata *FileMetadata
-	if digest != "" {
+	if file.Digest != "" {
 		fileMetadata = &FileMetadata{
 			Tags: map[string]string{
-				fileDigestSHA256Tag: digest,
+				fileDigestSHA256Tag: file.Digest,
 			},
+			Size: file.Size,
 		}
 	} else if fileMetadata, err = srv.getFileMetadata(ctx, src); err != nil {
 		return false, err
@@ -126,30 +128,88 @@ func (srv *Service) downloadFile(ctx context.Context, label, src, dst, digest st
 
 	return fileReady, err
 }
+
 func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst string, fileMetadata *FileMetadata) (bool, error) {
 	var err error
 
+	// check if file already exists and has the right contents
 	var fileReady bool
-	if fileReady, err = isFileReady(dst, fileMetadata.SHA256(), fileMetadata.MD5); err != nil || fileReady {
+	if fileReady, err = isFileReady(dst, fileMetadata); err != nil || fileReady {
 		return false, err
 	}
 
+	// partial download path
+	tmpDst := GetPartialDownloadFilePath(dst)
+
+	// find size of the already downloaded part if it exists
+	var offset int64
+	if fileInfo, err := os.Stat(tmpDst); err == nil {
+		offset = fileInfo.Size()
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return false, fmt.Errorf("error checking partial download %s: %w", tmpDst, err)
+	}
+
+	// check if offset is not larger than expected file size
+	if offset > fileMetadata.Size {
+		// partial file is larger than expected, remove it and start over
+		if err = os.Remove(tmpDst); err != nil {
+			return false, fmt.Errorf("error removing invalid partial download %s: %w", tmpDst, err)
+		}
+		offset = 0
+	}
+
+	// check local file create data
+	fileCreateData, err := determineFileCreateData(dst)
+	if err != nil {
+		return false, fmt.Errorf("error determining local fs data: %w", err)
+	}
+
+	// check if there is enough disk space, do not check if size is zero (unknown)
+	if fileMetadata.Size > 0 && fileMetadata.Size-offset+freeDiskOverhead > fileCreateData.bytesAvail {
+		return false, fmt.Errorf("not enough disk space to download file %s: need %d bytes, have %d bytes",
+			src, fileMetadata.Size-offset+freeDiskOverhead, fileCreateData.bytesAvail)
+	}
+
+	// download the file (or remaining part of it)
 	var srcFile io.ReadCloser
-	if srcFile, err = srv.getFile(ctx, src); err != nil {
+	if srcFile, err = srv.getFile(ctx, src, offset); err != nil {
 		return false, err
 	}
 
 	defer func() { _ = srcFile.Close() }()
 
 	var dstFile *os.File
-	if dstFile, err = createFile(dst, fileManagerDefaultFilePermission); err != nil {
+	if dstFile, err = createFile(tmpDst, fileCreateData, fileManagerDefaultFilePermission, offset == 0); err != nil {
 		return false, err
+	}
+
+	if offset > 0 {
+		if _, err := dstFile.Seek(offset, io.SeekStart); err != nil {
+			_ = dstFile.Close()
+			return false, fmt.Errorf("error seeking in file %s: %w", tmpDst, err)
+		}
 	}
 
 	defer func() { _ = dstFile.Close() }()
 
 	if _, err = io.Copy(dstFile, srcFile); err != nil {
-		return false, fmt.Errorf("error writing file %s: %w", dst, err)
+		return false, fmt.Errorf("error writing file %s: %w", tmpDst, err)
+	}
+
+	// check if the download to temporary file was successful
+	if fileReady, err = isFileReady(tmpDst, fileMetadata); err != nil {
+		return false, err
+	}
+
+	if !fileReady {
+		err = fmt.Errorf("downloaded file %s is incomplete or has invalid contents", src)
+		// in case of error, remove the partial file
+		_ = os.Remove(tmpDst)
+		return false, err
+	}
+
+	if err = os.Rename(tmpDst, dst); err != nil {
+		return false, fmt.Errorf("error renaming file %s to %s: %w", tmpDst, dst, err)
 	}
 
 	ReportInfo(ctx, nil, msgWithLabel(label, "Successfully downloaded file %s to %s"), src, dst)
@@ -160,17 +220,29 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 const localFileSchema = "file://"
 
 // getLocalFile returns file read-closer for a file on the local filesystem.
-func getLocalFile(src string) (io.ReadCloser, error) {
-	return os.Open(strings.TrimPrefix(src, localFileSchema))
+func getLocalFile(src string, offset int64) (io.ReadCloser, error) {
+	fp, err := os.Open(strings.TrimPrefix(src, localFileSchema))
+	if err != nil {
+		return nil, err
+	}
+
+	if offset > 0 {
+		if _, err := fp.Seek(offset, io.SeekStart); err != nil {
+			_ = fp.Close()
+			return nil, err
+		}
+	}
+
+	return fp, nil
 }
 
 // getFile returns file reader for a file in file manager.
-func (srv *Service) getFile(ctx context.Context, src string) (io.ReadCloser, error) {
+func (srv *Service) getFile(ctx context.Context, src string, offset int64) (io.ReadCloser, error) {
 	if strings.HasPrefix(src, localFileSchema) {
-		return getLocalFile(src)
+		return getLocalFile(src, offset)
 	}
 
-	return srv.getFileFromAPI(ctx, src)
+	return srv.getFileFromAPI(ctx, src, offset)
 }
 
 // getFileMetadataFromLocal returns metadata for a file on the local filesystem.
@@ -199,6 +271,7 @@ func (srv *Service) getFileMetadataFromLocal(src string) (*FileMetadata, error) 
 		Tags: map[string]string{
 			fileDigestSHA256Tag: hexDigest,
 		},
+		Size: fileInfo.Size(),
 	}
 
 	return fileMetadata, nil
@@ -219,7 +292,7 @@ func (srv *Service) downloadTemplateFile(
 	label string,
 	src string,
 	dst string,
-	digest string,
+	file File,
 	params map[string]string,
 ) (bool, error) {
 	var err error
@@ -244,7 +317,7 @@ func (srv *Service) downloadTemplateFile(
 	} else {
 		cacheSrc = filepath.Join(srv.cacheDirectory, FileDistributionCacheDirectory, src)
 
-		if _, err = srv.downloadFile(ctx, label, src, cacheSrc, digest); err != nil {
+		if _, err = srv.downloadFile(ctx, label, src, cacheSrc, file); err != nil {
 			return false, err
 		}
 	}
@@ -254,9 +327,20 @@ func (srv *Service) downloadTemplateFile(
 		return false, err
 	}
 
+	fileMetadata := &FileMetadata{
+		Tags: map[string]string{
+			fileDigestSHA256Tag: sha256digest,
+		},
+	}
+
 	var fileReady bool
-	if fileReady, err = isFileReady(dst, sha256digest, ""); err != nil || fileReady {
+	if fileReady, err = isFileReady(dst, fileMetadata); err != nil || fileReady {
 		return false, err
+	}
+
+	fileCreateData, err := determineFileCreateData(dst)
+	if err != nil {
+		return false, fmt.Errorf("error determining local fs data: %w", err)
 	}
 
 	var srcFile io.ReadCloser
@@ -267,7 +351,7 @@ func (srv *Service) downloadTemplateFile(
 	defer func() { _ = srcFile.Close() }()
 
 	var dstFile io.WriteCloser
-	if dstFile, err = createFile(dst, fileManagerDefaultFilePermission); err != nil {
+	if dstFile, err = createFile(dst, fileCreateData, fileManagerDefaultFilePermission, true); err != nil {
 		return false, err
 	}
 
@@ -407,22 +491,24 @@ func calculateTemplateDigest(src string, params map[string]string) (string, erro
 }
 
 // createFile under provided path and with provided uid and gid.
-func createFile(path string, permission os.FileMode) (*os.File, error) {
-	uid, gid, err := determineFileOwner(path)
-	if err != nil {
+func createFile(path string, fileCreateData *fileCreateData, permission os.FileMode, truncate bool) (*os.File, error) {
+	var err error
+	if err = makeDirectories(path, fileManagerDefaultDirectoryPermission, fileCreateData.uid, fileCreateData.gid); err != nil {
 		return nil, err
 	}
 
-	if err = makeDirectories(path, fileManagerDefaultDirectoryPermission, uid, gid); err != nil {
-		return nil, err
+	openFlags := os.O_RDWR | os.O_CREATE
+
+	if truncate {
+		openFlags = openFlags | os.O_TRUNC
 	}
 
 	var file *os.File
-	if file, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, permission); err != nil {
+	if file, err = os.OpenFile(path, openFlags, permission); err != nil {
 		return nil, fmt.Errorf("error creating file %s: %w", path, err)
 	}
 
-	if err = file.Chown(uid, gid); err != nil {
+	if err = file.Chown(fileCreateData.uid, fileCreateData.gid); err != nil {
 		_ = file.Close()
 		return nil, fmt.Errorf("error setting owner on %s: %w", path, err)
 	}
@@ -431,7 +517,7 @@ func createFile(path string, permission os.FileMode) (*os.File, error) {
 }
 
 // isFileReady returns true if provided file exists and has expected contents.
-func isFileReady(path, sha256Digest, md5Digest string) (bool, error) {
+func isFileReady(path string, fileMetadata *FileMetadata) (bool, error) {
 	fd, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -446,11 +532,11 @@ func isFileReady(path, sha256Digest, md5Digest string) (bool, error) {
 	var expectedHexDigest string
 	var digest hash.Hash
 
-	if sha256Digest != "" {
-		expectedHexDigest = sha256Digest
+	if fileMetadata.SHA256() != "" {
+		expectedHexDigest = fileMetadata.SHA256()
 		digest = sha256.New()
 	} else {
-		expectedHexDigest = md5Digest
+		expectedHexDigest = fileMetadata.MD5
 		digest = md5.New()
 	}
 
@@ -465,8 +551,17 @@ func isFileReady(path, sha256Digest, md5Digest string) (bool, error) {
 	return fileIsReady, nil
 }
 
-// determineFileOwner detects uid and gid for the path.
-func determineFileOwner(dst string) (int, int, error) {
+const freeDiskOverhead = 1024 * 1024 * 1 // 1MB
+
+type fileCreateData struct {
+	uid        int
+	gid        int
+	bytesAvail int64
+}
+
+// determineFileCreateData detects uid and gid for the path.
+func determineFileCreateData(dst string) (*fileCreateData, error) {
+
 	fileInfo, err := os.Stat(dst)
 	if err != nil {
 		// if path doesn't exist, try to determine owner of the parent directory
@@ -475,24 +570,41 @@ func determineFileOwner(dst string) (int, int, error) {
 
 			if parentDirPath == dst {
 				// this should never happen, but in case it does, use the process uid/gid
-				return os.Geteuid(), os.Getgid(), nil
+				return &fileCreateData{
+					uid:        os.Geteuid(),
+					gid:        os.Getgid(),
+					bytesAvail: 0,
+				}, nil
 			}
 
-			return determineFileOwner(parentDirPath)
+			return determineFileCreateData(parentDirPath)
 		}
 
-		return 0, 0, fmt.Errorf("cannot check file ownership: %s - %w", dst, err)
+		return nil, fmt.Errorf("cannot check file create data: %s - %w", dst, err)
 	}
 
 	// if file exists, use its uid/gid
 	fileStat, ok := fileInfo.Sys().(*syscall.Stat_t)
 	if !ok {
-		return 0, 0, fmt.Errorf("cannot check file ownership: %s - unsupported OS", dst)
+		return nil, fmt.Errorf("cannot check file ownership: %s - unsupported OS", dst)
 	}
 
 	uid, gid := int(fileStat.Uid), int(fileStat.Gid)
 
-	return uid, gid, nil
+	// get diskspace available
+
+	stat := syscall.Statfs_t{}
+	if err = syscall.Statfs(dst, &stat); err != nil {
+		return nil, fmt.Errorf("cannot check disk space: %s - %w", dst, err)
+	}
+
+	bytesAvail := int64(stat.Bavail) * int64(stat.Bsize)
+
+	return &fileCreateData{
+		uid:        uid,
+		gid:        gid,
+		bytesAvail: bytesAvail,
+	}, nil
 }
 
 // makeDirectories checks if all directories for the dst file exist, if not, create them with provided owner and group.
@@ -579,4 +691,9 @@ func resolveDestinationPath(source, destination string) (string, error) {
 		return filepath.Join(destination, baseName), nil
 	}
 	return destination, nil
+}
+
+// GetPartialDownloadFilePath returns the file path for a partial download.
+func GetPartialDownloadFilePath(path string) string {
+	return filepath.Join(filepath.Dir(path), fmt.Sprintf(".%s.part", filepath.Base(path)))
 }

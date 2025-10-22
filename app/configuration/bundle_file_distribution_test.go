@@ -19,6 +19,7 @@ package configuration_test
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"go.qbee.io/agent/app/agent"
@@ -409,4 +410,107 @@ func Test_FileDistirbution_No_Reports_Connectivity_Issues(t *testing.T) {
 	reports, _ := configuration.ExecuteTestConfigInDocker(r, agentConfig)
 
 	assert.Empty(t, reports)
+}
+
+func Test_ResumeDownload(t *testing.T) {
+	r := runner.New(t)
+
+	sourcePath := "/var/lib/test.txt"
+	destinationPath := fmt.Sprintf("%s.downloaded", sourcePath)
+	partialContents := "this is the cont"
+	fileContents := partialContents + "ents of the file"
+
+	r.CreateFile(sourcePath, []byte(fileContents))
+
+	originalHash := strings.Fields(string(r.MustExec("sha256sum", sourcePath)))[0]
+
+	partialFilePath := configuration.GetPartialDownloadFilePath(destinationPath)
+
+	localFileRef := "file://" + sourcePath
+	agentConfig := configuration.CommittedConfig{
+		Bundles: []string{configuration.BundleFileDistribution},
+		BundleData: configuration.BundleData{
+			FileDistribution: &configuration.FileDistributionBundle{
+				Metadata: configuration.Metadata{Enabled: true},
+				FileSets: []configuration.FileSet{
+					{Files: []configuration.File{{Source: localFileRef, Destination: destinationPath}}},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name             string
+		existingContents string
+		expectSuccess    bool
+	}{
+		{"empty partial file", "", true},
+		{"valid partial file", partialContents, true},
+		{"corrupted partial file", partialContents + " this breaks it", false},
+		{"full file as partial file", fileContents, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Remove any file from previous tests
+			r.MustExec("rm", "-f", destinationPath)
+			r.MustExec("rm", "-f", partialFilePath)
+
+			// write partial file to cache
+			r.CreateFile(partialFilePath, []byte(tt.existingContents))
+			output := r.MustExec("cat", partialFilePath)
+			assert.Equal(t, string(output), tt.existingContents)
+
+			reports, _ := configuration.ExecuteTestConfigInDocker(r, agentConfig)
+
+			if tt.expectSuccess {
+				output := r.MustExec("sha256sum", destinationPath)
+				assert.Equal(t, string(output), fmt.Sprintf("%s  %s", originalHash, destinationPath))
+
+				expectedReports := []string{
+					fmt.Sprintf("[INFO] Successfully downloaded file %[1]s to %s", localFileRef, destinationPath),
+				}
+				assert.Equal(t, reports, expectedReports)
+
+			} else {
+				expectedReports := []string{
+					fmt.Sprintf("[ERR] Unable to download file %[1]s to %s", localFileRef, destinationPath),
+				}
+				assert.Equal(t, reports, expectedReports)
+			}
+		})
+	}
+}
+
+func Test_FileDistributionBundle_NoSpace(t *testing.T) {
+	r := runner.New(t)
+
+	sourcePath := "/var/lib/test.txt"
+	destinationPath := "/proc/test.txt"
+	fileContents := "this is the contents of the file"
+	r.CreateFile(sourcePath, []byte(fileContents))
+
+	localFileRef := "file://" + sourcePath
+
+	agentConfig := configuration.CommittedConfig{
+		Bundles: []string{configuration.BundleFileDistribution},
+		BundleData: configuration.BundleData{
+			FileDistribution: &configuration.FileDistributionBundle{
+				Metadata: configuration.Metadata{Enabled: true},
+				FileSets: []configuration.FileSet{
+					{
+						Files: []configuration.File{
+							{Source: localFileRef, Destination: destinationPath},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	reports, _ := configuration.ExecuteTestConfigInDocker(r, agentConfig)
+
+	assert.Equal(t, reports, []string{
+		fmt.Sprintf("[ERR] Unable to download file %s to %s", localFileRef, destinationPath),
+	})
 }
