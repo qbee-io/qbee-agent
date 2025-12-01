@@ -8,7 +8,7 @@ require (
 	github.com/google/go-tpm-tools v0.4.5
 	github.com/xtaci/smux v1.5.34
 	go.qbee.io/transport v1.25.28
-	golang.org/x/sys v0.34.0
+	golang.org/x/sys v0.38.0
 	google.golang.org/protobuf v1.36.6
 )
 
@@ -19,5 +19,5 @@ require (
 	github.com/google/logger v1.1.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.40.0 // indirect
+	golang.org/x/crypto v0.45.0 // indirect
 )
