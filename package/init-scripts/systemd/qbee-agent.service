@@ -9,7 +9,7 @@ ExecStart=/usr/bin/qbee-agent start
 ExecReload=/bin/kill -HUP $MAINPID
 KillMode=process
 Restart=on-failure
-#EnvironmentFile=-/etc/default/qbee-agent
+TimeoutStopSec=3600
 # Since systemd 229, should be in [Unit] but in order to support systemd <229,
 # it is also supported to have it here.
 StartLimitInterval=10
