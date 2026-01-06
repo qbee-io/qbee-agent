@@ -33,14 +33,25 @@ const (
 	cacheDirectory       = "cache"
 )
 
-// prepareDirectories makes sure that agent's directories are in place.
-func prepareDirectories(cfgDirectory, stateDirectory string) error {
+// prepareConfigDirectories makes sure that agent's directories are in place.
+func prepareConfigDirectories(cfgDirectory string) error {
 	log.Infof("Preparing agent directories")
 
-	cacheDirectoryPath := filepath.Join(stateDirectory, appWorkingDirectory, cacheDirectory)
-
 	directories := []string{
+		cfgDirectory,
 		filepath.Join(cfgDirectory, credentialsDirectory),
+	}
+
+	return prepareDirectories(directories, os.Geteuid(), os.Getegid())
+}
+
+// prepareStateDirectories makes sure that agent's state directories are in place.
+func prepareStateDirectories(stateDirectory string, owner, group int) error {
+	cacheDirectoryPath := filepath.Join(stateDirectory, appWorkingDirectory, cacheDirectory)
+	directories := []string{
+		stateDirectory,
+		filepath.Join(stateDirectory, appWorkingDirectory),
+		cacheDirectoryPath,
 		filepath.Join(cacheDirectoryPath, configuration.FileDistributionCacheDirectory),
 		filepath.Join(cacheDirectoryPath, configuration.SoftwareCacheDirectory),
 		filepath.Join(cacheDirectoryPath, configuration.DockerContainerDirectory),
@@ -48,8 +59,13 @@ func prepareDirectories(cfgDirectory, stateDirectory string) error {
 		filepath.Join(cacheDirectoryPath, configuration.DockerComposeDirectory),
 	}
 
+	return prepareDirectories(directories, owner, group)
+}
+
+// prepareDirectories creates required directories with correct permissions.
+func prepareDirectories(directories []string, owner, group int) error {
 	for _, directory := range directories {
-		if err := createDirectory(directory); err != nil {
+		if err := createDirectory(directory, owner, group); err != nil {
 			return err
 		}
 	}
@@ -59,7 +75,7 @@ func prepareDirectories(cfgDirectory, stateDirectory string) error {
 
 // createDirectory checks whether directory exists and has correct permissions.
 // Directory will be created if not found.
-func createDirectory(path string) error {
+func createDirectory(path string, owner, group int) error {
 	if err := os.MkdirAll(path, directoryMode); err != nil {
 		return fmt.Errorf("error creating directory %s: %w", path, err)
 	}
@@ -77,6 +93,17 @@ func createDirectory(path string) error {
 		if err = os.Chmod(path, directoryMode); err != nil {
 			return fmt.Errorf("directory %s has incorrect permissions %s and unable to fix: %w,", path, stats.Mode(), err)
 		}
+	}
+
+	// walk directory and set ownewship if necessary
+	err = filepath.Walk(path, func(p string, info fs.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		return os.Chown(p, owner, group)
+	})
+	if err != nil {
+		return fmt.Errorf("error setting ownership for directory %s: %w", path, err)
 	}
 
 	return nil

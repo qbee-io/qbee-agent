@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
 	"syscall"
@@ -29,16 +30,40 @@ import (
 
 // RunCommand runs a command and returns its output.
 func RunCommand(ctx context.Context, cmd []string) ([]byte, error) {
-	command := NewCommand(ctx, cmd)
+	return runCommandOutput(NewCommand(ctx, cmd))
+}
 
+// RunPrivilegedCommand runs a command with sudo and returns its output.
+func RunPrivilegedCommand(ctx context.Context, elevationCmd, cmd []string) ([]byte, error) {
+	// attempt to run command with sudo if not already root
+	if os.Geteuid() == 0 {
+		return RunCommand(ctx, cmd)
+	}
+
+	// no elevation command provided, assume capabilities are set
+	if len(elevationCmd) == 0 {
+		return RunCommand(ctx, cmd)
+	}
+
+	if _, err := exec.LookPath(elevationCmd[0]); err != nil {
+		return nil, fmt.Errorf("%s not found: %w", elevationCmd[0], err)
+	}
+
+	cmd = append(elevationCmd, cmd...)
+	return runCommandOutput(NewCommand(ctx, cmd))
+}
+
+// runCommandOutput runs a command and returns its output as a string.
+func runCommandOutput(command *exec.Cmd) ([]byte, error) {
 	output, err := command.Output()
+
 	if err != nil {
 		exitError := new(exec.ExitError)
 		if errors.As(err, &exitError) {
-			return nil, fmt.Errorf("error running command %v: %w\n%s", cmd, err, exitError.Stderr)
+			return nil, fmt.Errorf("error running command %v: %w\n%s", command.Args, err, exitError.Stderr)
 		}
 
-		return nil, fmt.Errorf("error running command %v: %w", cmd, err)
+		return nil, fmt.Errorf("error running command %v: %w", command.Args, err)
 	}
 	return output, nil
 }

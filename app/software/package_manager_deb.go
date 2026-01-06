@@ -17,6 +17,7 @@
 package software
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -85,6 +86,11 @@ func (deb *DebianPackageManager) Busy() (bool, error) {
 	deb.lock.Lock()
 	defer deb.lock.Unlock()
 
+	// cannot check for lock file, best effort
+	if os.Geteuid() != 0 {
+		return false, nil
+	}
+
 	// check the lock by attempting to acquire one
 	file, err := os.OpenFile(dpkgLockPath, syscall.O_CREAT|syscall.O_RDWR|syscall.O_CLOEXEC, dpkgLockMode)
 	if err != nil {
@@ -108,7 +114,7 @@ func (deb *DebianPackageManager) Busy() (bool, error) {
 }
 
 // ListPackages returns a list of packages with available updates.
-func (deb *DebianPackageManager) ListPackages(ctx context.Context) ([]Package, error) {
+func (deb *DebianPackageManager) ListPackages(ctx context.Context, elevationCmd []string) ([]Package, error) {
 	deb.lock.Lock()
 	defer deb.lock.Unlock()
 
@@ -123,7 +129,7 @@ func (deb *DebianPackageManager) ListPackages(ctx context.Context) ([]Package, e
 
 	// availableUpdates = map[pkgName:arch]updateVersion
 	var availableUpdates map[string]string
-	if availableUpdates, err = deb.listAvailableUpdates(ctx); err != nil {
+	if availableUpdates, err = deb.listAvailableUpdates(ctx, elevationCmd); err != nil {
 		return nil, fmt.Errorf("error listing available updates: %w", err)
 	}
 
@@ -172,10 +178,10 @@ func (deb *DebianPackageManager) listInstalledPackages(ctx context.Context) ([]P
 }
 
 // listAvailableUpdates returns a map of pkgName:arch -> availableUpdateVersion for packages with available updates.
-func (deb *DebianPackageManager) listAvailableUpdates(ctx context.Context) (map[string]string, error) {
+func (deb *DebianPackageManager) listAvailableUpdates(ctx context.Context, elevationCmd []string) (map[string]string, error) {
 	updateCmd := []string{aptGetPath, "update"}
 
-	if _, err := utils.RunCommand(ctx, updateCmd); err != nil {
+	if _, err := utils.RunPrivilegedCommand(ctx, elevationCmd, updateCmd); err != nil {
 		return nil, err
 	}
 
@@ -184,7 +190,12 @@ func (deb *DebianPackageManager) listAvailableUpdates(ctx context.Context) (map[
 
 	// only process lines matching the following format:
 	// Inst libsystemd0 [232-25+deb9u13] (232-25+deb9u14 Debian-Security:9/oldoldstable [amd64])
-	err := utils.ForLinesInCommandOutput(ctx, cmd, func(line string) error {
+	output, err := utils.RunPrivilegedCommand(ctx, elevationCmd, cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	err = utils.ForLines(bytes.NewBuffer(output), func(line string) error {
 		pkg := deb.parseUpdateAvailableLine(line)
 		if pkg != nil {
 			updates[pkg.ID()] = pkg.Update
@@ -192,6 +203,7 @@ func (deb *DebianPackageManager) listAvailableUpdates(ctx context.Context) (map[
 
 		return nil
 	})
+
 	if err != nil {
 		return nil, err
 	}
@@ -230,9 +242,9 @@ var aptGetBaseCommand = []string{
 
 // UpgradeAll performs system upgrade if there are available upgrades.
 // On success, return number of packages upgraded, output of the upgrade command and nil error.
-func (deb *DebianPackageManager) UpgradeAll(ctx context.Context) (int, []byte, error) {
+func (deb *DebianPackageManager) UpgradeAll(ctx context.Context, elevationCmd []string) (int, []byte, error) {
 	// check for updates
-	inventory, err := deb.ListPackages(ctx)
+	inventory, err := deb.ListPackages(ctx, elevationCmd)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -273,7 +285,7 @@ func (deb *DebianPackageManager) UpgradeAll(ctx context.Context) (int, []byte, e
 // Install ensures a package with provided version number is installed in the system.
 // If version is empty, the latest version of the package is installed.
 // Returns output of the installation command.
-func (deb *DebianPackageManager) Install(ctx context.Context, pkgName, version string) ([]byte, error) {
+func (deb *DebianPackageManager) Install(ctx context.Context, pkgName, version string, elevationCmd []string) ([]byte, error) {
 	deb.lock.Lock()
 	defer deb.lock.Unlock()
 
@@ -294,11 +306,11 @@ func (deb *DebianPackageManager) Install(ctx context.Context, pkgName, version s
 
 	defer cache.Delete(debianPackagesCacheKey)
 
-	return utils.RunCommand(ctx, shellCmd)
+	return utils.RunPrivilegedCommand(ctx, elevationCmd, shellCmd)
 }
 
 // InstallLocal package.
-func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath string) ([]byte, error) {
+func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath string, elevationCmd []string) ([]byte, error) {
 	deb.lock.Lock()
 	defer deb.lock.Unlock()
 

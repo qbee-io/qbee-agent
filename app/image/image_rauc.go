@@ -170,11 +170,11 @@ func IsRaucCompatible(version string) bool {
 }
 
 // GetRaucStatus returns RAUC information.
-func GetRaucStatus(ctx context.Context) (*RaucStatus, error) {
+func GetRaucStatus(ctx context.Context, elevationCmd []string) (*RaucStatus, error) {
 
 	raucStatusCmd := []string{"rauc", "status", "--output-format", "json", "--detailed"}
 
-	raucInfoBytes, err := utils.RunCommand(ctx, raucStatusCmd)
+	raucInfoBytes, err := utils.RunPrivilegedCommand(ctx, elevationCmd, raucStatusCmd)
 
 	if err != nil {
 		return nil, err

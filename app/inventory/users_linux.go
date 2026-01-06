@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"strconv"
 	"strings"
 
@@ -134,6 +135,11 @@ func GetUsersFromPasswd(passwdFilePath, shadowFilePath string) ([]User, error) {
 
 // getUsersFromShadow returns map of users with password related fields populated.
 func getUsersFromShadow(filePath string) (map[string]User, error) {
+	// Only root can read the shadow file
+	if os.Geteuid() != 0 {
+		return nil, nil
+	}
+
 	users := make(map[string]User)
 
 	err := utils.ForLinesInFile(filePath, func(line string) error {

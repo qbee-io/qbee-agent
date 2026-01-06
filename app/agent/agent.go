@@ -23,8 +23,11 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -260,7 +263,7 @@ func (agent *Agent) IsTPMEnabled() bool {
 
 // NewWithoutCredentials returns a new instance of Agent without loaded credentials.
 func NewWithoutCredentials(cfg *Config) (*Agent, error) {
-	if err := prepareDirectories(cfg.Directory, cfg.StateDirectory); err != nil {
+	if err := prepareConfigDirectories(cfg.Directory); err != nil {
 		return nil, err
 	}
 
@@ -297,13 +300,79 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 
 	agent.Inventory = inventory.New(agent.api)
 	agent.Metrics = metrics.New(agent.api)
-	agent.Configuration = configuration.New(agent.api, appDir, cacheDir).WithURLSigner(agent).WithMetricsService(agent.Metrics)
+	agent.Configuration = configuration.New(agent.api, appDir, cacheDir).
+		WithURLSigner(agent).
+		WithMetricsService(agent.Metrics).
+		WithElevationCommand(cfg.ElevationCommand)
 	agent.remoteAccess = remoteaccess.New().
 		WithConfigReloadNotifier(agent.update)
 	agent.loopTicker = time.NewTicker(agent.Configuration.RunInterval())
 	agent.disableRemoteAccess = cfg.DisableRemoteAccess
 
 	return agent, nil
+}
+
+type execUser struct {
+	uid      int
+	gid      int
+	groupIDs []int
+}
+
+// setExecUser changes the user and group of the running process.
+func resolveExecUser(cfg *Config) (execUser, error) {
+	// we can't change user if we are not root
+	if os.Geteuid() != 0 {
+		return execUser{uid: os.Geteuid(), gid: os.Getegid()}, nil
+	}
+
+	// no user specified, nothing to do
+	if cfg.ExecUser == "" {
+		return execUser{uid: os.Geteuid(), gid: os.Getegid()}, nil
+	}
+
+	// lookup user
+	userInfo, err := user.Lookup(cfg.ExecUser)
+	if err != nil {
+		return execUser{}, err
+	}
+
+	// parse uid and gid
+	uid, err := strconv.Atoi(userInfo.Uid)
+	if err != nil {
+		return execUser{}, err
+	}
+
+	// parse gid
+	gid, err := strconv.Atoi(userInfo.Gid)
+	if err != nil {
+		return execUser{}, err
+	}
+
+	// we are already root user, nothing to do
+	if uid == 0 {
+		return execUser{uid: os.Geteuid(), gid: os.Getegid()}, nil
+	}
+
+	// get all user groups
+	groupIds, err := userInfo.GroupIds()
+	if err != nil {
+		return execUser{}, err
+	}
+
+	var gids []int
+	for _, gidStr := range groupIds {
+		// skip primary gid, already included
+		if gidStr == userInfo.Gid {
+			continue
+		}
+		gid, err := strconv.Atoi(gidStr)
+		if err != nil {
+			return execUser{}, err
+		}
+		gids = append(gids, gid)
+	}
+
+	return execUser{uid: uid, gid: gid, groupIDs: gids}, nil
 }
 
 // New returns a new instance of Agent with loaded credentials.
@@ -333,6 +402,49 @@ func New(cfg *Config) (*Agent, error) {
 
 	agent.api.WithTLSConfig(tlsConfig)
 	agent.remoteAccess.WithTLSConfig(tlsConfig)
+
+	execUser, err := resolveExecUser(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	// prepare lock file directory
+	if err = prepareDirectories([]string{agent.Configuration.LockFileDir()}, execUser.uid, execUser.gid); err != nil {
+		return nil, err
+	}
+
+	// prepare state directories
+	if err = prepareStateDirectories(cfg.StateDirectory, execUser.uid, execUser.gid); err != nil {
+		return nil, err
+	}
+
+	if execUser.uid == os.Geteuid() {
+		return agent, nil
+	}
+
+	_, err = exec.LookPath("loginctl")
+	if err == nil {
+		// enable lingering privileges to be able to switch user (important for podman containers etc.)
+		if _, err := utils.RunCommand(context.Background(), []string{"loginctl", "enable-linger", cfg.ExecUser}); err != nil {
+			return nil, fmt.Errorf("failed to enable lingering for user %s: %w", cfg.ExecUser, err)
+		}
+	}
+
+	log.Infof("dropping privileges to user %s (uid: %d, gid: %d, groups: %v)", cfg.ExecUser, execUser.uid, execUser.gid, execUser.groupIDs)
+
+	if len(execUser.groupIDs) > 0 {
+		if err := syscall.Setgroups(execUser.groupIDs); err != nil {
+			return nil, fmt.Errorf("failed to set supplementary groups for user %s: %w", cfg.ExecUser, err)
+		}
+	}
+
+	if err := syscall.Setgid(execUser.gid); err != nil {
+		return nil, fmt.Errorf("failed to set group ID to %d: %w", execUser.gid, err)
+	}
+
+	if err := syscall.Setuid(execUser.uid); err != nil {
+		return nil, fmt.Errorf("failed to set user ID to %d: %w", execUser.uid, err)
+	}
 
 	return agent, nil
 }

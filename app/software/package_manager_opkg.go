@@ -18,6 +18,7 @@ package software
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -77,6 +78,11 @@ func (opkg *OpkgPackageManager) Busy() (bool, error) {
 	opkg.lock.Lock()
 	defer opkg.lock.Unlock()
 
+	// cannot check for lock file, best effort
+	if os.Geteuid() != 0 {
+		return false, nil
+	}
+
 	return checkPackageManagerLockFile(opkgLockPath, opkgLockMode)
 }
 
@@ -106,7 +112,7 @@ func checkPackageManagerLockFile(lockPath string, lockMode os.FileMode) (bool, e
 }
 
 // ListPackages returns a list of packages with available updates.
-func (opkg *OpkgPackageManager) ListPackages(ctx context.Context) ([]Package, error) {
+func (opkg *OpkgPackageManager) ListPackages(ctx context.Context, elevationCmd []string) ([]Package, error) {
 	opkg.lock.Lock()
 	defer opkg.lock.Unlock()
 
@@ -121,7 +127,7 @@ func (opkg *OpkgPackageManager) ListPackages(ctx context.Context) ([]Package, er
 
 	// availableUpdates = map[pkgName]updateVersion
 	var availableUpdates map[string]string
-	if availableUpdates, err = opkg.listAvailableUpdates(ctx); err != nil {
+	if availableUpdates, err = opkg.listAvailableUpdates(ctx, elevationCmd); err != nil {
 		return nil, fmt.Errorf("error listing available updates: %w", err)
 	}
 
@@ -137,18 +143,23 @@ func (opkg *OpkgPackageManager) ListPackages(ctx context.Context) ([]Package, er
 	return installedPackages, nil
 }
 
-func (opkg *OpkgPackageManager) listAvailableUpdates(ctx context.Context) (map[string]string, error) {
+func (opkg *OpkgPackageManager) listAvailableUpdates(ctx context.Context, elevationCmd []string) (map[string]string, error) {
 
 	updateCmd := []string{opkgCmd, "update"}
 
-	if _, err := utils.RunCommand(ctx, updateCmd); err != nil {
+	if _, err := utils.RunPrivilegedCommand(ctx, elevationCmd, updateCmd); err != nil {
 		return nil, err
 	}
 
 	cmd := []string{opkgCmd, "list-upgradable"}
 	updates := make(map[string]string)
 
-	err := utils.ForLinesInCommandOutput(ctx, cmd, func(line string) error {
+	output, err := utils.RunPrivilegedCommand(ctx, elevationCmd, cmd)
+	if err != nil {
+		return nil, fmt.Errorf("error listing available updates: %w", err)
+	}
+
+	err = utils.ForLines(bytes.NewBuffer(output), func(line string) error {
 		pkg := opkg.parseUpdateAvailableLine(line)
 		if pkg != nil {
 			updates[pkg.ID()] = pkg.Update
@@ -297,9 +308,9 @@ func (opkg *OpkgPackageManager) resolvePackageArchitecture(packageName string) (
 }
 
 // UpgradeAll performs upgrade of all packages.
-func (opkg *OpkgPackageManager) UpgradeAll(ctx context.Context) (int, []byte, error) {
+func (opkg *OpkgPackageManager) UpgradeAll(ctx context.Context, elevationCmd []string) (int, []byte, error) {
 	// check for updates
-	inventory, err := opkg.ListPackages(ctx)
+	inventory, err := opkg.ListPackages(ctx, elevationCmd)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -322,7 +333,7 @@ func (opkg *OpkgPackageManager) UpgradeAll(ctx context.Context) (int, []byte, er
 	var output []byte
 
 	for _, cmd := range cmdList {
-		tmpOut, err := utils.RunCommand(ctx, cmd)
+		tmpOut, err := utils.RunPrivilegedCommand(ctx, elevationCmd, cmd)
 		output = append(output, tmpOut...)
 		if err != nil {
 			return 0, output, fmt.Errorf("error upgrading packages: %w", err)
@@ -335,7 +346,7 @@ func (opkg *OpkgPackageManager) UpgradeAll(ctx context.Context) (int, []byte, er
 }
 
 // Install ensures a package with provided version number is installed in the system.
-func (opkg *OpkgPackageManager) Install(ctx context.Context, pkgName, version string) ([]byte, error) {
+func (opkg *OpkgPackageManager) Install(ctx context.Context, pkgName, version string, elevationCmd []string) ([]byte, error) {
 	opkg.lock.Lock()
 	defer opkg.lock.Unlock()
 
@@ -346,11 +357,11 @@ func (opkg *OpkgPackageManager) Install(ctx context.Context, pkgName, version st
 
 	defer cache.Delete(opkgPackagesCacheKey)
 
-	return utils.RunCommand(ctx, cmd)
+	return utils.RunPrivilegedCommand(ctx, elevationCmd, cmd)
 }
 
 // InstallLocal package.
-func (opkg *OpkgPackageManager) InstallLocal(ctx context.Context, pkgFilePath string) ([]byte, error) {
+func (opkg *OpkgPackageManager) InstallLocal(ctx context.Context, pkgFilePath string, elevationCmd []string) ([]byte, error) {
 	opkg.lock.Lock()
 	defer opkg.lock.Unlock()
 
@@ -358,7 +369,7 @@ func (opkg *OpkgPackageManager) InstallLocal(ctx context.Context, pkgFilePath st
 
 	defer cache.Delete(opkgPackagesCacheKey)
 
-	return utils.RunCommand(ctx, cmd)
+	return utils.RunPrivilegedCommand(ctx, elevationCmd, cmd)
 }
 
 // PackageArchitecture returns the architecture of the package manager

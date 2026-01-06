@@ -62,17 +62,17 @@ type PackageManager interface {
 	Busy() (bool, error)
 
 	// ListPackages returns a list of packages with available updates.
-	ListPackages(ctx context.Context) ([]Package, error)
+	ListPackages(ctx context.Context, elevationCmd []string) ([]Package, error)
 
 	// UpgradeAll performs upgrade of all packages.
 	// On success, return number of packages upgraded, output of the upgrade command and nil error.
-	UpgradeAll(ctx context.Context) (int, []byte, error)
+	UpgradeAll(ctx context.Context, elevationCmd []string) (int, []byte, error)
 
 	// Install ensures a package with provided version number is installed in the system.
-	Install(ctx context.Context, pkgName, version string) ([]byte, error)
+	Install(ctx context.Context, pkgName, version string, elevationCmd []string) ([]byte, error)
 
 	// InstallLocal package.
-	InstallLocal(ctx context.Context, pkgFilePath string) ([]byte, error)
+	InstallLocal(ctx context.Context, pkgFilePath string, elevationCmd []string) ([]byte, error)
 
 	// PackageArchitecture returns the architecture of the package manager
 	PackageArchitecture() (string, error)

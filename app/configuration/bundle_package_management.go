@@ -89,9 +89,9 @@ func (p PackageManagementBundle) Execute(ctx context.Context, service *Service) 
 	var updated bool
 
 	if p.FullUpgrade {
-		updated, err = p.fullUpgrade(ctx, pkgManager)
+		updated, err = p.fullUpgrade(ctx, pkgManager, service.elevationCommand)
 	} else {
-		updated, err = p.partialUpgrade(ctx, pkgManager)
+		updated, err = p.partialUpgrade(ctx, pkgManager, service.elevationCommand)
 	}
 
 	if updated && p.RebootMode == RebootAlways {
@@ -102,8 +102,8 @@ func (p PackageManagementBundle) Execute(ctx context.Context, service *Service) 
 }
 
 // fullUpgrade performs full system upgrade and reports the results.
-func (p PackageManagementBundle) fullUpgrade(ctx context.Context, pkgManager software.PackageManager) (bool, error) {
-	updated, output, err := pkgManager.UpgradeAll(ctx)
+func (p PackageManagementBundle) fullUpgrade(ctx context.Context, pkgManager software.PackageManager, elevationCmd []string) (bool, error) {
+	updated, output, err := pkgManager.UpgradeAll(ctx, elevationCmd)
 	if err != nil {
 		ReportError(ctx, err, "Full upgrade failed.")
 		return false, err
@@ -119,12 +119,12 @@ func (p PackageManagementBundle) fullUpgrade(ctx context.Context, pkgManager sof
 }
 
 // partialUpgrade performs update only of the packages specified in the bundle.
-func (p PackageManagementBundle) partialUpgrade(ctx context.Context, pkgManager software.PackageManager) (bool, error) {
+func (p PackageManagementBundle) partialUpgrade(ctx context.Context, pkgManager software.PackageManager, elevationCmd []string) (bool, error) {
 	if len(p.Packages) == 0 {
 		return false, nil
 	}
 
-	installedPackages, err := pkgManager.ListPackages(ctx)
+	installedPackages, err := pkgManager.ListPackages(ctx, elevationCmd)
 	if err != nil {
 		return false, err
 	}
@@ -153,7 +153,7 @@ func (p PackageManagementBundle) partialUpgrade(ctx context.Context, pkgManager 
 			}
 		}
 
-		output, err := pkgManager.Install(ctx, pkg.Name, pkg.Version)
+		output, err := pkgManager.Install(ctx, pkg.Name, pkg.Version, elevationCmd)
 		if err != nil {
 			ReportError(ctx, err, "Unable to install package '%s'", pkg.Name)
 			return false, err

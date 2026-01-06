@@ -69,6 +69,15 @@ type Config struct {
 
 	// CACert is the path to the CA certificate.
 	CACert string `json:"ca_cert,omitempty"`
+
+	// ExecUser is the user to run the agent as.
+	ExecUser string `json:"exec_user,omitempty"`
+
+	// UsePrivilegeElevation indicates whether to use privilege elevation for commands requiring elevated privileges.
+	UsePrivilegeElevation bool `json:"use_privilege_elevation,omitempty"`
+
+	// ElevationCommand is the command to use for privilege elevation.
+	ElevationCommand []string `json:"elevation_command,omitempty"`
 }
 
 // LoadConfig loads config from a provided config file path.
@@ -99,6 +108,10 @@ func LoadConfig(configDir, stateDir string) (*Config, error) {
 
 	if config.DeviceHubPort == "" {
 		config.DeviceHubPort = DefaultDeviceHubPort
+	}
+
+	if config.UsePrivilegeElevation && len(config.ElevationCommand) == 0 {
+		config.ElevationCommand = []string{"sudo", "-n"}
 	}
 
 	return config, nil

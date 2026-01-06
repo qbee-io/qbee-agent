@@ -93,7 +93,7 @@ func (rpm *RpmPackageManager) Busy() (bool, error) {
 }
 
 // ListPackages returns a list of packages with available updates.
-func (rpm *RpmPackageManager) ListPackages(ctx context.Context) ([]Package, error) {
+func (rpm *RpmPackageManager) ListPackages(ctx context.Context, elevationCmd []string) ([]Package, error) {
 
 	rpm.lock.Lock()
 	defer rpm.lock.Unlock()
@@ -108,7 +108,7 @@ func (rpm *RpmPackageManager) ListPackages(ctx context.Context) ([]Package, erro
 	}
 
 	var availableUpdates map[string]string
-	availableUpdates, err = rpm.listAvailableUpdates(ctx)
+	availableUpdates, err = rpm.listAvailableUpdates(ctx, elevationCmd)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +145,7 @@ func (rpm *RpmPackageManager) parseUpdateAvailableLine(line string) *Package {
 }
 
 // listAvailableUpdates returns a list of available updates.
-func (rpm *RpmPackageManager) listAvailableUpdates(ctx context.Context) (map[string]string, error) {
+func (rpm *RpmPackageManager) listAvailableUpdates(ctx context.Context, elevationCmd []string) (map[string]string, error) {
 	cmd := []string{
 		yumPath,
 		"--quiet",
@@ -154,6 +154,10 @@ func (rpm *RpmPackageManager) listAvailableUpdates(ctx context.Context) (map[str
 	}
 
 	updates := make(map[string]string)
+
+	if len(elevationCmd) > 0 {
+		cmd = append(elevationCmd, cmd...)
+	}
 
 	// yum check-updates returns 100 when there are updates available
 	cmdProc := utils.NewCommand(ctx, cmd)
@@ -223,9 +227,9 @@ func (rpm *RpmPackageManager) listInstalledPackages(ctx context.Context) ([]Pack
 }
 
 // UpgradeAll performs upgrade of all packages.
-func (rpm *RpmPackageManager) UpgradeAll(ctx context.Context) (int, []byte, error) {
+func (rpm *RpmPackageManager) UpgradeAll(ctx context.Context, elevationCmd []string) (int, []byte, error) {
 	// check for updates
-	inventory, err := rpm.ListPackages(ctx)
+	inventory, err := rpm.ListPackages(ctx, elevationCmd)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -253,7 +257,7 @@ func (rpm *RpmPackageManager) UpgradeAll(ctx context.Context) (int, []byte, erro
 	}
 
 	var output []byte
-	if output, err = utils.RunCommand(ctx, upgradeCommand); err != nil {
+	if output, err = utils.RunPrivilegedCommand(ctx, elevationCmd, upgradeCommand); err != nil {
 		return 0, output, err
 	}
 
@@ -263,7 +267,7 @@ func (rpm *RpmPackageManager) UpgradeAll(ctx context.Context) (int, []byte, erro
 }
 
 // Install ensures a package with provided version number is installed in the system.
-func (rpm *RpmPackageManager) Install(ctx context.Context, pkgName, version string) ([]byte, error) {
+func (rpm *RpmPackageManager) Install(ctx context.Context, pkgName, version string, elevationCmd []string) ([]byte, error) {
 	rpm.lock.Lock()
 	defer rpm.lock.Unlock()
 
@@ -281,11 +285,11 @@ func (rpm *RpmPackageManager) Install(ctx context.Context, pkgName, version stri
 		pkgName,
 	}
 
-	return utils.RunCommand(ctx, installCommand)
+	return utils.RunPrivilegedCommand(ctx, elevationCmd, installCommand)
 }
 
 // InstallLocal package.
-func (rpm *RpmPackageManager) InstallLocal(ctx context.Context, pkgFilePath string) ([]byte, error) {
+func (rpm *RpmPackageManager) InstallLocal(ctx context.Context, pkgFilePath string, elevationCmd []string) ([]byte, error) {
 	rpm.lock.Lock()
 	defer rpm.lock.Unlock()
 
@@ -299,7 +303,7 @@ func (rpm *RpmPackageManager) InstallLocal(ctx context.Context, pkgFilePath stri
 		pkgFilePath,
 	}
 
-	return utils.RunCommand(ctx, installCmd)
+	return utils.RunPrivilegedCommand(ctx, elevationCmd, installCmd)
 }
 
 // PackageArchitecture returns the architecture of the package manager

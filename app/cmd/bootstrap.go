@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"go.qbee.io/agent/app/agent"
+	"go.qbee.io/agent/app/utils"
 	"go.qbee.io/agent/app/utils/cmd"
 )
 
@@ -36,6 +37,9 @@ const (
 	bootstrapDeviceNameOption          = "device-name"
 	bootstrapDisableRemoteAccessOption = "disable-remote-access"
 	bootstrapCACert                    = "ca-cert"
+	bootstrapExecUser                  = "exec-user"
+	bootstrapUsePrivilegeElevation     = "use-privilege-elevation"
+	bootstrapElevationCommand          = "elevation-command"
 )
 
 var bootstrapCommand = cmd.Command{
@@ -93,23 +97,48 @@ var bootstrapCommand = cmd.Command{
 			Name: bootstrapCACert,
 			Help: "Custom CA certificate to use for TLS.",
 		},
+		{
+			Name: bootstrapExecUser,
+			Help: "User to run the agent as.",
+		},
+		{
+			Name: bootstrapUsePrivilegeElevation,
+			Flag: "true",
+			Help: "Use privilege elevation for commands requiring elevated privileges.",
+		},
+		{
+			Name:    bootstrapElevationCommand,
+			Help:    "Command to use for privilege elevation (e.g. sudo).",
+			Default: "sudo -n",
+		},
 	},
 
 	Target: func(opts cmd.Options) error {
+
 		cfg := &agent.Config{
-			BootstrapKey:        opts[bootstrapKeyOption],
-			Directory:           opts[mainConfigDirOption],
-			StateDirectory:      opts[mainStateDirOption],
-			DeviceHubServer:     opts[bootstrapDeviceHubHostOption],
-			DeviceHubPort:       opts[bootstrapDeviceHubPortOption],
-			TPMDevice:           opts[bootstrapTPMDeviceOption],
-			ProxyServer:         opts[bootstrapProxyHostOption],
-			ProxyPort:           opts[bootstrapProxyPortOption],
-			ProxyUser:           opts[bootstrapProxyUserOption],
-			ProxyPassword:       opts[bootstrapProxyPasswordOption],
-			DeviceName:          opts[bootstrapDeviceNameOption],
-			DisableRemoteAccess: opts[bootstrapDisableRemoteAccessOption] == "true",
-			CACert:              opts[bootstrapCACert],
+			BootstrapKey:          opts[bootstrapKeyOption],
+			Directory:             opts[mainConfigDirOption],
+			StateDirectory:        opts[mainStateDirOption],
+			DeviceHubServer:       opts[bootstrapDeviceHubHostOption],
+			DeviceHubPort:         opts[bootstrapDeviceHubPortOption],
+			TPMDevice:             opts[bootstrapTPMDeviceOption],
+			ProxyServer:           opts[bootstrapProxyHostOption],
+			ProxyPort:             opts[bootstrapProxyPortOption],
+			ProxyUser:             opts[bootstrapProxyUserOption],
+			ProxyPassword:         opts[bootstrapProxyPasswordOption],
+			DeviceName:            opts[bootstrapDeviceNameOption],
+			DisableRemoteAccess:   opts[bootstrapDisableRemoteAccessOption] == "true",
+			CACert:                opts[bootstrapCACert],
+			ExecUser:              opts[bootstrapExecUser],
+			UsePrivilegeElevation: opts[bootstrapUsePrivilegeElevation] == "true",
+		}
+
+		if cfg.UsePrivilegeElevation {
+			elevationCmd, err := utils.ParseCommandLine(opts[bootstrapElevationCommand])
+			if err != nil {
+				return fmt.Errorf("cannot parse elevation command: %w", err)
+			}
+			cfg.ElevationCommand = elevationCmd
 		}
 
 		if cfg.BootstrapKey == "" {

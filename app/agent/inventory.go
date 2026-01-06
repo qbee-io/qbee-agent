@@ -22,6 +22,7 @@ import (
 
 	"go.qbee.io/agent/app"
 	"go.qbee.io/agent/app/inventory"
+	"go.qbee.io/agent/app/log"
 )
 
 // doInventories collects all inventories and delivers them to the device hub API.
@@ -45,7 +46,7 @@ func (agent *Agent) doInventories(ctx context.Context) error {
 
 	for name, fn := range inventories {
 		if err := fn(ctx); err != nil {
-			return fmt.Errorf("failed to do %s inventory: %w", name, err)
+			log.Errorf("failed to do %s inventory: %v", name, err)
 		}
 	}
 
@@ -175,7 +176,7 @@ func (agent *Agent) doSoftwareInventory(ctx context.Context) error {
 		return nil
 	}
 
-	softwareInventory, err := inventory.CollectSoftwareInventory(ctx)
+	softwareInventory, err := inventory.CollectSoftwareInventory(ctx, agent.cfg.ElevationCommand)
 	if err != nil {
 		return err
 	}
@@ -199,7 +200,7 @@ func (agent *Agent) doProcessInventory(ctx context.Context) error {
 
 // doRaucInventory collects RAUC inventory - if enabled - and delivers it to the device hub API.
 func (agent *Agent) doRaucInventory(ctx context.Context) error {
-	raucInventory, err := inventory.CollectRaucInventory(ctx)
+	raucInventory, err := inventory.CollectRaucInventory(ctx, agent.cfg.ElevationCommand)
 	if err != nil {
 		return err
 	}
