@@ -78,6 +78,9 @@ type Config struct {
 
 	// ElevationCommand is the command to use for privilege elevation.
 	ElevationCommand []string `json:"elevation_command,omitempty"`
+
+	// skipLoadingCredentials indicates whether to skip loading credentials.
+	SkipLoadingCredentials bool `json:"-"`
 }
 
 // LoadConfig loads config from a provided config file path.

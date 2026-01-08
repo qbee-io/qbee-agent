@@ -316,6 +316,7 @@ type execUser struct {
 	uid      int
 	gid      int
 	groupIDs []int
+	userInfo *user.User
 }
 
 // setExecUser changes the user and group of the running process.
@@ -372,7 +373,7 @@ func resolveExecUser(cfg *Config) (execUser, error) {
 		gids = append(gids, gid)
 	}
 
-	return execUser{uid: uid, gid: gid, groupIDs: gids}, nil
+	return execUser{uid: uid, gid: gid, groupIDs: gids, userInfo: userInfo}, nil
 }
 
 // New returns a new instance of Agent with loaded credentials.
@@ -382,26 +383,28 @@ func New(cfg *Config) (*Agent, error) {
 		return nil, err
 	}
 
-	if err = agent.loadPrivateKey(); err != nil {
-		return nil, err
-	}
+	if !cfg.SkipLoadingCredentials {
+		if err = agent.loadPrivateKey(); err != nil {
+			return nil, err
+		}
 
-	if err = agent.loadCertificate(); err != nil {
-		return nil, err
-	}
+		if err = agent.loadCertificate(); err != nil {
+			return nil, err
+		}
 
-	tlsConfig := &tls.Config{
-		RootCAs: agent.caCertPool,
-		Certificates: []tls.Certificate{
-			{
-				Certificate: [][]byte{agent.certificate.Raw},
-				PrivateKey:  agent.privateKey,
+		tlsConfig := &tls.Config{
+			RootCAs: agent.caCertPool,
+			Certificates: []tls.Certificate{
+				{
+					Certificate: [][]byte{agent.certificate.Raw},
+					PrivateKey:  agent.privateKey,
+				},
 			},
-		},
-	}
+		}
 
-	agent.api.WithTLSConfig(tlsConfig)
-	agent.remoteAccess.WithTLSConfig(tlsConfig)
+		agent.api.WithTLSConfig(tlsConfig)
+		agent.remoteAccess.WithTLSConfig(tlsConfig)
+	}
 
 	execUser, err := resolveExecUser(cfg)
 	if err != nil {
@@ -422,29 +425,44 @@ func New(cfg *Config) (*Agent, error) {
 		return agent, nil
 	}
 
-	_, err = exec.LookPath("loginctl")
-	if err == nil {
-		// enable lingering privileges to be able to switch user (important for podman containers etc.)
-		if _, err := utils.RunCommand(context.Background(), []string{"loginctl", "enable-linger", cfg.ExecUser}); err != nil {
-			return nil, fmt.Errorf("failed to enable lingering for user %s: %w", cfg.ExecUser, err)
+	if err := setupUnprivilegedUser(execUser); err != nil {
+		return nil, err
+	}
+
+	log.Infof("dropping privileges to user %s (uid: %d, gid: %d, groups: %v)", execUser.userInfo.Username, execUser.uid, execUser.gid, execUser.groupIDs)
+	return agent, nil
+}
+
+// setupUnprivilegedUser prepares the agent to run as an unprivileged user.
+func setupUnprivilegedUser(execUser execUser) error {
+
+	// enable lingering privileges to be able to switch user (important for podman containers etc.)
+	_, err := exec.LookPath("loginctl")
+	if _, err2 := os.Stat("/.dockerenv"); err == nil && err2 != nil {
+		if _, err := utils.RunCommand(context.Background(), []string{"loginctl", "enable-linger", execUser.userInfo.Username}); err != nil {
+			return fmt.Errorf("failed to enable lingering for user %s: %w", execUser.userInfo.Username, err)
 		}
 	}
 
-	log.Infof("dropping privileges to user %s (uid: %d, gid: %d, groups: %v)", cfg.ExecUser, execUser.uid, execUser.gid, execUser.groupIDs)
+	// set environment variables
+	if execUser.userInfo.HomeDir != "" {
+		os.Setenv("HOME", execUser.userInfo.HomeDir)
+	}
+	os.Setenv("USER", execUser.userInfo.Username)
 
 	if len(execUser.groupIDs) > 0 {
 		if err := syscall.Setgroups(execUser.groupIDs); err != nil {
-			return nil, fmt.Errorf("failed to set supplementary groups for user %s: %w", cfg.ExecUser, err)
+			return fmt.Errorf("failed to set supplementary groups for user %s: %w", execUser.userInfo.Username, err)
 		}
 	}
 
 	if err := syscall.Setgid(execUser.gid); err != nil {
-		return nil, fmt.Errorf("failed to set group ID to %d: %w", execUser.gid, err)
+		return fmt.Errorf("failed to set group ID to %d: %w", execUser.gid, err)
 	}
 
 	if err := syscall.Setuid(execUser.uid); err != nil {
-		return nil, fmt.Errorf("failed to set user ID to %d: %w", execUser.uid, err)
+		return fmt.Errorf("failed to set user ID to %d: %w", execUser.uid, err)
 	}
 
-	return agent, nil
+	return nil
 }
