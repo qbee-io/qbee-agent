@@ -1,0 +1,12 @@
+Cmnd_Alias OTA_CMDS = /usr/bin/rauc
+Cmnd_Alias APT_GET_CMDS = /usr/bin/apt-get, /bin/apt-get
+Cmnd_Alias YUM_CMDS = /usr/bin/yum, /bin/yum, /usr/bin/dnf, /bin/dnf
+Cmnd_Alias RPM_CMDS = /usr/bin/rpm, /bin/rpm
+Cmnd_Alias DPKG_CMDS = /usr/bin/dpkg, /bin/dpkg
+Defaults!APT_GET_CMDS env_keep+=DEBIAN_FRONTEND
+Cmnd_Alias PKG_CMDS = APT_GET_CMDS, YUM_CMDS, RPM_CMDS, DPKG_CMDS
+Cmnd_Alias FIREWALL_CMDS = /usr/sbin/iptables, /sbin/iptables
+Cmnd_Alias SHUTDOWN_CMDS = /usr/sbin/shutdown, /sbin/shutdown
+Cmnd_Alias USER_CMDS = /usr/sbin/useradd, /sbin/useradd, /usr/sbin/userdel, /sbin/userdel
+
+qbee ALL=(ALL) SETENV:NOPASSWD: SHUTDOWN_CMDS, OTA_CMDS, PKG_CMDS, FIREWALL_CMDS, SHUTDOWN_CMDS

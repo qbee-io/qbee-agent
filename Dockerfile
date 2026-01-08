@@ -46,10 +46,7 @@ RUN echo \
   tee /etc/apt/sources.list.d/docker.list > /dev/null
 # update apt cache
 RUN apt-get update && apt-get upgrade -y
-RUN apt-get install docker-ce-cli podman -y 
-
-# install docker cli
-RUN apt-get install docker-ce-cli -y
+RUN apt-get install docker-ce-cli podman sudo -y
 
 # create empty agent configuration directory
 RUN mkdir /etc/qbee && echo '{}' > /etc/qbee/qbee-agent.json
@@ -61,3 +58,10 @@ COPY --from=builder /usr/sbin/qbee-agent /usr/sbin/qbee-agent
 
 # add docker-compose files
 COPY test/resources/docker-compose /docker-compose
+
+# add an unprivileged user (with subuid/subgid ranges for rootless containers)
+RUN adduser --system --group --home /var/lib/qbee-home qbee
+RUN usermod --add-subuids 100000-165535 --add-subgids 100000-165535 qbee
+
+# add sudoers file for qbee user
+COPY test/resources/common/sudoers.d/99-qbee /etc/sudoers.d/99-qbee
