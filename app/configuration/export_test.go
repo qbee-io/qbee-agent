@@ -35,12 +35,23 @@ func ExecuteTestConfigInDocker(r *runner.Runner, config CommittedConfig) ([]stri
 		config.Bundles = append(config.Bundles, BundleSettings)
 
 		config.BundleData.Settings = SettingsBundle{
-			Metadata: Metadata{Enabled: true},
+			Metadata:      Metadata{Enabled: true},
 			EnableReports: false,
 		}
 	}
 
 	r.CreateJSON("/app/config.json", config)
+
+	// make the file readable for the agent
+	r.MustExec("chmod", "644", "/app/config.json")
+
+	if r.GetUnprivileged() {
+		// write the qbee-agent.json file to drop privileges
+		r.CreateJSON("/etc/qbee/qbee-agent.json", map[string]any{
+			"exec_user":               "qbee",
+			"use_privilege_elevation": true,
+		})
+	}
 
 	return ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r", "-f", "/app/config.json"))
 }

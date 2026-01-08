@@ -87,9 +87,10 @@ func NewWithImage(t *testing.T, image string, privileged bool) *Runner {
 
 // Runner provides a convenient way to run the agent in a container.
 type Runner struct {
-	t         *testing.T
-	container string
-	image     string
+	t            *testing.T
+	container    string
+	image        string
+	unprivileged bool
 }
 
 // Close kills the container.
@@ -105,6 +106,17 @@ func (runner *Runner) Pause() {
 // Unpause processes within the runner container.
 func (runner *Runner) Unpause() {
 	_ = exec.Command("docker", "unpause", runner.container).Run()
+}
+
+// WithUnprivileged sets the runner to run using qbee-agent in unprivileged mode.
+func (runner *Runner) WithUnprivileged() *Runner {
+	runner.unprivileged = true
+	return runner
+}
+
+// GetUnprivileged returns whether the runner is set to run using qbee-agent in unprivileged mode.
+func (runner *Runner) GetUnprivileged() bool {
+	return runner.unprivileged
 }
 
 // PackageInstallCommand returns the package manager install command for the runner image.
