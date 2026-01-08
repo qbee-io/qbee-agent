@@ -30,19 +30,19 @@ import (
 
 // RunCommand runs a command and returns its output.
 func RunCommand(ctx context.Context, cmd []string) ([]byte, error) {
-	return runCommandOutput(NewCommand(ctx, cmd))
+	return RunCommandOutput(NewCommand(ctx, cmd))
 }
 
-// RunPrivilegedCommand runs a command with sudo and returns its output.
-func RunPrivilegedCommand(ctx context.Context, elevationCmd, cmd []string) ([]byte, error) {
+// NewPrivilegedCommand creates a new exec.Cmd with privilege elevation if needed.
+func NewPrivilegedCommand(ctx context.Context, elevationCmd, cmd []string) (*exec.Cmd, error) {
 	// attempt to run command with sudo if not already root
 	if os.Geteuid() == 0 {
-		return RunCommand(ctx, cmd)
+		return NewCommand(ctx, cmd), nil
 	}
 
 	// no elevation command provided, assume capabilities are set
 	if len(elevationCmd) == 0 {
-		return RunCommand(ctx, cmd)
+		return NewCommand(ctx, cmd), nil
 	}
 
 	if _, err := exec.LookPath(elevationCmd[0]); err != nil {
@@ -50,11 +50,20 @@ func RunPrivilegedCommand(ctx context.Context, elevationCmd, cmd []string) ([]by
 	}
 
 	cmd = append(elevationCmd, cmd...)
-	return runCommandOutput(NewCommand(ctx, cmd))
+	return NewCommand(ctx, cmd), nil
 }
 
-// runCommandOutput runs a command and returns its output as a string.
-func runCommandOutput(command *exec.Cmd) ([]byte, error) {
+// RunPrivilegedCommand runs a command with sudo and returns its output.
+func RunPrivilegedCommand(ctx context.Context, elevationCmd, cmd []string) ([]byte, error) {
+	command, err := NewPrivilegedCommand(ctx, elevationCmd, cmd)
+	if err != nil {
+		return nil, err
+	}
+	return RunCommandOutput(command)
+}
+
+// RunCommandOutput runs a command and returns its output as a string.
+func RunCommandOutput(command *exec.Cmd) ([]byte, error) {
 	output, err := command.Output()
 
 	if err != nil {

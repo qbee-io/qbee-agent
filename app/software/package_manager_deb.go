@@ -232,7 +232,6 @@ func (deb *DebianPackageManager) parseUpdateAvailableLine(line string) *Package 
 }
 
 var aptGetBaseCommand = []string{
-	"DEBIAN_FRONTEND=noninteractive",
 	aptGetPath,
 	`-o Dpkg::Options::="--force-confdef"`,
 	`-o Dpkg::Options::="--force-confold"`,
@@ -265,21 +264,38 @@ func (deb *DebianPackageManager) UpgradeAll(ctx context.Context, elevationCmd []
 	}
 
 	// perform system upgrade
+
 	upgradeCommand := append(aptGetBaseCommand, "upgrade")
 	distUpgradeCommand := append(aptGetBaseCommand, "dist-upgrade")
 
-	cmd := append(append(upgradeCommand, "&&"), distUpgradeCommand...)
-
-	shellCmd := []string{"sh", "-c", strings.Join(cmd, " ")}
-
-	var output []byte
-	if output, err = utils.RunCommand(ctx, shellCmd); err != nil {
-		return 0, output, err
+	aptUpgradeCmd, err := newAptGetCommand(ctx, elevationCmd, upgradeCommand)
+	if err != nil {
+		return 0, nil, err
 	}
 
-	cache.Delete(debianPackagesCacheKey)
+	aptDistUpgradeCmd, err := newAptGetCommand(ctx, elevationCmd, distUpgradeCommand)
+	if err != nil {
+		return 0, nil, err
+	}
 
-	return updatesAvailable, output, err
+	// we are about to change the package database, so clear the cache on return
+	defer func() {
+		cache.Delete(debianPackagesCacheKey)
+	}()
+
+	upgradeOutput, err := utils.RunCommandOutput(aptUpgradeCmd)
+	if err != nil {
+		return 0, upgradeOutput, err
+	}
+
+	distUpgradeOutput, err := utils.RunCommandOutput(aptDistUpgradeCmd)
+	if err != nil {
+		return 0, distUpgradeOutput, err
+	}
+
+	combinedOutput := append(upgradeOutput, distUpgradeOutput...)
+
+	return updatesAvailable, combinedOutput, nil
 }
 
 // Install ensures a package with provided version number is installed in the system.
@@ -302,11 +318,14 @@ func (deb *DebianPackageManager) Install(ctx context.Context, pkgName, version s
 
 	installCommand := append(aptGetBaseCommand, downgradesFlag, "install", pkgName)
 
-	shellCmd := []string{"sh", "-c", strings.Join(installCommand, " ")}
+	aptCmd, err := newAptGetCommand(ctx, elevationCmd, installCommand)
+	if err != nil {
+		return nil, err
+	}
 
 	defer cache.Delete(debianPackagesCacheKey)
 
-	return utils.RunPrivilegedCommand(ctx, elevationCmd, shellCmd)
+	return utils.RunCommandOutput(aptCmd)
 }
 
 // InstallLocal package.
@@ -317,8 +336,7 @@ func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath s
 	defer cache.Delete(debianPackagesCacheKey)
 
 	installCommand := []string{dpkgPath, "-i", pkgFilePath}
-	cmd := []string{"sh", "-c", strings.Join(installCommand, " ")}
-	dpkgOutput, err := utils.RunCommand(ctx, cmd)
+	dpkgOutput, err := utils.RunPrivilegedCommand(ctx, elevationCmd, installCommand)
 
 	// dpkg succeeded, return
 	if err == nil {
@@ -327,11 +345,16 @@ func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath s
 
 	// dpkg fails, so we need to run "apt-get install -f" to install any possible dependencies
 	dpkgOutput = []byte(err.Error())
-
 	installCommand = append(aptGetBaseCommand, "install")
-	cmd = []string{"sh", "-c", strings.Join(installCommand, " ")}
-	aptOutput, err := utils.RunCommand(ctx, cmd)
 
+	aptCmd, err := newAptGetCommand(ctx, elevationCmd, installCommand)
+	if err != nil {
+		return dpkgOutput, err
+	}
+
+	aptCmd.Env = append(aptCmd.Env, "DEBIAN_FRONTEND=noninteractive")
+
+	aptOutput, err := utils.RunCommandOutput(aptCmd)
 	return append(dpkgOutput, aptOutput...), err
 }
 
@@ -403,4 +426,14 @@ func (deb *DebianPackageManager) IsSupportedArchitecture(arch string) error {
 	}
 
 	return fmt.Errorf("architecture %s is not supported by the system", arch)
+}
+
+func newAptGetCommand(ctx context.Context, elevationCmd, cmd []string) (*exec.Cmd, error) {
+	aptCmd, err := utils.NewPrivilegedCommand(ctx, elevationCmd, cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	aptCmd.Env = append(aptCmd.Env, "DEBIAN_FRONTEND=noninteractive")
+	return aptCmd, nil
 }
