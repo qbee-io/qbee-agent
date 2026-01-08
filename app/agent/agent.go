@@ -446,9 +446,14 @@ func setupUnprivilegedUser(execUser execUser) error {
 
 	// set environment variables
 	if execUser.userInfo.HomeDir != "" {
-		os.Setenv("HOME", execUser.userInfo.HomeDir)
+		if err := os.Setenv("HOME", execUser.userInfo.HomeDir); err != nil {
+			return fmt.Errorf("failed to set HOME environment variable: %w", err)
+		}
 	}
-	os.Setenv("USER", execUser.userInfo.Username)
+
+	if err := os.Setenv("USER", execUser.userInfo.Username); err != nil {
+		return fmt.Errorf("failed to set USER environment variable: %w", err)
+	}
 
 	if len(execUser.groupIDs) > 0 {
 		if err := syscall.Setgroups(execUser.groupIDs); err != nil {
