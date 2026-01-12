@@ -51,6 +51,12 @@ func ExecuteTestConfigInDocker(r *runner.Runner, config CommittedConfig) ([]stri
 			"exec_user":               "qbee",
 			"use_privilege_elevation": true,
 		})
+
+		// set up access to docker socket for unprivileged user
+		gidOutput := r.MustExec("stat", "-c", "%g", "/var/run/docker.sock")
+		gid := strings.TrimSpace(string(gidOutput))
+		r.MustExec("groupadd", "-fg", gid, "docker")
+		r.MustExec("usermod", "-aG", gid, "qbee")
 	}
 
 	return ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r", "-f", "/app/config.json"))

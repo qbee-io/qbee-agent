@@ -26,17 +26,9 @@ import (
 	"go.qbee.io/agent/app/utils/runner"
 )
 
-var tests = []struct {
-	name         string
-	unprivileged bool
-}{
-	{"Unprivileged", true},
-	{"Privileged", false},
-}
-
 func Test_Firewall_NoIPTablesInstalled(t *testing.T) {
 
-	for _, tt := range tests {
+	for _, tt := range privilegeTest {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			r := runner.New(t)
@@ -69,7 +61,7 @@ func Test_Firewall_NoIPTablesInstalled(t *testing.T) {
 
 func Test_Firewall(t *testing.T) {
 
-	for _, tt := range tests {
+	for _, tt := range privilegeTest {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			r := runner.New(t)

@@ -17,8 +17,10 @@
 package configuration_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"go.qbee.io/agent/app/configuration"
 	"go.qbee.io/agent/app/utils"
@@ -73,13 +75,26 @@ func Test_Version_Parse(t *testing.T) {
 }
 
 func Test_Simple_Docker_Compose(t *testing.T) {
+	for _, tt := range privilegeTest {
+		t.Run(tt.name, func(t *testing.T) {
+			testSimpleDockerCompose(t, tt.unprivileged)
+		})
+	}
+}
+
+func testSimpleDockerCompose(t *testing.T, unprivileged bool) {
 
 	r := runner.New(t)
+	if unprivileged {
+		r = r.WithUnprivileged()
+	}
 
+	projectNameBase := fmt.Sprintf("%d", time.Now().UnixNano())
+	projectNameA := projectNameBase + "-a"
 	dockerComposeBundle := configuration.DockerComposeBundle{
 		Projects: []configuration.Compose{
 			{
-				Name: "project-a",
+				Name: projectNameBase + "-a",
 				File: "file:///docker-compose/compose-nobuild.yml",
 			},
 		},
@@ -96,8 +111,8 @@ func Test_Simple_Docker_Compose(t *testing.T) {
 
 	reports, _ := configuration.ExecuteTestConfigInDocker(r, config)
 	expectedReports := []string{
-		"[INFO] Successfully downloaded file file:///docker-compose/compose-nobuild.yml to /var/lib/qbee/app_workdir/cache/docker_compose/project-a/compose.yml",
-		"[INFO] Started compose project project-a",
+		"[INFO] Successfully downloaded file file:///docker-compose/compose-nobuild.yml to /var/lib/qbee/app_workdir/cache/docker_compose/" + projectNameA + "/compose.yml",
+		"[INFO] Started compose project " + projectNameA,
 	}
 
 	assert.Equal(t, reports, expectedReports)
@@ -106,10 +121,11 @@ func Test_Simple_Docker_Compose(t *testing.T) {
 
 	assert.Empty(t, reports)
 
+	projectNameB := projectNameBase + "-b"
 	dockerComposeBundle = configuration.DockerComposeBundle{
 		Projects: []configuration.Compose{
 			{
-				Name: "project-b",
+				Name: projectNameB,
 				File: "file:///docker-compose/compose-nobuild.yml",
 			},
 		},
@@ -127,12 +143,12 @@ func Test_Simple_Docker_Compose(t *testing.T) {
 
 	reports, _ = configuration.ExecuteTestConfigInDocker(r, config)
 	expectedReports = []string{
-		"[INFO] Successfully downloaded file file:///docker-compose/compose-nobuild.yml to /var/lib/qbee/app_workdir/cache/docker_compose/project-b/compose.yml",
-		"[INFO] Started compose project project-b",
+		"[INFO] Successfully downloaded file file:///docker-compose/compose-nobuild.yml to /var/lib/qbee/app_workdir/cache/docker_compose/" + projectNameB + "/compose.yml",
+		"[INFO] Started compose project " + projectNameB,
 	}
 
 	assert.Equal(t, reports, expectedReports)
-	r.MustExec("docker", "compose", "-p", "project-b", "down", "--remove-orphans", "--volumes", "--timeout", "60", "--rmi", "all")
+	r.MustExec("docker", "compose", "-p", projectNameB, "down", "--remove-orphans", "--volumes", "--timeout", "60", "--rmi", "all")
 }
 
 func Test_ComposeWithParams(t *testing.T) {

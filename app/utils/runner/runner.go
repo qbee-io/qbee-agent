@@ -219,7 +219,10 @@ func (runner *Runner) CreateFile(path string, contents []byte) {
 
 	containerPath := fmt.Sprintf("%s:%s", runner.container, path)
 
-	if err = exec.Command("docker", "cp", fd.Name(), containerPath).Run(); err != nil {
+	if output, err := exec.Command("docker", "cp", fd.Name(), containerPath).CombinedOutput(); err != nil {
+		fmt.Printf("Command was: docker cp %s %s", fd.Name(), containerPath)
+		fmt.Println("Error copying file to container:", err)
+		fmt.Println("Output:", string(output))
 		panic(err)
 	}
 }

@@ -59,21 +59,7 @@ func Test_PackageManagement_InstallPackage_PreConditionFailed(t *testing.T) {
 
 func Test_PackageManagement_InstallPackage_NoPrecondition(t *testing.T) {
 
-	tests := []struct {
-		name         string
-		unprivileged bool
-	}{
-		{
-			name:         "privileged",
-			unprivileged: true,
-		},
-		{
-			name:         "unprivileged",
-			unprivileged: true,
-		},
-	}
-
-	for _, tt := range tests {
+	for _, tt := range privilegeTest {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -142,21 +128,7 @@ func Test_PackageManagement_InstallPackage_PreconditionSuccess(t *testing.T) {
 
 func Test_PackageManagement_InstallPackage_Downgrade(t *testing.T) {
 
-	tests := []struct {
-		name         string
-		unprivileged bool
-	}{
-		{
-			name:         "privileged",
-			unprivileged: true,
-		},
-		{
-			name:         "unprivileged",
-			unprivileged: true,
-		},
-	}
-
-	for _, tt := range tests {
+	for _, tt := range privilegeTest {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			runners := []*runner.Runner{
