@@ -113,13 +113,41 @@ func LoadConfig(configDir, stateDir string) (*Config, error) {
 		config.DeviceHubPort = DefaultDeviceHubPort
 	}
 
-	if config.UsePrivilegeElevation && len(config.ElevationCommand) == 0 {
-		config.ElevationCommand = []string{"sudo", "-n"}
+	if config.UsePrivilegeElevation {
+		if len(config.ElevationCommand) == 0 {
+			config.ElevationCommand = []string{"sudo", "-n"}
+		}
+
+		if err := validateElevationCommand(config.ElevationCommand); err != nil {
+			return nil, err
+		}
 	}
 
 	return config, nil
 }
 
+// validateElevationCommand ensures the elevation command is safe to use.
+// It only allows a small, known-safe set of elevation tools or absolute paths.
+func validateElevationCommand(cmd []string) error {
+	if len(cmd) == 0 {
+		return fmt.Errorf("elevation command is empty")
+	}
+
+	bin := cmd[0]
+
+	// Allow a small, explicit allow-list of elevation tools by name.
+	switch bin {
+	case "sudo", "doas":
+		return nil
+	}
+
+	// Otherwise require an absolute path to avoid PATH-based attacks.
+	if !filepath.IsAbs(bin) {
+		return fmt.Errorf("elevation command %q must be an absolute path or one of the approved tools (sudo, doas)", bin)
+	}
+
+	return nil
+}
 func (agent *Agent) saveConfig() error {
 
 	if agent.cfg.BootstrapKey != "" {

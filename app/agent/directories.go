@@ -95,7 +95,7 @@ func createDirectory(path string, owner, group int) error {
 		}
 	}
 
-	// walk directory and set ownewship if necessary
+	// walk directory and set ownership if necessary
 	err = filepath.Walk(path, func(p string, info fs.FileInfo, err error) error {
 		if err != nil {
 			return err

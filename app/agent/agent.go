@@ -319,7 +319,8 @@ type execUser struct {
 	userInfo *user.User
 }
 
-// setExecUser changes the user and group of the running process.
+// resolveExecUser looks up and returns the user and group information to be used
+// for execution, without changing the current process user or group.
 func resolveExecUser(cfg *Config) (execUser, error) {
 	// we can't change user if we are not root
 	if os.Geteuid() != 0 {
@@ -366,11 +367,11 @@ func resolveExecUser(cfg *Config) (execUser, error) {
 		if gidStr == userInfo.Gid {
 			continue
 		}
-		gid, err := strconv.Atoi(gidStr)
+		groupID, err := strconv.Atoi(gidStr)
 		if err != nil {
 			return execUser{}, err
 		}
-		gids = append(gids, gid)
+		gids = append(gids, groupID)
 	}
 
 	return execUser{uid: uid, gid: gid, groupIDs: gids, userInfo: userInfo}, nil

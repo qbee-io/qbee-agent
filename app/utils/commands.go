@@ -35,7 +35,7 @@ func RunCommand(ctx context.Context, cmd []string) ([]byte, error) {
 
 // NewPrivilegedCommand creates a new exec.Cmd with privilege elevation if needed.
 func NewPrivilegedCommand(ctx context.Context, elevationCmd, cmd []string) (*exec.Cmd, error) {
-	// attempt to run command with sudo if not already root
+	// if already root, run command directly without elevation
 	if os.Geteuid() == 0 {
 		return NewCommand(ctx, cmd), nil
 	}

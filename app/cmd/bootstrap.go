@@ -107,8 +107,9 @@ var bootstrapCommand = cmd.Command{
 			Help: "Use privilege elevation for commands requiring elevated privileges.",
 		},
 		{
-			Name:    bootstrapElevationCommand,
-			Help:    "Command to use for privilege elevation (e.g. sudo).",
+			Name: bootstrapElevationCommand,
+			Help: "Command to use for privilege elevation (e.g. sudo). The default \"sudo -n\" " +
+				"requires passwordless sudo or appropriate sudoers configuration (e.g. NOPASSWD for the target user).",
 			Default: "sudo -n",
 		},
 	},
