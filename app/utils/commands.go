@@ -53,7 +53,7 @@ func NewPrivilegedCommand(ctx context.Context, elevationCmd, cmd []string) (*exe
 	return NewCommand(ctx, cmd), nil
 }
 
-// RunPrivilegedCommand runs a command with sudo and returns its output.
+// RunPrivilegedCommand runs a command with the configured elevation command and returns its output.
 func RunPrivilegedCommand(ctx context.Context, elevationCmd, cmd []string) ([]byte, error) {
 	command, err := NewPrivilegedCommand(ctx, elevationCmd, cmd)
 	if err != nil {
