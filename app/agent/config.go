@@ -113,14 +113,22 @@ func LoadConfig(configDir, stateDir string) (*Config, error) {
 		config.DeviceHubPort = DefaultDeviceHubPort
 	}
 
-	if config.UsePrivilegeElevation {
-		if len(config.ElevationCommand) == 0 {
-			config.ElevationCommand = []string{"sudo", "-n"}
-		}
+	if !config.UsePrivilegeElevation {
+		return config, nil
+	}
 
-		if err := validateElevationCommand(config.ElevationCommand); err != nil {
-			return nil, err
+	// Set default elevation command if not set to use system sudo
+	if len(config.ElevationCommand) == 0 {
+		// attempt to auto-resolve sudo path
+		sudoPath, err := resolveSudoPath()
+		if err != nil {
+			return nil, fmt.Errorf("elevation command not set and cannot resolve sudo path: %w", err)
 		}
+		config.ElevationCommand = []string{sudoPath, "-n"}
+	}
+
+	if err := validateElevationCommand(config.ElevationCommand); err != nil {
+		return nil, err
 	}
 
 	return config, nil
@@ -133,21 +141,28 @@ func validateElevationCommand(cmd []string) error {
 		return fmt.Errorf("elevation command is empty")
 	}
 
-	bin := cmd[0]
-
-	// Allow a small, explicit allow-list of elevation tools by name.
-	switch bin {
-	case "sudo", "doas":
-		return nil
-	}
-
 	// Otherwise require an absolute path to avoid PATH-based attacks.
-	if !filepath.IsAbs(bin) {
-		return fmt.Errorf("elevation command %q must be an absolute path or one of the approved tools (sudo, doas)", bin)
+	if !filepath.IsAbs(cmd[0]) {
+		return fmt.Errorf("elevation command %q must be an absolute path", cmd[0])
 	}
 
 	return nil
 }
+
+func resolveSudoPath() (string, error) {
+	systemSudoPaths := []string{
+		"/usr/bin/sudo",
+		"/bin/sudo",
+	}
+
+	for _, path := range systemSudoPaths {
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("sudo command not found in standard locations")
+}
+
 func (agent *Agent) saveConfig() error {
 
 	if agent.cfg.BootstrapKey != "" {
