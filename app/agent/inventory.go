@@ -47,14 +47,12 @@ func (agent *Agent) doInventories(ctx context.Context) error {
 
 	for name, fn := range inventories {
 		if err := fn(ctx); err != nil {
-			if os.Geteuid() != 0 {
-				// If not running as root, some inventories may fail due to insufficient permissions.
-				// We do not want to spam the logs in this case, so we log a debug message instead.
-				log.Debugf("failed to do %s inventory while running as non-root: %v", name, err)
+			// allow permission errors to pass silently for non-root users
+			if os.IsPermission(err) && os.Geteuid() != 0 {
+				log.Debugf("inventory '%s' skipped due to insufficient permissions", name)
 				continue
 			}
-			// do not return error, but log it. Continue with other inventories.
-			log.Errorf("failed to do %s inventory: %v", name, err)
+			return fmt.Errorf("failed to collect/send inventory '%s': %w", name, err)
 		}
 	}
 
