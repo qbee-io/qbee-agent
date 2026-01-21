@@ -45,7 +45,13 @@ const (
 
 // RpmPackageManager implements PackageManager interface for RPM based systems (Fedora, CentOS etc.)
 type RpmPackageManager struct {
-	lock sync.Mutex
+	lock         sync.Mutex
+	elevationCmd []string
+}
+
+// WithElevationCommand sets elevation command for package manager.
+func (rpm *RpmPackageManager) WithElevationCommand(elevationCmd []string) {
+	rpm.elevationCmd = elevationCmd
 }
 
 // Type returns type of the package manager.
@@ -93,7 +99,7 @@ func (rpm *RpmPackageManager) Busy() (bool, error) {
 }
 
 // ListPackages returns a list of packages with available updates.
-func (rpm *RpmPackageManager) ListPackages(ctx context.Context, elevationCmd []string) ([]Package, error) {
+func (rpm *RpmPackageManager) ListPackages(ctx context.Context) ([]Package, error) {
 
 	rpm.lock.Lock()
 	defer rpm.lock.Unlock()
@@ -108,7 +114,7 @@ func (rpm *RpmPackageManager) ListPackages(ctx context.Context, elevationCmd []s
 	}
 
 	var availableUpdates map[string]string
-	availableUpdates, err = rpm.listAvailableUpdates(ctx, elevationCmd)
+	availableUpdates, err = rpm.listAvailableUpdates(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +151,7 @@ func (rpm *RpmPackageManager) parseUpdateAvailableLine(line string) *Package {
 }
 
 // listAvailableUpdates returns a list of available updates.
-func (rpm *RpmPackageManager) listAvailableUpdates(ctx context.Context, elevationCmd []string) (map[string]string, error) {
+func (rpm *RpmPackageManager) listAvailableUpdates(ctx context.Context) (map[string]string, error) {
 	cmd := []string{
 		yumPath,
 		"--quiet",
@@ -155,8 +161,8 @@ func (rpm *RpmPackageManager) listAvailableUpdates(ctx context.Context, elevatio
 
 	updates := make(map[string]string)
 
-	if len(elevationCmd) > 0 {
-		cmd = append(elevationCmd, cmd...)
+	if len(rpm.elevationCmd) > 0 {
+		cmd = append(rpm.elevationCmd, cmd...)
 	}
 
 	// yum check-updates returns 100 when there are updates available
@@ -201,7 +207,12 @@ func (rpm *RpmPackageManager) listInstalledPackages(ctx context.Context) ([]Pack
 
 	installedPackages := make([]Package, 0)
 
-	err := utils.ForLinesInCommandOutput(ctx, cmd, func(line string) error {
+	output, err := utils.RunPrivilegedCommand(ctx, rpm.elevationCmd, cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	err = utils.ForLines(bytes.NewBuffer(output), func(line string) error {
 		// package||1.1.1-1||x86_64
 		parts := strings.Split(line, "||")
 		if len(parts) != 3 {
@@ -227,9 +238,9 @@ func (rpm *RpmPackageManager) listInstalledPackages(ctx context.Context) ([]Pack
 }
 
 // UpgradeAll performs upgrade of all packages.
-func (rpm *RpmPackageManager) UpgradeAll(ctx context.Context, elevationCmd []string) (int, []byte, error) {
+func (rpm *RpmPackageManager) UpgradeAll(ctx context.Context) (int, []byte, error) {
 	// check for updates
-	inventory, err := rpm.ListPackages(ctx, elevationCmd)
+	inventory, err := rpm.ListPackages(ctx)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -257,7 +268,7 @@ func (rpm *RpmPackageManager) UpgradeAll(ctx context.Context, elevationCmd []str
 	}
 
 	var output []byte
-	if output, err = utils.RunPrivilegedCommand(ctx, elevationCmd, upgradeCommand); err != nil {
+	if output, err = utils.RunPrivilegedCommand(ctx, rpm.elevationCmd, upgradeCommand); err != nil {
 		return 0, output, err
 	}
 
@@ -267,7 +278,7 @@ func (rpm *RpmPackageManager) UpgradeAll(ctx context.Context, elevationCmd []str
 }
 
 // Install ensures a package with provided version number is installed in the system.
-func (rpm *RpmPackageManager) Install(ctx context.Context, pkgName, version string, elevationCmd []string) ([]byte, error) {
+func (rpm *RpmPackageManager) Install(ctx context.Context, pkgName, version string) ([]byte, error) {
 	rpm.lock.Lock()
 	defer rpm.lock.Unlock()
 
@@ -285,11 +296,11 @@ func (rpm *RpmPackageManager) Install(ctx context.Context, pkgName, version stri
 		pkgName,
 	}
 
-	return utils.RunPrivilegedCommand(ctx, elevationCmd, installCommand)
+	return utils.RunPrivilegedCommand(ctx, rpm.elevationCmd, installCommand)
 }
 
 // InstallLocal package.
-func (rpm *RpmPackageManager) InstallLocal(ctx context.Context, pkgFilePath string, elevationCmd []string) ([]byte, error) {
+func (rpm *RpmPackageManager) InstallLocal(ctx context.Context, pkgFilePath string) ([]byte, error) {
 	rpm.lock.Lock()
 	defer rpm.lock.Unlock()
 
@@ -303,7 +314,7 @@ func (rpm *RpmPackageManager) InstallLocal(ctx context.Context, pkgFilePath stri
 		pkgFilePath,
 	}
 
-	return utils.RunPrivilegedCommand(ctx, elevationCmd, installCmd)
+	return utils.RunPrivilegedCommand(ctx, rpm.elevationCmd, installCmd)
 }
 
 // PackageArchitecture returns the architecture of the package manager
@@ -314,7 +325,7 @@ func (rpm *RpmPackageManager) PackageArchitecture() (string, error) {
 
 	cmd := []string{rpmPath, "--eval", "%{_arch}"}
 
-	output, err := utils.RunCommand(context.Background(), cmd)
+	output, err := utils.RunPrivilegedCommand(context.Background(), rpm.elevationCmd, cmd)
 	if err != nil {
 		return "", err
 	}
@@ -336,7 +347,7 @@ func (rpm *RpmPackageManager) ParsePackageFile(ctx context.Context, filePath str
 		filePath,
 	}
 
-	output, err := utils.RunCommand(ctx, cmd)
+	output, err := utils.RunPrivilegedCommand(ctx, rpm.elevationCmd, cmd)
 
 	if err != nil {
 		return nil, err

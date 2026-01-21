@@ -72,7 +72,7 @@ var inventoryCommand = cmd.Command{
 		case inventory.TypeUsers:
 			inventoryData, err = inventory.CollectUsersInventory()
 		case inventory.TypeSoftware:
-			inventoryData, err = inventory.CollectSoftwareInventory(ctx, cfg.ElevationCommand)
+			inventoryData, err = inventory.CollectSoftwareInventory(ctx)
 		case inventory.TypeDockerContainers:
 			inventoryData, err = inventory.CollectDockerContainersInventory(ctx)
 		case inventory.TypeDockerImages:

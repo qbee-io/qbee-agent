@@ -58,6 +58,7 @@ type SoftwareManagementBundle struct {
 
 // Execute software management bundle on the system.
 func (s SoftwareManagementBundle) Execute(ctx context.Context, srv *Service) error {
+
 	pkgManager := software.DefaultPackageManager
 
 	if pkgManager == nil {
@@ -145,7 +146,7 @@ func (s Software) Execute(ctx context.Context, srv *Service, pkgManager software
 	if strings.HasSuffix(s.Package, software.DefaultPackageManager.FileSuffix()) {
 		shouldRestart, err = s.installFromFile(ctx, srv, pkgManager)
 	} else {
-		shouldRestart, err = s.installFromRepository(ctx, pkgManager, srv.elevationCommand)
+		shouldRestart, err = s.installFromRepository(ctx, pkgManager)
 	}
 	if err != nil {
 		return err
@@ -209,7 +210,7 @@ func (s Software) installFromFile(ctx context.Context, srv *Service, pkgManager 
 	}
 
 	// Check whether package is installed
-	if isInstalled, err := s.isPackageInstalled(ctx, pkgInfo, pkgManager, srv.elevationCommand); err != nil {
+	if isInstalled, err := s.isPackageInstalled(ctx, pkgInfo, pkgManager); err != nil {
 		return false, err
 	} else if isInstalled {
 		return false, nil
@@ -217,13 +218,13 @@ func (s Software) installFromFile(ctx context.Context, srv *Service, pkgManager 
 
 	// install package using the package manager
 	var output []byte
-	if output, err = pkgManager.InstallLocal(ctx, pkgFileCachePath, srv.elevationCommand); err != nil {
+	if output, err = pkgManager.InstallLocal(ctx, pkgFileCachePath); err != nil {
 		ReportError(ctx, err, "Unable to install '%s'", s.Package)
 		return false, err
 	}
 
 	// Verify that package was installed
-	if isInstalled, err := s.isPackageInstalled(ctx, pkgInfo, pkgManager, srv.elevationCommand); err != nil {
+	if isInstalled, err := s.isPackageInstalled(ctx, pkgInfo, pkgManager); err != nil {
 		ReportError(ctx, err, "Unable to verify installation of '%s'", s.Package)
 		return false, err
 	} else if !isInstalled {
@@ -236,9 +237,9 @@ func (s Software) installFromFile(ctx context.Context, srv *Service, pkgManager 
 	return true, nil
 }
 
-func (s Software) isPackageInstalled(ctx context.Context, pkgInfo *software.Package, pkgManager software.PackageManager, elevationCmd []string) (bool, error) {
+func (s Software) isPackageInstalled(ctx context.Context, pkgInfo *software.Package, pkgManager software.PackageManager) (bool, error) {
 	// check if package is already installed
-	installedPackages, err := pkgManager.ListPackages(ctx, elevationCmd)
+	installedPackages, err := pkgManager.ListPackages(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -265,12 +266,12 @@ func (s Software) isPackageInstalled(ctx context.Context, pkgInfo *software.Pack
 }
 
 // installFromRepository install package from package repository.
-func (s Software) installFromRepository(ctx context.Context, pkgManager software.PackageManager, elevationCmd []string) (bool, error) {
+func (s Software) installFromRepository(ctx context.Context, pkgManager software.PackageManager) (bool, error) {
 	// Check whether package is installed
 	pkgInfo := &software.Package{
 		Name: s.Package,
 	}
-	if isInstalled, err := s.isPackageInstalled(ctx, pkgInfo, pkgManager, elevationCmd); err != nil {
+	if isInstalled, err := s.isPackageInstalled(ctx, pkgInfo, pkgManager); err != nil {
 		return false, err
 	} else if isInstalled {
 		return false, nil
@@ -279,7 +280,7 @@ func (s Software) installFromRepository(ctx context.Context, pkgManager software
 	// install package
 	var output []byte
 	var err error
-	if output, err = pkgManager.Install(ctx, s.Package, "", elevationCmd); err != nil {
+	if output, err = pkgManager.Install(ctx, s.Package, ""); err != nil {
 		ReportError(ctx, err, "Unable to install '%s'", s.Package)
 		return false, err
 	}

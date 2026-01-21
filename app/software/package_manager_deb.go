@@ -52,6 +52,12 @@ const (
 type DebianPackageManager struct {
 	supportsAllowDowngradesFlag bool
 	lock                        sync.Mutex
+	elevationCmd                []string
+}
+
+// WithElevationCommand sets elevation command for package manager.
+func (deb *DebianPackageManager) WithElevationCommand(elevationCmd []string) {
+	deb.elevationCmd = elevationCmd
 }
 
 // Type returns type of the package manager.
@@ -86,15 +92,22 @@ func (deb *DebianPackageManager) Busy() (bool, error) {
 	deb.lock.Lock()
 	defer deb.lock.Unlock()
 
-	// cannot check for lock file, best effort
-	if os.Geteuid() != 0 {
-		return false, nil
-	}
-
 	// check the lock by attempting to acquire one
 	file, err := os.OpenFile(dpkgLockPath, syscall.O_CREAT|syscall.O_RDWR|syscall.O_CLOEXEC, dpkgLockMode)
+
+	// we might have permission error when trying to open the lock file
 	if err != nil {
-		return false, fmt.Errorf("cannot open file %s: %w", dpkgLockPath, err)
+		if os.Geteuid() == 0 {
+			// we are root, so this is unexpected
+			return false, fmt.Errorf("cannot open file %s: %w", dpkgLockPath, err)
+		}
+
+		if os.IsPermission(err) {
+			// we do not have permission to check the lock, best effort assume it's not locked.
+			// We do not return error here as it would prevent any package operations.
+			return false, nil
+		}
+		return false, fmt.Errorf("error checking dpkg lock: %w", err)
 	}
 
 	defer func() { _ = file.Close() }()
@@ -114,7 +127,7 @@ func (deb *DebianPackageManager) Busy() (bool, error) {
 }
 
 // ListPackages returns a list of packages with available updates.
-func (deb *DebianPackageManager) ListPackages(ctx context.Context, elevationCmd []string) ([]Package, error) {
+func (deb *DebianPackageManager) ListPackages(ctx context.Context) ([]Package, error) {
 	deb.lock.Lock()
 	defer deb.lock.Unlock()
 
@@ -129,7 +142,7 @@ func (deb *DebianPackageManager) ListPackages(ctx context.Context, elevationCmd 
 
 	// availableUpdates = map[pkgName:arch]updateVersion
 	var availableUpdates map[string]string
-	if availableUpdates, err = deb.listAvailableUpdates(ctx, elevationCmd); err != nil {
+	if availableUpdates, err = deb.listAvailableUpdates(ctx); err != nil {
 		return nil, fmt.Errorf("error listing available updates: %w", err)
 	}
 
@@ -148,9 +161,14 @@ func (deb *DebianPackageManager) listInstalledPackages(ctx context.Context) ([]P
 
 	installedPackages := make([]Package, 0)
 
+	output, err := utils.RunPrivilegedCommand(ctx, deb.elevationCmd, cmd)
+	if err != nil {
+		return nil, err
+	}
+
 	// only process lines matching the following format:
 	// ii  libsystemd0:amd64           232-25+deb9u13     amd64              systemd utility library
-	err := utils.ForLinesInCommandOutput(ctx, cmd, func(line string) error {
+	err = utils.ForLines(bytes.NewBuffer(output), func(line string) error {
 		fields := strings.Fields(line)
 
 		if fields[0] != "ii" || len(fields) < 4 {
@@ -178,10 +196,10 @@ func (deb *DebianPackageManager) listInstalledPackages(ctx context.Context) ([]P
 }
 
 // listAvailableUpdates returns a map of pkgName:arch -> availableUpdateVersion for packages with available updates.
-func (deb *DebianPackageManager) listAvailableUpdates(ctx context.Context, elevationCmd []string) (map[string]string, error) {
+func (deb *DebianPackageManager) listAvailableUpdates(ctx context.Context) (map[string]string, error) {
 	updateCmd := []string{aptGetPath, "update"}
 
-	if _, err := utils.RunPrivilegedCommand(ctx, elevationCmd, updateCmd); err != nil {
+	if _, err := utils.RunPrivilegedCommand(ctx, deb.elevationCmd, updateCmd); err != nil {
 		return nil, err
 	}
 
@@ -190,7 +208,7 @@ func (deb *DebianPackageManager) listAvailableUpdates(ctx context.Context, eleva
 
 	// only process lines matching the following format:
 	// Inst libsystemd0 [232-25+deb9u13] (232-25+deb9u14 Debian-Security:9/oldoldstable [amd64])
-	output, err := utils.RunPrivilegedCommand(ctx, elevationCmd, cmd)
+	output, err := utils.RunPrivilegedCommand(ctx, deb.elevationCmd, cmd)
 	if err != nil {
 		return nil, err
 	}
@@ -241,9 +259,9 @@ var aptGetBaseCommand = []string{
 
 // UpgradeAll performs system upgrade if there are available upgrades.
 // On success, return number of packages upgraded, output of the upgrade command and nil error.
-func (deb *DebianPackageManager) UpgradeAll(ctx context.Context, elevationCmd []string) (int, []byte, error) {
+func (deb *DebianPackageManager) UpgradeAll(ctx context.Context) (int, []byte, error) {
 	// check for updates
-	inventory, err := deb.ListPackages(ctx, elevationCmd)
+	inventory, err := deb.ListPackages(ctx)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -268,12 +286,12 @@ func (deb *DebianPackageManager) UpgradeAll(ctx context.Context, elevationCmd []
 	upgradeCommand := append(aptGetBaseCommand, "upgrade")
 	distUpgradeCommand := append(aptGetBaseCommand, "dist-upgrade")
 
-	aptUpgradeCmd, err := newAptGetCommand(ctx, elevationCmd, upgradeCommand)
+	aptUpgradeCmd, err := deb.newAptGetCommand(ctx, upgradeCommand)
 	if err != nil {
 		return 0, nil, err
 	}
 
-	aptDistUpgradeCmd, err := newAptGetCommand(ctx, elevationCmd, distUpgradeCommand)
+	aptDistUpgradeCmd, err := deb.newAptGetCommand(ctx, distUpgradeCommand)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -301,7 +319,7 @@ func (deb *DebianPackageManager) UpgradeAll(ctx context.Context, elevationCmd []
 // Install ensures a package with provided version number is installed in the system.
 // If version is empty, the latest version of the package is installed.
 // Returns output of the installation command.
-func (deb *DebianPackageManager) Install(ctx context.Context, pkgName, version string, elevationCmd []string) ([]byte, error) {
+func (deb *DebianPackageManager) Install(ctx context.Context, pkgName, version string) ([]byte, error) {
 	deb.lock.Lock()
 	defer deb.lock.Unlock()
 
@@ -318,7 +336,7 @@ func (deb *DebianPackageManager) Install(ctx context.Context, pkgName, version s
 
 	installCommand := append(aptGetBaseCommand, downgradesFlag, "install", pkgName)
 
-	aptCmd, err := newAptGetCommand(ctx, elevationCmd, installCommand)
+	aptCmd, err := deb.newAptGetCommand(ctx, installCommand)
 	if err != nil {
 		return nil, err
 	}
@@ -329,14 +347,14 @@ func (deb *DebianPackageManager) Install(ctx context.Context, pkgName, version s
 }
 
 // InstallLocal package.
-func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath string, elevationCmd []string) ([]byte, error) {
+func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath string) ([]byte, error) {
 	deb.lock.Lock()
 	defer deb.lock.Unlock()
 
 	defer cache.Delete(debianPackagesCacheKey)
 
 	installCommand := []string{dpkgPath, "-i", pkgFilePath}
-	dpkgOutput, err := utils.RunPrivilegedCommand(ctx, elevationCmd, installCommand)
+	dpkgOutput, err := utils.RunPrivilegedCommand(ctx, deb.elevationCmd, installCommand)
 
 	// dpkg succeeded, return
 	if err == nil {
@@ -347,7 +365,7 @@ func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath s
 	dpkgOutput = []byte(err.Error())
 	installCommand = append(aptGetBaseCommand, "install")
 
-	aptCmd, err := newAptGetCommand(ctx, elevationCmd, installCommand)
+	aptCmd, err := deb.newAptGetCommand(ctx, installCommand)
 	if err != nil {
 		return dpkgOutput, err
 	}
@@ -367,7 +385,7 @@ func (deb *DebianPackageManager) PackageArchitecture() (string, error) {
 
 	cmd := []string{dpkgPath, "--print-architecture"}
 
-	output, err := utils.RunCommand(context.Background(), cmd)
+	output, err := utils.RunPrivilegedCommand(context.Background(), deb.elevationCmd, cmd)
 	if err != nil {
 		return "", err
 	}
@@ -383,7 +401,12 @@ func (deb *DebianPackageManager) ParsePackageFile(ctx context.Context, pkgFilePa
 
 	pkg := new(Package)
 
-	err := utils.ForLinesInCommandOutput(ctx, cmd, func(line string) error {
+	output, err := utils.RunPrivilegedCommand(ctx, deb.elevationCmd, cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	err = utils.ForLines(bytes.NewBuffer(output), func(line string) error {
 		fields := strings.Fields(line)
 		if len(fields) != 2 {
 			return nil
@@ -428,8 +451,8 @@ func (deb *DebianPackageManager) IsSupportedArchitecture(arch string) error {
 	return fmt.Errorf("architecture %s is not supported by the system", arch)
 }
 
-func newAptGetCommand(ctx context.Context, elevationCmd, cmd []string) (*exec.Cmd, error) {
-	aptCmd, err := utils.NewPrivilegedCommand(ctx, elevationCmd, cmd)
+func (deb *DebianPackageManager) newAptGetCommand(ctx context.Context, cmd []string) (*exec.Cmd, error) {
+	aptCmd, err := utils.NewPrivilegedCommand(ctx, deb.elevationCmd, cmd)
 	if err != nil {
 		return nil, err
 	}

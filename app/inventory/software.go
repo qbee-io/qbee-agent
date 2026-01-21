@@ -37,14 +37,14 @@ type Software struct {
 }
 
 // CollectSoftwareInventory returns populated Software inventory based on current system status.
-func CollectSoftwareInventory(ctx context.Context, elevationCmd []string) (*Software, error) {
+func CollectSoftwareInventory(ctx context.Context) (*Software, error) {
 	pkgManager := software.DefaultPackageManager
 	if pkgManager == nil {
 		log.Debugf("no supported package manager found")
 		return nil, nil
 	}
 
-	pkgList, err := pkgManager.ListPackages(ctx, elevationCmd)
+	pkgList, err := pkgManager.ListPackages(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error listing packages: %w", err)
 	}

@@ -184,7 +184,7 @@ func (agent *Agent) doSoftwareInventory(ctx context.Context) error {
 		return nil
 	}
 
-	softwareInventory, err := inventory.CollectSoftwareInventory(ctx, agent.cfg.ElevationCommand)
+	softwareInventory, err := inventory.CollectSoftwareInventory(ctx)
 	if err != nil {
 		return err
 	}

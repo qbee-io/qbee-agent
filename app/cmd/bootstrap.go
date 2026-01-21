@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"go.qbee.io/agent/app/agent"
+	"go.qbee.io/agent/app/software"
 	"go.qbee.io/agent/app/utils"
 	"go.qbee.io/agent/app/utils/cmd"
 )
@@ -110,7 +111,7 @@ var bootstrapCommand = cmd.Command{
 			Name: bootstrapElevationCommand,
 			Help: "Command to use for privilege elevation (e.g. sudo). The default \"sudo -n\" " +
 				"requires passwordless sudo or appropriate sudoers configuration (e.g. NOPASSWD for the target user).",
-			Default: "sudo -n",
+			Default: "/usr/bin/sudo -n",
 		},
 	},
 
@@ -139,7 +140,18 @@ var bootstrapCommand = cmd.Command{
 			if err != nil {
 				return fmt.Errorf("cannot parse elevation command: %w", err)
 			}
+
+			if err := agent.ValidateElevationCommand(elevationCmd); err != nil {
+				return fmt.Errorf("invalid elevation command: %w", err)
+			}
+
 			cfg.ElevationCommand = elevationCmd
+
+			// propagate elevation command to software package manager
+			if software.DefaultPackageManager != nil {
+				software.DefaultPackageManager.WithElevationCommand(cfg.ElevationCommand)
+			}
+
 		}
 
 		if cfg.BootstrapKey == "" {

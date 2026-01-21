@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"go.qbee.io/agent/app/software"
 	"go.qbee.io/agent/app/utils"
 )
 
@@ -127,8 +128,13 @@ func LoadConfig(configDir, stateDir string) (*Config, error) {
 		config.ElevationCommand = []string{sudoPath, "-n"}
 	}
 
-	if err := validateElevationCommand(config.ElevationCommand); err != nil {
+	if err := ValidateElevationCommand(config.ElevationCommand); err != nil {
 		return nil, err
+	}
+
+	// propagate elevation command to software package manager
+	if software.DefaultPackageManager != nil {
+		software.DefaultPackageManager.WithElevationCommand(config.ElevationCommand)
 	}
 
 	return config, nil
@@ -136,7 +142,7 @@ func LoadConfig(configDir, stateDir string) (*Config, error) {
 
 // validateElevationCommand ensures the elevation command is safe to use.
 // It only allows a small, known-safe set of elevation tools or absolute paths.
-func validateElevationCommand(cmd []string) error {
+func ValidateElevationCommand(cmd []string) error {
 	if len(cmd) == 0 {
 		return fmt.Errorf("elevation command is empty")
 	}
