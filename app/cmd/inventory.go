@@ -82,7 +82,7 @@ var inventoryCommand = cmd.Command{
 		case inventory.TypeDockerVolumes:
 			inventoryData, err = inventory.CollectDockerVolumesInventory(ctx)
 		case inventory.TypeRauc:
-			inventoryData, err = inventory.CollectRaucInventory(ctx)
+			inventoryData, err = inventory.CollectRaucInventory(ctx, cfg.ElevationCommand)
 		default:
 			return fmt.Errorf("unsupported inventory type")
 		}

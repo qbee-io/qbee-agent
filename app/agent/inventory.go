@@ -19,9 +19,11 @@ package agent
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"go.qbee.io/agent/app"
 	"go.qbee.io/agent/app/inventory"
+	"go.qbee.io/agent/app/log"
 )
 
 // doInventories collects all inventories and delivers them to the device hub API.
@@ -45,7 +47,14 @@ func (agent *Agent) doInventories(ctx context.Context) error {
 
 	for name, fn := range inventories {
 		if err := fn(ctx); err != nil {
-			return fmt.Errorf("failed to do %s inventory: %w", name, err)
+			if os.Geteuid() != 0 {
+				// If not running as root, some inventories may fail due to insufficient permissions.
+				// We do not want to spam the logs in this case, so we log a debug message instead.
+				log.Debugf("failed to do %s inventory while running as non-root: %v", name, err)
+				continue
+			}
+			// do not return error, but log it. Continue with other inventories.
+			log.Errorf("failed to do %s inventory: %v", name, err)
 		}
 	}
 
@@ -199,7 +208,7 @@ func (agent *Agent) doProcessInventory(ctx context.Context) error {
 
 // doRaucInventory collects RAUC inventory - if enabled - and delivers it to the device hub API.
 func (agent *Agent) doRaucInventory(ctx context.Context) error {
-	raucInventory, err := inventory.CollectRaucInventory(ctx)
+	raucInventory, err := inventory.CollectRaucInventory(ctx, agent.cfg.ElevationCommand)
 	if err != nil {
 		return err
 	}
