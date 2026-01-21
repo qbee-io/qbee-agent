@@ -58,6 +58,7 @@ type SoftwareManagementBundle struct {
 
 // Execute software management bundle on the system.
 func (s SoftwareManagementBundle) Execute(ctx context.Context, srv *Service) error {
+
 	pkgManager := software.DefaultPackageManager
 
 	if pkgManager == nil {
@@ -316,7 +317,7 @@ func (s Software) restart(ctx context.Context, srv *Service) {
 	}
 
 	var output []byte
-	if output, err = utils.RunCommand(ctx, cmd); err != nil {
+	if output, err = utils.RunPrivilegedCommand(ctx, srv.elevationCommand, cmd); err != nil {
 		return
 	}
 

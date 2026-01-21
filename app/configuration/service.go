@@ -81,6 +81,9 @@ type Service struct {
 
 	// configEndpointUnreachable is true if the config endpoint is unreachable
 	configEndpointUnreachable bool
+
+	// elevationCommand is the command used to elevate privileges
+	elevationCommand []string
 }
 
 // New returns a new instance of configuration Service.
@@ -113,6 +116,12 @@ func (srv *Service) WithUserCacheDirectory(userCacheDirectory string) *Service {
 // WithMetricsService sets the metrics service for the service.
 func (srv *Service) WithMetricsService(metricsService *metrics.Service) *Service {
 	srv.metrics = metricsService
+	return srv
+}
+
+// WithElevationCommand sets the elevation command for the service.
+func (srv *Service) WithElevationCommand(elevationCommand []string) *Service {
+	srv.elevationCommand = elevationCommand
 	return srv
 }
 

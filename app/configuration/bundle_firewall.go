@@ -58,7 +58,7 @@ type FirewallBundle struct {
 func (f FirewallBundle) Execute(ctx context.Context, service *Service) error {
 	for tableName, chains := range f.Tables {
 		for chainName, chain := range chains {
-			if err := chain.execute(ctx, tableName, chainName); err != nil {
+			if err := chain.execute(ctx, tableName, chainName, service.elevationCommand); err != nil {
 				return err
 			}
 		}
@@ -121,7 +121,7 @@ type FirewallChain struct {
 }
 
 // execute a firewall chain configuration.
-func (c FirewallChain) execute(ctx context.Context, table FirewallTableName, chain FirewallChainName) error {
+func (c FirewallChain) execute(ctx context.Context, table FirewallTableName, chain FirewallChainName, elevationCmd []string) error {
 	iptablesBin, err := exec.LookPath("iptables")
 	if err != nil {
 		ReportError(ctx, err, "Firewall configuration failed.")
@@ -131,7 +131,7 @@ func (c FirewallChain) execute(ctx context.Context, table FirewallTableName, cha
 	// list current rules for a table and chain
 	listRulesCmd := []string{iptablesBin, "-t", string(table), "-S", string(chain)}
 	var currentRules []byte
-	if currentRules, err = utils.RunCommand(ctx, listRulesCmd); err != nil {
+	if currentRules, err = utils.RunPrivilegedCommand(ctx, elevationCmd, listRulesCmd); err != nil {
 		ReportError(ctx, err, "Firewall configuration failed.")
 		return err
 	}
@@ -148,7 +148,7 @@ func (c FirewallChain) execute(ctx context.Context, table FirewallTableName, cha
 
 	// flush all rules
 	flushCmd := []string{iptablesBin, "-t", string(table), "-F", string(chain)}
-	if _, err = utils.RunCommand(ctx, flushCmd); err != nil {
+	if _, err = utils.RunPrivilegedCommand(ctx, elevationCmd, flushCmd); err != nil {
 		ReportError(ctx, err, "Firewall configuration failed.")
 		return err
 	}
@@ -158,7 +158,7 @@ func (c FirewallChain) execute(ctx context.Context, table FirewallTableName, cha
 	// apply correct rules
 	for _, rule := range applyRules {
 		cmd := append([]string{iptablesBin, "-t", string(table)}, strings.Fields(rule)...)
-		if _, err = utils.RunCommand(ctx, cmd); err != nil {
+		if _, err = utils.RunPrivilegedCommand(ctx, elevationCmd, cmd); err != nil {
 			ReportError(ctx, err, "Firewall configuration failed.")
 			return err
 		}
