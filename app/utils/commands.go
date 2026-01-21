@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
 	"syscall"
@@ -29,16 +30,49 @@ import (
 
 // RunCommand runs a command and returns its output.
 func RunCommand(ctx context.Context, cmd []string) ([]byte, error) {
-	command := NewCommand(ctx, cmd)
+	return RunCommandOutput(NewCommand(ctx, cmd))
+}
 
+// NewPrivilegedCommand creates a new exec.Cmd with privilege elevation if needed.
+func NewPrivilegedCommand(ctx context.Context, elevationCmd, cmd []string) (*exec.Cmd, error) {
+	// if already root, run command directly without elevation
+	if os.Geteuid() == 0 {
+		return NewCommand(ctx, cmd), nil
+	}
+
+	// no elevation command provided, assume capabilities are set
+	if len(elevationCmd) == 0 {
+		return NewCommand(ctx, cmd), nil
+	}
+
+	if _, err := exec.LookPath(elevationCmd[0]); err != nil {
+		return nil, fmt.Errorf("%s not found: %w", elevationCmd[0], err)
+	}
+
+	cmd = append(elevationCmd, cmd...)
+	return NewCommand(ctx, cmd), nil
+}
+
+// RunPrivilegedCommand runs a command with the configured elevation command and returns its output.
+func RunPrivilegedCommand(ctx context.Context, elevationCmd, cmd []string) ([]byte, error) {
+	command, err := NewPrivilegedCommand(ctx, elevationCmd, cmd)
+	if err != nil {
+		return nil, err
+	}
+	return RunCommandOutput(command)
+}
+
+// RunCommandOutput runs a command and returns its output as a string.
+func RunCommandOutput(command *exec.Cmd) ([]byte, error) {
 	output, err := command.Output()
+
 	if err != nil {
 		exitError := new(exec.ExitError)
 		if errors.As(err, &exitError) {
-			return nil, fmt.Errorf("error running command %v: %w\n%s", cmd, err, exitError.Stderr)
+			return nil, fmt.Errorf("error running command %v: %w\n%s", command.Args, err, exitError.Stderr)
 		}
 
-		return nil, fmt.Errorf("error running command %v: %w", cmd, err)
+		return nil, fmt.Errorf("error running command %v: %w", command.Args, err)
 	}
 	return output, nil
 }
