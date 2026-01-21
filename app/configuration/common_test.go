@@ -16,10 +16,13 @@
 
 package configuration_test
 
-var privilegeTest = []struct {
+type runnerData struct {
 	name         string
 	unprivileged bool
-}{
-	{"Unprivileged", true},
-	{"Privileged", false},
+	dataDir      string
+}
+
+var privilegeTest = []runnerData{
+	{"Unprivileged", true, "/var/lib/qbee-home/var"},
+	{"Privileged", false, "/var/lib/qbee"},
 }

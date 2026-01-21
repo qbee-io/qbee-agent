@@ -18,6 +18,7 @@ package configuration_test
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -77,15 +78,15 @@ func Test_Version_Parse(t *testing.T) {
 func Test_Simple_Docker_Compose(t *testing.T) {
 	for _, tt := range privilegeTest {
 		t.Run(tt.name, func(t *testing.T) {
-			testSimpleDockerCompose(t, tt.unprivileged)
+			testSimpleDockerCompose(t, tt)
 		})
 	}
 }
 
-func testSimpleDockerCompose(t *testing.T, unprivileged bool) {
+func testSimpleDockerCompose(t *testing.T, d runnerData) {
 
 	r := runner.New(t)
-	if unprivileged {
+	if d.unprivileged {
 		r = r.WithUnprivileged()
 	}
 
@@ -110,8 +111,9 @@ func testSimpleDockerCompose(t *testing.T, unprivileged bool) {
 	}
 
 	reports, _ := configuration.ExecuteTestConfigInDocker(r, config)
+	downloadedPath := filepath.Join(d.dataDir, "app_workdir", "cache", "docker_compose", projectNameA, "compose.yml")
 	expectedReports := []string{
-		"[INFO] Successfully downloaded file file:///docker-compose/compose-nobuild.yml to /var/lib/qbee/app_workdir/cache/docker_compose/" + projectNameA + "/compose.yml",
+		"[INFO] Successfully downloaded file file:///docker-compose/compose-nobuild.yml to " + downloadedPath,
 		"[INFO] Started compose project " + projectNameA,
 	}
 
@@ -142,8 +144,9 @@ func testSimpleDockerCompose(t *testing.T, unprivileged bool) {
 	}
 
 	reports, _ = configuration.ExecuteTestConfigInDocker(r, config)
+	downloadedPath = filepath.Join(d.dataDir, "app_workdir", "cache", "docker_compose", projectNameB, "compose.yml")
 	expectedReports = []string{
-		"[INFO] Successfully downloaded file file:///docker-compose/compose-nobuild.yml to /var/lib/qbee/app_workdir/cache/docker_compose/" + projectNameB + "/compose.yml",
+		"[INFO] Successfully downloaded file file:///docker-compose/compose-nobuild.yml to " + downloadedPath,
 		"[INFO] Started compose project " + projectNameB,
 	}
 
