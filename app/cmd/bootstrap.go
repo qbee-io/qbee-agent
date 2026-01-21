@@ -21,6 +21,8 @@ import (
 	"fmt"
 
 	"go.qbee.io/agent/app/agent"
+	"go.qbee.io/agent/app/software"
+	"go.qbee.io/agent/app/utils"
 	"go.qbee.io/agent/app/utils/cmd"
 )
 
@@ -36,6 +38,9 @@ const (
 	bootstrapDeviceNameOption          = "device-name"
 	bootstrapDisableRemoteAccessOption = "disable-remote-access"
 	bootstrapCACert                    = "ca-cert"
+	bootstrapExecUser                  = "exec-user"
+	bootstrapPrivilegeElevation        = "privilege-elevation"
+	bootstrapElevationCommand          = "elevation-command"
 )
 
 var bootstrapCommand = cmd.Command{
@@ -93,9 +98,25 @@ var bootstrapCommand = cmd.Command{
 			Name: bootstrapCACert,
 			Help: "Custom CA certificate to use for TLS.",
 		},
+		{
+			Name: bootstrapExecUser,
+			Help: "User to run the agent as.",
+		},
+		{
+			Name: bootstrapPrivilegeElevation,
+			Flag: "true",
+			Help: "Use privilege elevation for commands requiring elevated privileges.",
+		},
+		{
+			Name: bootstrapElevationCommand,
+			Help: "Command to use for privilege elevation (e.g. sudo). The default \"sudo -n\" " +
+				"requires passwordless sudo or appropriate sudoers configuration (e.g. NOPASSWD for the target user).",
+			Default: "/usr/bin/sudo -n",
+		},
 	},
 
 	Target: func(opts cmd.Options) error {
+
 		cfg := &agent.Config{
 			BootstrapKey:        opts[bootstrapKeyOption],
 			Directory:           opts[mainConfigDirOption],
@@ -110,6 +131,26 @@ var bootstrapCommand = cmd.Command{
 			DeviceName:          opts[bootstrapDeviceNameOption],
 			DisableRemoteAccess: opts[bootstrapDisableRemoteAccessOption] == "true",
 			CACert:              opts[bootstrapCACert],
+			PrivilegeElevation:  opts[bootstrapPrivilegeElevation] == "true",
+		}
+
+		if cfg.PrivilegeElevation {
+			elevationCmd, err := utils.ParseCommandLine(opts[bootstrapElevationCommand])
+			if err != nil {
+				return fmt.Errorf("cannot parse elevation command: %w", err)
+			}
+
+			if err := agent.ValidateElevationCommand(elevationCmd); err != nil {
+				return fmt.Errorf("invalid elevation command: %w", err)
+			}
+
+			cfg.ElevationCommand = elevationCmd
+
+			// propagate elevation command to software package manager
+			if software.DefaultPackageManager != nil {
+				software.DefaultPackageManager.WithElevationCommand(cfg.ElevationCommand)
+			}
+
 		}
 
 		if cfg.BootstrapKey == "" {

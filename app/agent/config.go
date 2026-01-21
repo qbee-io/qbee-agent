@@ -71,17 +71,11 @@ type Config struct {
 	// CACert is the path to the CA certificate.
 	CACert string `json:"ca_cert,omitempty"`
 
-	// ExecUser is the user to run the agent as.
-	ExecUser string `json:"exec_user,omitempty"`
-
-	// UsePrivilegeElevation indicates whether to use privilege elevation for commands requiring elevated privileges.
-	UsePrivilegeElevation bool `json:"use_privilege_elevation,omitempty"`
+	// PrivilegeElevation indicates whether to use privilege elevation for commands requiring elevated privileges.
+	PrivilegeElevation bool `json:"privilege_elevation,omitempty"`
 
 	// ElevationCommand is the command to use for privilege elevation.
 	ElevationCommand []string `json:"elevation_command,omitempty"`
-
-	// skipLoadingCredentials indicates whether to skip loading credentials.
-	SkipLoadingCredentials bool `json:"-"`
 }
 
 // LoadConfig loads config from a provided config file path.
@@ -114,7 +108,7 @@ func LoadConfig(configDir, stateDir string) (*Config, error) {
 		config.DeviceHubPort = DefaultDeviceHubPort
 	}
 
-	if !config.UsePrivilegeElevation {
+	if !config.PrivilegeElevation {
 		return config, nil
 	}
 
@@ -150,6 +144,13 @@ func ValidateElevationCommand(cmd []string) error {
 	// Otherwise require an absolute path to avoid PATH-based attacks.
 	if !filepath.IsAbs(cmd[0]) {
 		return fmt.Errorf("elevation command %q must be an absolute path", cmd[0])
+	}
+
+	// check that the commmand is executable
+	if fileInfo, err := os.Stat(cmd[0]); err != nil {
+		return fmt.Errorf("cannot stat elevation command %q: %w", cmd[0], err)
+	} else if fileInfo.Mode()&0111 == 0 {
+		return fmt.Errorf("elevation command %q is not executable", cmd[0])
 	}
 
 	return nil
