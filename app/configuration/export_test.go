@@ -17,6 +17,7 @@
 package configuration
 
 import (
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -40,26 +41,31 @@ func ExecuteTestConfigInDocker(r *runner.Runner, config CommittedConfig) ([]stri
 		}
 	}
 
-	r.CreateJSON("/app/config.json", config)
+	cmd := []string{"qbee-agent", "config", "-r", "-f", "/app/config.json"}
 
-	// make the file readable for the agent
-	r.MustExec("chmod", "644", "/app/config.json")
-
+	// setup runner for unprivileged user if needed
 	if r.GetUnprivileged() {
-		// write the qbee-agent.json file to drop privileges
-		r.CreateJSON("/etc/qbee/qbee-agent.json", map[string]any{
-			"exec_user":               "qbee",
-			"use_privilege_elevation": true,
-		})
-
 		// set up access to docker socket for unprivileged user
 		gidOutput := r.MustExec("stat", "-c", "%g", "/var/run/docker.sock")
 		gid := strings.TrimSpace(string(gidOutput))
 		r.MustExec("groupadd", "-fg", gid, "docker")
 		r.MustExec("usermod", "-aG", gid, "qbee")
+
+		etcDir := "/var/lib/qbee-home/etc"
+		stateDir := "/var/lib/qbee-home/var"
+
+		r.MustExec("mkdir", "-p", etcDir)
+		r.CreateFile(filepath.Join(etcDir, "qbee-agent.json"), []byte(`{"privilege_elevation": true}`))
+		r.MustExec("chown", "-R", "qbee:qbee", etcDir)
+
+		suCmd := "qbee-agent -c " + etcDir + " -s " + stateDir + " config -r -f /app/config.json"
+		cmd = append([]string{"su", "-s", "/bin/sh", "qbee", "-c"}, suCmd)
 	}
 
-	return ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r", "-f", "/app/config.json"))
+	r.CreateJSON("/app/config.json", config)
+	r.MustExec("chmod", "644", "/app/config.json")
+
+	return ParseTestConfigExecuteOutput(r.MustExec(cmd...))
 }
 
 // ParseTestConfigExecuteOutput parses logs and reports out of the configuration-execute command output.
