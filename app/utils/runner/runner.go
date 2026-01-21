@@ -87,9 +87,21 @@ func NewWithImage(t *testing.T, image string, privileged bool) *Runner {
 
 // Runner provides a convenient way to run the agent in a container.
 type Runner struct {
-	t         *testing.T
-	container string
-	image     string
+	t                *testing.T
+	container        string
+	image            string
+	execUnPrivileged bool
+}
+
+// WithUnprivileged sets whether commands should be executed unprivileged.
+func (runner *Runner) WithUnprivileged() *Runner {
+	runner.execUnPrivileged = true
+	return runner
+}
+
+// GetUnprivileged returns whether commands are executed unprivileged.
+func (runner *Runner) GetUnprivileged() bool {
+	return runner.execUnPrivileged
 }
 
 // Close kills the container.
