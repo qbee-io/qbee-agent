@@ -50,6 +50,9 @@ type PackageManagerType string
 
 // PackageManager defines package manager interface.
 type PackageManager interface {
+	// WithElevationCommand sets elevation command for package manager.
+	WithElevationCommand(elevationCmd []string)
+
 	Type() PackageManagerType
 
 	// FileSuffix returns the file suffix for the package manager.
@@ -70,7 +73,6 @@ type PackageManager interface {
 
 	// Install ensures a package with provided version number is installed in the system.
 	Install(ctx context.Context, pkgName, version string) ([]byte, error)
-
 	// InstallLocal package.
 	InstallLocal(ctx context.Context, pkgFilePath string) ([]byte, error)
 

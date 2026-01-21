@@ -18,6 +18,7 @@ package software
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -49,7 +50,13 @@ const (
 
 // OpkgPackageManager implements PackageManager interface for Opkg based systems (OpenWRT etc.)
 type OpkgPackageManager struct {
-	lock sync.Mutex
+	lock         sync.Mutex
+	elevationCmd []string
+}
+
+// WithElevationCommand sets elevation command for package manager.
+func (opkg *OpkgPackageManager) WithElevationCommand(elevationCmd []string) {
+	opkg.elevationCmd = elevationCmd
 }
 
 // Type returns type of the package manager.
@@ -141,14 +148,19 @@ func (opkg *OpkgPackageManager) listAvailableUpdates(ctx context.Context) (map[s
 
 	updateCmd := []string{opkgCmd, "update"}
 
-	if _, err := utils.RunCommand(ctx, updateCmd); err != nil {
+	if _, err := utils.RunPrivilegedCommand(ctx, opkg.elevationCmd, updateCmd); err != nil {
 		return nil, err
 	}
 
 	cmd := []string{opkgCmd, "list-upgradable"}
 	updates := make(map[string]string)
 
-	err := utils.ForLinesInCommandOutput(ctx, cmd, func(line string) error {
+	output, err := utils.RunPrivilegedCommand(ctx, opkg.elevationCmd, cmd)
+	if err != nil {
+		return nil, fmt.Errorf("error listing available updates: %w", err)
+	}
+
+	err = utils.ForLines(bytes.NewBuffer(output), func(line string) error {
 		pkg := opkg.parseUpdateAvailableLine(line)
 		if pkg != nil {
 			updates[pkg.ID()] = pkg.Update
@@ -322,7 +334,7 @@ func (opkg *OpkgPackageManager) UpgradeAll(ctx context.Context) (int, []byte, er
 	var output []byte
 
 	for _, cmd := range cmdList {
-		tmpOut, err := utils.RunCommand(ctx, cmd)
+		tmpOut, err := utils.RunPrivilegedCommand(ctx, opkg.elevationCmd, cmd)
 		output = append(output, tmpOut...)
 		if err != nil {
 			return 0, output, fmt.Errorf("error upgrading packages: %w", err)
@@ -346,7 +358,7 @@ func (opkg *OpkgPackageManager) Install(ctx context.Context, pkgName, version st
 
 	defer cache.Delete(opkgPackagesCacheKey)
 
-	return utils.RunCommand(ctx, cmd)
+	return utils.RunPrivilegedCommand(ctx, opkg.elevationCmd, cmd)
 }
 
 // InstallLocal package.
@@ -358,7 +370,7 @@ func (opkg *OpkgPackageManager) InstallLocal(ctx context.Context, pkgFilePath st
 
 	defer cache.Delete(opkgPackagesCacheKey)
 
-	return utils.RunCommand(ctx, cmd)
+	return utils.RunPrivilegedCommand(ctx, opkg.elevationCmd, cmd)
 }
 
 // PackageArchitecture returns the architecture of the package manager
