@@ -29,6 +29,8 @@ func (srv *Service) ResetRebootAfterRun() {
 	srv.rebootAfterRun = false
 }
 
+const unprivilegedUser = "qbee-agent"
+
 // ExecuteTestConfigInDocker executes provided config inside a docker container and returns reports and logs.
 func ExecuteTestConfigInDocker(r *runner.Runner, config CommittedConfig) ([]string, []string) {
 	// if settings bundle is not set, add it to the config to stop the agent from reporting back to the device hub
@@ -49,17 +51,16 @@ func ExecuteTestConfigInDocker(r *runner.Runner, config CommittedConfig) ([]stri
 		gidOutput := r.MustExec("stat", "-c", "%g", "/var/run/docker.sock")
 		gid := strings.TrimSpace(string(gidOutput))
 		r.MustExec("groupadd", "-fg", gid, "docker")
-		r.MustExec("usermod", "-aG", gid, "qbee")
-
-		etcDir := "/var/lib/qbee-home/etc"
-		stateDir := "/var/lib/qbee-home/var"
+		r.MustExec("usermod", "-aG", gid, unprivilegedUser)
+		etcDir := filepath.Join("/var/lib", unprivilegedUser, "etc")
+		stateDir := filepath.Join("/var/lib", unprivilegedUser, "var")
 
 		r.MustExec("mkdir", "-p", etcDir)
 		r.CreateFile(filepath.Join(etcDir, "qbee-agent.json"), []byte(`{"privilege_elevation": true}`))
-		r.MustExec("chown", "-R", "qbee:qbee", etcDir)
+		r.MustExec("chown", "-R", unprivilegedUser+":"+unprivilegedUser, etcDir)
 
 		suCmd := "qbee-agent -c " + etcDir + " -s " + stateDir + " config -r -f /app/config.json"
-		cmd = append([]string{"su", "-s", "/bin/sh", "qbee", "-c"}, suCmd)
+		cmd = append([]string{"su", "-s", "/bin/sh", unprivilegedUser, "-c"}, suCmd)
 	}
 
 	r.CreateJSON("/app/config.json", config)

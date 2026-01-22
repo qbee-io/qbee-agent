@@ -60,8 +60,8 @@ COPY --from=builder /usr/sbin/qbee-agent /usr/sbin/qbee-agent
 COPY test/resources/docker-compose /docker-compose
 
 # add an unprivileged user (with subuid/subgid ranges for rootless containers)
-RUN adduser --system --group --home /var/lib/qbee-home qbee
-RUN usermod --add-subuids 100000-165535 --add-subgids 100000-165535 qbee
+RUN adduser --system --group --home /var/lib/qbee-agent qbee-agent
+RUN usermod --add-subuids 100000-165535 --add-subgids 100000-165535 qbee-agent
 
 # add sudoers file for qbee user
-COPY test/resources/common/sudoers.d/99-qbee /etc/sudoers.d/99-qbee
+COPY test/resources/common/sudoers.d/99-qbee-agent /etc/sudoers.d/99-qbee-agent

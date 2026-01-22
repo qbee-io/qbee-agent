@@ -23,6 +23,6 @@ type runnerData struct {
 }
 
 var privilegeTest = []runnerData{
-	{"Unprivileged", true, "/var/lib/qbee-home/var"},
+	{"Unprivileged", true, "/var/lib/qbee-agent/var"},
 	{"Privileged", false, "/var/lib/qbee"},
 }

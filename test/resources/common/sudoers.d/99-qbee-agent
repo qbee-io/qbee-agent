@@ -9,4 +9,4 @@ Cmnd_Alias FIREWALL_CMDS = /usr/sbin/iptables, /sbin/iptables
 Cmnd_Alias SHUTDOWN_CMDS = /usr/sbin/shutdown, /sbin/shutdown
 Cmnd_Alias USER_CMDS = /usr/sbin/useradd, /sbin/useradd, /usr/sbin/userdel, /sbin/userdel
 
-qbee ALL=(ALL) SETENV:NOPASSWD: SHUTDOWN_CMDS, OTA_CMDS, PKG_CMDS, FIREWALL_CMDS, USER_CMDS
+qbee-agent ALL=(ALL) SETENV:NOPASSWD: SHUTDOWN_CMDS, OTA_CMDS, PKG_CMDS, FIREWALL_CMDS, USER_CMDS

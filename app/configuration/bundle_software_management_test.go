@@ -215,7 +215,7 @@ func testSoftwareManagementBundleInstallPackageWithConfigFileTemplate(t *testing
 	r.CreateFile("/"+filename, fileContents)
 	r.MustExec("chmod", "644", "/"+filename)
 
-	configLocation := "/var/lib/qbee-home/config.test"
+	configLocation := "/var/lib/qbee-agent/config.test"
 
 	config := configuration.CommittedConfig{
 		Bundles: []string{configuration.BundleParameters, configuration.BundleSoftwareManagement},

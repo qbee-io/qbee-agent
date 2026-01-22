@@ -35,8 +35,8 @@ COPY --from=builder /usr/bin/qbee-agent /usr/bin/qbee-agent
 WORKDIR /app
 
 RUN yum install -y sudo
-RUN adduser --system --home-dir /var/lib/qbee-home --create-home --shell /usr/sbin/nologin qbee
-COPY test/resources/common/sudoers.d/99-qbee /etc/sudoers.d/99-qbee
+RUN adduser --system --home-dir /var/lib/qbee-agent --create-home --shell /usr/sbin/nologin qbee-agent
+COPY test/resources/common/sudoers.d/99-qbee-agent /etc/sudoers.d/99-qbee-agent
 
 CMD [ "/bin/sh" ]
 
