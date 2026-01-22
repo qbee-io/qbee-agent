@@ -64,4 +64,4 @@ RUN adduser --system --group --home /var/lib/qbee-agent qbee-agent
 RUN usermod --add-subuids 100000-165535 --add-subgids 100000-165535 qbee-agent
 
 # add sudoers file for qbee user
-COPY test/resources/common/sudoers.d/99-qbee-agent /etc/sudoers.d/99-qbee-agent
+COPY package/share/sudoers/99-qbee-agent /etc/sudoers.d/99-qbee-agent

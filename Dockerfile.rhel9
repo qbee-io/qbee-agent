@@ -36,7 +36,7 @@ WORKDIR /app
 
 RUN yum install -y sudo
 RUN adduser --system --home-dir /var/lib/qbee-agent --create-home --shell /usr/sbin/nologin qbee-agent
-COPY test/resources/common/sudoers.d/99-qbee-agent /etc/sudoers.d/99-qbee-agent
+COPY package/share/sudoers/99-qbee-agent /etc/sudoers.d/99-qbee-agent
 
 CMD [ "/bin/sh" ]
 
