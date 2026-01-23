@@ -38,7 +38,6 @@ const (
 	bootstrapDeviceNameOption          = "device-name"
 	bootstrapDisableRemoteAccessOption = "disable-remote-access"
 	bootstrapCACert                    = "ca-cert"
-	bootstrapExecUser                  = "exec-user"
 	bootstrapPrivilegeElevation        = "privilege-elevation"
 	bootstrapElevationCommand          = "elevation-command"
 )
@@ -97,10 +96,6 @@ var bootstrapCommand = cmd.Command{
 		{
 			Name: bootstrapCACert,
 			Help: "Custom CA certificate to use for TLS.",
-		},
-		{
-			Name: bootstrapExecUser,
-			Help: "User to run the agent as.",
 		},
 		{
 			Name: bootstrapPrivilegeElevation,
