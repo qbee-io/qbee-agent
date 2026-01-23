@@ -146,7 +146,7 @@ func ValidateElevationCommand(cmd []string) error {
 		return fmt.Errorf("elevation command %q must be an absolute path", cmd[0])
 	}
 
-	// check that the commmand is executable
+	// check that the command is executable
 	if fileInfo, err := os.Stat(cmd[0]); err != nil {
 		return fmt.Errorf("cannot stat elevation command %q: %w", cmd[0], err)
 	} else if fileInfo.Mode()&0111 == 0 {

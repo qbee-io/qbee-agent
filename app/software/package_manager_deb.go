@@ -199,16 +199,19 @@ func (deb *DebianPackageManager) listInstalledPackages(ctx context.Context) ([]P
 func (deb *DebianPackageManager) listAvailableUpdates(ctx context.Context) (map[string]string, error) {
 	updateCmd := []string{aptGetPath, "update"}
 
+	// update needs to be run with elevated privileges
 	if _, err := utils.RunPrivilegedCommand(ctx, deb.elevationCmd, updateCmd); err != nil {
 		return nil, err
 	}
 
 	updates := make(map[string]string)
+
 	cmd := []string{aptGetPath, "--just-print", "--with-new-pkgs", "upgrade"}
 
 	// only process lines matching the following format:
 	// Inst libsystemd0 [232-25+deb9u13] (232-25+deb9u14 Debian-Security:9/oldoldstable [amd64])
-	output, err := utils.RunPrivilegedCommand(ctx, deb.elevationCmd, cmd)
+	// this does not need to be run with elevated privileges
+	output, err := utils.RunCommand(ctx, cmd)
 	if err != nil {
 		return nil, err
 	}
@@ -370,7 +373,7 @@ func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath s
 		return dpkgOutput, err
 	}
 
-	aptCmd.Env = append(aptCmd.Env, "DEBIAN_FRONTEND=noninteractive")
+	aptCmd.Env = []string{"DEBIAN_FRONTEND=noninteractive"}
 
 	aptOutput, err := utils.RunCommandOutput(aptCmd)
 	return append(dpkgOutput, aptOutput...), err
@@ -457,6 +460,6 @@ func (deb *DebianPackageManager) newAptGetCommand(ctx context.Context, cmd []str
 		return nil, err
 	}
 
-	aptCmd.Env = append(aptCmd.Env, "DEBIAN_FRONTEND=noninteractive")
+	aptCmd.Env = []string{"DEBIAN_FRONTEND=noninteractive"}
 	return aptCmd, nil
 }

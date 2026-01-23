@@ -9,7 +9,7 @@ Cmnd_Alias APT_GET_CMDS = /usr/bin/apt-get, /bin/apt-get
 Defaults!APT_GET_CMDS env_keep+=DEBIAN_FRONTEND
 Cmnd_Alias PKG_CMDS = APT_GET_CMDS, YUM_CMDS, RPM_CMDS, DPKG_CMDS
 
-# Firewall managment
+# Firewall management
 Cmnd_Alias FIREWALL_CMDS = /usr/sbin/iptables, /sbin/iptables
 
 # A/B updates (rauc) and connectivity watchdog
