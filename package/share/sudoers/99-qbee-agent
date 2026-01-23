@@ -22,6 +22,6 @@ Cmnd_Alias OTA_CMDS = /usr/bin/rauc
 Cmnd_Alias USER_CMDS = /usr/sbin/useradd, /sbin/useradd, /usr/sbin/userdel, /sbin/userdel
 
 # Suppress logging of sudo executions for user
-Defaults:qbee-agent !syslog
+Defaults:qbee-agent !syslog, env_keep+="HTTP_PROXY HTTPS_PROXY http_proxy https_proxy NO_PROXY no_proxy"
 
-qbee-agent ALL=(ALL) SETENV:NOPASSWD: SHUTDOWN_CMDS, OTA_CMDS, PKG_CMDS, FIREWALL_CMDS, USER_CMDS
+qbee-agent ALL=(ALL) NOPASSWD: SHUTDOWN_CMDS, OTA_CMDS, PKG_CMDS, FIREWALL_CMDS, USER_CMDS
