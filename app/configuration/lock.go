@@ -25,24 +25,21 @@ import (
 
 const lockFileName = "config.lock"
 
-// LockFileDir returns the directory where the lock file is stored.
-func (srv *Service) LockFileDir() string {
+// lockFilePath returns the path to the lock file.
+func (srv *Service) lockFilePath() string {
+
 	tmpfsDirs := []string{"/run", "/var/run"}
+
 	for _, dir := range tmpfsDirs {
 		if _, err := os.Stat(dir); err == nil {
 			lockfileDir := filepath.Join(dir, "qbee")
 			if err := os.MkdirAll(lockfileDir, 0700); err == nil {
-				return lockfileDir
+				return filepath.Join(lockfileDir, lockFileName)
 			}
 		}
 	}
 	// no tmpfs dirs found, use app directory
-	return srv.appDirectory
-}
-
-// lockFilePath returns the path to the lock file.
-func (srv *Service) lockFilePath() string {
-	return filepath.Join(srv.LockFileDir(), lockFileName)
+	return filepath.Join(srv.appDirectory, lockFileName)
 }
 
 // acquireLock for the configuration execution.
