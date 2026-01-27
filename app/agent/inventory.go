@@ -206,7 +206,7 @@ func (agent *Agent) doProcessInventory(ctx context.Context) error {
 
 // doRaucInventory collects RAUC inventory - if enabled - and delivers it to the device hub API.
 func (agent *Agent) doRaucInventory(ctx context.Context) error {
-	raucInventory, err := inventory.CollectRaucInventory(ctx, agent.cfg.ElevationCommand)
+	raucInventory, err := inventory.CollectRaucInventory(ctx)
 	if err != nil {
 		return err
 	}

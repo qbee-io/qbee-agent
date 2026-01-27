@@ -297,10 +297,7 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 
 	agent.Inventory = inventory.New(agent.api)
 	agent.Metrics = metrics.New(agent.api)
-	agent.Configuration = configuration.New(agent.api, appDir, cacheDir).
-		WithURLSigner(agent).
-		WithMetricsService(agent.Metrics).
-		WithElevationCommand(cfg.ElevationCommand)
+	agent.Configuration = configuration.New(agent.api, appDir, cacheDir).WithURLSigner(agent).WithMetricsService(agent.Metrics)
 	agent.remoteAccess = remoteaccess.New().
 		WithConfigReloadNotifier(agent.update)
 	agent.loopTicker = time.NewTicker(agent.Configuration.RunInterval())
