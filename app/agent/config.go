@@ -22,7 +22,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"go.qbee.io/agent/app/software"
 	"go.qbee.io/agent/app/utils"
 )
 
@@ -124,11 +123,6 @@ func LoadConfig(configDir, stateDir string) (*Config, error) {
 
 	if err := ValidateElevationCommand(config.ElevationCommand); err != nil {
 		return nil, err
-	}
-
-	// propagate elevation command to software package manager
-	if software.DefaultPackageManager != nil {
-		software.DefaultPackageManager.WithElevationCommand(config.ElevationCommand)
 	}
 
 	return config, nil

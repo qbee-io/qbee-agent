@@ -21,6 +21,7 @@ import (
 
 	"go.qbee.io/agent/app/agent"
 	"go.qbee.io/agent/app/log"
+	"go.qbee.io/agent/app/utils"
 	"go.qbee.io/agent/app/utils/cmd"
 )
 
@@ -50,17 +51,19 @@ var startCommand = cmd.Command{
 			return err
 		}
 
+		ctxWithElevationCommand := context.WithValue(ctx, utils.ContextKeyElevationCommand, cfg.ElevationCommand)
+
 		if cfg.BootstrapKey != "" {
 			log.Infof("Found bootstrap key, bootstrapping device.")
-			if err := agent.Bootstrap(ctx, cfg); err != nil {
+			if err := agent.Bootstrap(ctxWithElevationCommand, cfg); err != nil {
 				return err
 			}
 		}
 
 		if runOnce {
-			return agent.RunOnce(ctx, cfg)
+			return agent.RunOnce(ctxWithElevationCommand, cfg)
 		}
 
-		return agent.Start(ctx, cfg)
+		return agent.Start(ctxWithElevationCommand, cfg)
 	},
 }

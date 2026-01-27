@@ -28,15 +28,32 @@ import (
 	"time"
 )
 
+type cmdCtxKey int
+
+const (
+	ContextKeyElevationCommand cmdCtxKey = iota
+)
+
 // RunCommand runs a command and returns its output.
 func RunCommand(ctx context.Context, cmd []string) ([]byte, error) {
 	return RunCommandOutput(NewCommand(ctx, cmd))
 }
 
 // NewPrivilegedCommand creates a new exec.Cmd with privilege elevation if needed.
-func NewPrivilegedCommand(ctx context.Context, elevationCmd, cmd []string) (*exec.Cmd, error) {
+func NewPrivilegedCommand(ctx context.Context, cmd []string) (*exec.Cmd, error) {
 	// if already root, run command directly without elevation
 	if os.Geteuid() == 0 {
+		return NewCommand(ctx, cmd), nil
+	}
+
+	// get elevation command from context if not provided
+	elevationCmdFromCtx := ctx.Value(ContextKeyElevationCommand)
+	if elevationCmdFromCtx == nil {
+		return NewCommand(ctx, cmd), nil
+	}
+	// assert type, must be []string, return regular command if not
+	elevationCmd, ok := elevationCmdFromCtx.([]string)
+	if !ok {
 		return NewCommand(ctx, cmd), nil
 	}
 
@@ -45,6 +62,7 @@ func NewPrivilegedCommand(ctx context.Context, elevationCmd, cmd []string) (*exe
 		return NewCommand(ctx, cmd), nil
 	}
 
+	// check if elevation command exists
 	if _, err := exec.LookPath(elevationCmd[0]); err != nil {
 		return nil, fmt.Errorf("%s not found: %w", elevationCmd[0], err)
 	}
@@ -54,8 +72,8 @@ func NewPrivilegedCommand(ctx context.Context, elevationCmd, cmd []string) (*exe
 }
 
 // RunPrivilegedCommand runs a command with the configured elevation command and returns its output.
-func RunPrivilegedCommand(ctx context.Context, elevationCmd, cmd []string) ([]byte, error) {
-	command, err := NewPrivilegedCommand(ctx, elevationCmd, cmd)
+func RunPrivilegedCommand(ctx context.Context, cmd []string) ([]byte, error) {
+	command, err := NewPrivilegedCommand(ctx, cmd)
 	if err != nil {
 		return nil, err
 	}

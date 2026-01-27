@@ -45,13 +45,7 @@ const (
 
 // RpmPackageManager implements PackageManager interface for RPM based systems (Fedora, CentOS etc.)
 type RpmPackageManager struct {
-	lock         sync.Mutex
-	elevationCmd []string
-}
-
-// WithElevationCommand sets elevation command for package manager.
-func (rpm *RpmPackageManager) WithElevationCommand(elevationCmd []string) {
-	rpm.elevationCmd = elevationCmd
+	lock sync.Mutex
 }
 
 // Type returns type of the package manager.
@@ -161,12 +155,11 @@ func (rpm *RpmPackageManager) listAvailableUpdates(ctx context.Context) (map[str
 
 	updates := make(map[string]string)
 
-	if len(rpm.elevationCmd) > 0 {
-		cmd = append(rpm.elevationCmd, cmd...)
-	}
-
 	// yum check-updates returns 100 when there are updates available
-	cmdProc := utils.NewCommand(ctx, cmd)
+	cmdProc, err := utils.NewPrivilegedCommand(ctx, cmd)
+	if err != nil {
+		return nil, fmt.Errorf("error creating command %v: %w", cmd, err)
+	}
 
 	output, err := cmdProc.CombinedOutput()
 	// no error, no updates
@@ -207,7 +200,7 @@ func (rpm *RpmPackageManager) listInstalledPackages(ctx context.Context) ([]Pack
 
 	installedPackages := make([]Package, 0)
 
-	output, err := utils.RunPrivilegedCommand(ctx, rpm.elevationCmd, cmd)
+	output, err := utils.RunPrivilegedCommand(ctx, cmd)
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +261,7 @@ func (rpm *RpmPackageManager) UpgradeAll(ctx context.Context) (int, []byte, erro
 	}
 
 	var output []byte
-	if output, err = utils.RunPrivilegedCommand(ctx, rpm.elevationCmd, upgradeCommand); err != nil {
+	if output, err = utils.RunPrivilegedCommand(ctx, upgradeCommand); err != nil {
 		return 0, output, err
 	}
 
@@ -296,7 +289,7 @@ func (rpm *RpmPackageManager) Install(ctx context.Context, pkgName, version stri
 		pkgName,
 	}
 
-	return utils.RunPrivilegedCommand(ctx, rpm.elevationCmd, installCommand)
+	return utils.RunPrivilegedCommand(ctx, installCommand)
 }
 
 // InstallLocal package.
@@ -314,18 +307,18 @@ func (rpm *RpmPackageManager) InstallLocal(ctx context.Context, pkgFilePath stri
 		pkgFilePath,
 	}
 
-	return utils.RunPrivilegedCommand(ctx, rpm.elevationCmd, installCmd)
+	return utils.RunPrivilegedCommand(ctx, installCmd)
 }
 
 // PackageArchitecture returns the architecture of the package manager
-func (rpm *RpmPackageManager) PackageArchitecture() (string, error) {
+func (rpm *RpmPackageManager) PackageArchitecture(ctx context.Context) (string, error) {
 	if cachedArch, ok := cache.Get(rpmPkgArchCacheKey); ok {
 		return cachedArch.(string), nil
 	}
 
 	cmd := []string{rpmPath, "--eval", "%{_arch}"}
 
-	output, err := utils.RunPrivilegedCommand(context.Background(), rpm.elevationCmd, cmd)
+	output, err := utils.RunCommand(ctx, cmd)
 	if err != nil {
 		return "", err
 	}
@@ -347,7 +340,7 @@ func (rpm *RpmPackageManager) ParsePackageFile(ctx context.Context, filePath str
 		filePath,
 	}
 
-	output, err := utils.RunPrivilegedCommand(ctx, rpm.elevationCmd, cmd)
+	output, err := utils.RunCommand(ctx, cmd)
 
 	if err != nil {
 		return nil, err
@@ -367,8 +360,8 @@ func (rpm *RpmPackageManager) ParsePackageFile(ctx context.Context, filePath str
 }
 
 // IsSupportedArchitecture returns true if architecture is supported by the system
-func (rpm *RpmPackageManager) IsSupportedArchitecture(arch string) error {
-	mainArch, err := rpm.PackageArchitecture()
+func (rpm *RpmPackageManager) IsSupportedArchitecture(ctx context.Context, arch string) error {
+	mainArch, err := rpm.PackageArchitecture(ctx)
 	if err != nil {
 		return err
 	}

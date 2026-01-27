@@ -70,11 +70,11 @@ func (u UsersBundle) Execute(ctx context.Context, service *Service) error {
 		userExists := usersInventory.GetUser(user.Username) != nil
 
 		if user.Action == UserAdd && !userExists {
-			_ = u.AddUser(ctx, user.Username, service.elevationCommand)
+			_ = u.AddUser(ctx, user.Username)
 		}
 
 		if user.Action == UserRemove && userExists {
-			_ = u.RemoveUser(ctx, user.Username, service.elevationCommand)
+			_ = u.RemoveUser(ctx, user.Username)
 		}
 	}
 
@@ -87,8 +87,8 @@ const (
 )
 
 // AddUser to the system.
-func (u UsersBundle) AddUser(ctx context.Context, username string, elevationCmd []string) error {
-	output, err := utils.RunPrivilegedCommand(ctx, elevationCmd, []string{
+func (u UsersBundle) AddUser(ctx context.Context, username string) error {
+	output, err := utils.RunPrivilegedCommand(ctx, []string{
 		userAddCmd,
 		"--comment", fmt.Sprintf("%s,,,,User added by qbee", username),
 		"--create-home",
@@ -107,13 +107,13 @@ func (u UsersBundle) AddUser(ctx context.Context, username string, elevationCmd 
 }
 
 // RemoveUser from the system along with its home directory and the user's mail spool.
-func (u UsersBundle) RemoveUser(ctx context.Context, username string, elevationCmd []string) error {
+func (u UsersBundle) RemoveUser(ctx context.Context, username string) error {
 	if username == "root" {
 		ReportWarning(ctx, nil, "Cannot remove administrative user '%s'", username)
 		return fmt.Errorf("cannot delete root user")
 	}
 
-	output, err := utils.RunPrivilegedCommand(ctx, elevationCmd, []string{
+	output, err := utils.RunPrivilegedCommand(ctx, []string{
 		userDeleteCmd,
 		"--remove",
 		username,

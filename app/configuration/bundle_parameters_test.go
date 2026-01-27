@@ -49,7 +49,7 @@ func Test_resolveParameters(t *testing.T) {
 	hostname, err := os.Hostname()
 	assert.NoError(t, err)
 
-	pkgArch, err := software.DefaultPackageManager.PackageArchitecture()
+	pkgArch, err := software.DefaultPackageManager.PackageArchitecture(context.Background())
 	assert.NoError(t, err)
 
 	pkgType := software.DefaultPackageManager.Type()

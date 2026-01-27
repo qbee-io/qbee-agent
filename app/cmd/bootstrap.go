@@ -21,7 +21,6 @@ import (
 	"fmt"
 
 	"go.qbee.io/agent/app/agent"
-	"go.qbee.io/agent/app/software"
 	"go.qbee.io/agent/app/utils"
 	"go.qbee.io/agent/app/utils/cmd"
 )
@@ -129,6 +128,8 @@ var bootstrapCommand = cmd.Command{
 			PrivilegeElevation:  opts[bootstrapPrivilegeElevation] == "true",
 		}
 
+		ctx := context.Background()
+
 		if cfg.PrivilegeElevation {
 			elevationCmd, err := utils.ParseCommandLine(opts[bootstrapElevationCommand])
 			if err != nil {
@@ -141,20 +142,14 @@ var bootstrapCommand = cmd.Command{
 
 			cfg.ElevationCommand = elevationCmd
 
-			// propagate elevation command to software package manager
-			if software.DefaultPackageManager != nil {
-				software.DefaultPackageManager.WithElevationCommand(cfg.ElevationCommand)
-			}
-
 		}
 
 		if cfg.BootstrapKey == "" {
 			return fmt.Errorf("bootstrap key (-k) is required")
 		}
 
-		ctx := context.Background()
-
-		if err := agent.Bootstrap(ctx, cfg); err != nil {
+		ctxWithElevationCommand := context.WithValue(ctx, utils.ContextKeyElevationCommand, cfg.ElevationCommand)
+		if err := agent.Bootstrap(ctxWithElevationCommand, cfg); err != nil {
 			return fmt.Errorf("bootstrap error: %w", err)
 		}
 

@@ -82,7 +82,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return nil
 	}
 
-	raucStatus, err := image.GetRaucStatus(ctx, service.elevationCommand)
+	raucStatus, err := image.GetRaucStatus(ctx)
 	if err != nil {
 		ReportError(ctx, err, "Failed to get RAUC status")
 		return err
@@ -102,7 +102,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return nil
 	}
 
-	raucBundleInfo, err := r.getRaucBundleInfo(ctx, raucPath, service.elevationCommand)
+	raucBundleInfo, err := r.getRaucBundleInfo(ctx, raucPath)
 	if err != nil {
 		ReportError(
 			ctx,
@@ -129,7 +129,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	}
 
 	raucInstallCmd := []string{"rauc", "install", raucPath}
-	output, err := utils.RunPrivilegedCommand(ctx, service.elevationCommand, raucInstallCmd)
+	output, err := utils.RunPrivilegedCommand(ctx, raucInstallCmd)
 
 	if err != nil {
 		ReportError(
@@ -190,10 +190,10 @@ type RaucBundleInfo struct {
 	Images []map[string]RaucImageInfo `json:"images"`
 }
 
-func (r RaucBundle) getRaucBundleInfo(ctx context.Context, url string, elevationCmd []string) (*RaucBundleInfo, error) {
+func (r RaucBundle) getRaucBundleInfo(ctx context.Context, url string) (*RaucBundleInfo, error) {
 
 	raucInfoCmd := []string{"rauc", "info", "--output-format", "json", url}
-	raucInfoBytes, err := utils.RunPrivilegedCommand(ctx, elevationCmd, raucInfoCmd)
+	raucInfoBytes, err := utils.RunPrivilegedCommand(ctx, raucInfoCmd)
 
 	if err != nil {
 		return nil, err

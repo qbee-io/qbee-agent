@@ -41,5 +41,5 @@ func CollectRaucInventory(ctx context.Context, elevationCmd []string) (*image.Ra
 		return nil, nil
 	}
 
-	return image.GetRaucStatus(ctx, elevationCmd)
+	return image.GetRaucStatus(ctx)
 }

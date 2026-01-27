@@ -24,6 +24,7 @@ import (
 
 	"go.qbee.io/agent/app/agent"
 	"go.qbee.io/agent/app/inventory"
+	"go.qbee.io/agent/app/utils"
 	"go.qbee.io/agent/app/utils/cmd"
 )
 
@@ -100,6 +101,7 @@ var inventoryCommand = cmd.Command{
 			return fmt.Errorf("error initializing the agent: %w", err)
 		}
 
-		return deviceAgent.Inventory.Send(ctx, inventoryType, inventoryData)
+		ctxWithElevationCommand := context.WithValue(ctx, utils.ContextKeyElevationCommand, cfg.ElevationCommand)
+		return deviceAgent.Inventory.Send(ctxWithElevationCommand, inventoryType, inventoryData)
 	},
 }

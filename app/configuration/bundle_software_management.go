@@ -204,7 +204,7 @@ func (s Software) installFromFile(ctx context.Context, srv *Service, pkgManager 
 	}
 
 	// check package architecture
-	if err := pkgManager.IsSupportedArchitecture(pkgInfo.Architecture); err != nil {
+	if err := pkgManager.IsSupportedArchitecture(ctx, pkgInfo.Architecture); err != nil {
 		ReportError(ctx, err, "Unable to determine supported architecture for package %s", pkgInfo.Name)
 		return false, err
 	}
@@ -317,7 +317,7 @@ func (s Software) restart(ctx context.Context, srv *Service) {
 	}
 
 	var output []byte
-	if output, err = utils.RunPrivilegedCommand(ctx, srv.elevationCommand, cmd); err != nil {
+	if output, err = utils.RunPrivilegedCommand(ctx, cmd); err != nil {
 		return
 	}
 

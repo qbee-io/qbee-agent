@@ -50,9 +50,7 @@ type PackageManagerType string
 
 // PackageManager defines package manager interface.
 type PackageManager interface {
-	// WithElevationCommand sets elevation command for package manager.
-	WithElevationCommand(elevationCmd []string)
-
+	// Type returns the package manager type.
 	Type() PackageManagerType
 
 	// FileSuffix returns the file suffix for the package manager.
@@ -77,10 +75,10 @@ type PackageManager interface {
 	InstallLocal(ctx context.Context, pkgFilePath string) ([]byte, error)
 
 	// PackageArchitecture returns the architecture of the package manager
-	PackageArchitecture() (string, error)
+	PackageArchitecture(ctx context.Context) (string, error)
 
 	// IsSupportedArchitecture returns true if architecture is supported by the system
-	IsSupportedArchitecture(arch string) error
+	IsSupportedArchitecture(ctx context.Context, arch string) error
 
 	// ParsePackageFile returns a package from a file path.
 	ParsePackageFile(ctx context.Context, filePath string) (*Package, error)

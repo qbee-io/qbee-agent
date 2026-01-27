@@ -52,12 +52,6 @@ const (
 type DebianPackageManager struct {
 	supportsAllowDowngradesFlag bool
 	lock                        sync.Mutex
-	elevationCmd                []string
-}
-
-// WithElevationCommand sets elevation command for package manager.
-func (deb *DebianPackageManager) WithElevationCommand(elevationCmd []string) {
-	deb.elevationCmd = elevationCmd
 }
 
 // Type returns type of the package manager.
@@ -161,7 +155,7 @@ func (deb *DebianPackageManager) listInstalledPackages(ctx context.Context) ([]P
 
 	installedPackages := make([]Package, 0)
 
-	output, err := utils.RunPrivilegedCommand(ctx, deb.elevationCmd, cmd)
+	output, err := utils.RunPrivilegedCommand(ctx, cmd)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +194,7 @@ func (deb *DebianPackageManager) listAvailableUpdates(ctx context.Context) (map[
 	updateCmd := []string{aptGetPath, "update"}
 
 	// update needs to be run with elevated privileges
-	if _, err := utils.RunPrivilegedCommand(ctx, deb.elevationCmd, updateCmd); err != nil {
+	if _, err := utils.RunPrivilegedCommand(ctx, updateCmd); err != nil {
 		return nil, err
 	}
 
@@ -357,7 +351,7 @@ func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath s
 	defer cache.Delete(debianPackagesCacheKey)
 
 	installCommand := []string{dpkgPath, "-i", pkgFilePath}
-	dpkgOutput, err := utils.RunPrivilegedCommand(ctx, deb.elevationCmd, installCommand)
+	dpkgOutput, err := utils.RunPrivilegedCommand(ctx, installCommand)
 
 	// dpkg succeeded, return
 	if err == nil {
@@ -380,7 +374,7 @@ func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath s
 }
 
 // PackageArchitecture returns the architecture of the package manager
-func (deb *DebianPackageManager) PackageArchitecture() (string, error) {
+func (deb *DebianPackageManager) PackageArchitecture(ctx context.Context) (string, error) {
 
 	if cachedArch, ok := cache.Get(debianPkgArchCacheKey); ok {
 		return cachedArch.(string), nil
@@ -388,7 +382,7 @@ func (deb *DebianPackageManager) PackageArchitecture() (string, error) {
 
 	cmd := []string{dpkgPath, "--print-architecture"}
 
-	output, err := utils.RunPrivilegedCommand(context.Background(), deb.elevationCmd, cmd)
+	output, err := utils.RunCommand(ctx, cmd)
 	if err != nil {
 		return "", err
 	}
@@ -404,7 +398,7 @@ func (deb *DebianPackageManager) ParsePackageFile(ctx context.Context, pkgFilePa
 
 	pkg := new(Package)
 
-	output, err := utils.RunPrivilegedCommand(ctx, deb.elevationCmd, cmd)
+	output, err := utils.RunCommand(ctx, cmd)
 	if err != nil {
 		return nil, err
 	}
@@ -438,8 +432,8 @@ func (deb *DebianPackageManager) ParsePackageFile(ctx context.Context, pkgFilePa
 }
 
 // IsSupportedArchitecture returns true if architecture is supported by the system
-func (deb *DebianPackageManager) IsSupportedArchitecture(arch string) error {
-	mainArch, err := deb.PackageArchitecture()
+func (deb *DebianPackageManager) IsSupportedArchitecture(ctx context.Context, arch string) error {
+	mainArch, err := deb.PackageArchitecture(ctx)
 	if err != nil {
 		return err
 	}
@@ -455,7 +449,7 @@ func (deb *DebianPackageManager) IsSupportedArchitecture(arch string) error {
 }
 
 func (deb *DebianPackageManager) newAptGetCommand(ctx context.Context, cmd []string) (*exec.Cmd, error) {
-	aptCmd, err := utils.NewPrivilegedCommand(ctx, deb.elevationCmd, cmd)
+	aptCmd, err := utils.NewPrivilegedCommand(ctx, cmd)
 	if err != nil {
 		return nil, err
 	}

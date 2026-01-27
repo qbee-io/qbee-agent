@@ -24,6 +24,7 @@ import (
 
 	"go.qbee.io/agent/app/agent"
 	"go.qbee.io/agent/app/configuration"
+	"go.qbee.io/agent/app/utils"
 	"go.qbee.io/agent/app/utils/cmd"
 )
 
@@ -111,6 +112,7 @@ var configCommand = cmd.Command{
 			deviceAgent.Configuration.EnableConsoleReporting()
 		}
 
-		return deviceAgent.Configuration.Execute(ctx, configurationData)
+		ctxWithElevationCommand := context.WithValue(ctx, utils.ContextKeyElevationCommand, cfg.ElevationCommand)
+		return deviceAgent.Configuration.Execute(ctxWithElevationCommand, configurationData)
 	},
 }

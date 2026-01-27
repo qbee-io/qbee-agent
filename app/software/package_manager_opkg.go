@@ -50,13 +50,7 @@ const (
 
 // OpkgPackageManager implements PackageManager interface for Opkg based systems (OpenWRT etc.)
 type OpkgPackageManager struct {
-	lock         sync.Mutex
-	elevationCmd []string
-}
-
-// WithElevationCommand sets elevation command for package manager.
-func (opkg *OpkgPackageManager) WithElevationCommand(elevationCmd []string) {
-	opkg.elevationCmd = elevationCmd
+	lock sync.Mutex
 }
 
 // Type returns type of the package manager.
@@ -148,14 +142,14 @@ func (opkg *OpkgPackageManager) listAvailableUpdates(ctx context.Context) (map[s
 
 	updateCmd := []string{opkgCmd, "update"}
 
-	if _, err := utils.RunPrivilegedCommand(ctx, opkg.elevationCmd, updateCmd); err != nil {
+	if _, err := utils.RunPrivilegedCommand(ctx, updateCmd); err != nil {
 		return nil, err
 	}
 
 	cmd := []string{opkgCmd, "list-upgradable"}
 	updates := make(map[string]string)
 
-	output, err := utils.RunPrivilegedCommand(ctx, opkg.elevationCmd, cmd)
+	output, err := utils.RunPrivilegedCommand(ctx, cmd)
 	if err != nil {
 		return nil, fmt.Errorf("error listing available updates: %w", err)
 	}
@@ -334,7 +328,7 @@ func (opkg *OpkgPackageManager) UpgradeAll(ctx context.Context) (int, []byte, er
 	var output []byte
 
 	for _, cmd := range cmdList {
-		tmpOut, err := utils.RunPrivilegedCommand(ctx, opkg.elevationCmd, cmd)
+		tmpOut, err := utils.RunPrivilegedCommand(ctx, cmd)
 		output = append(output, tmpOut...)
 		if err != nil {
 			return 0, output, fmt.Errorf("error upgrading packages: %w", err)
@@ -358,7 +352,7 @@ func (opkg *OpkgPackageManager) Install(ctx context.Context, pkgName, version st
 
 	defer cache.Delete(opkgPackagesCacheKey)
 
-	return utils.RunPrivilegedCommand(ctx, opkg.elevationCmd, cmd)
+	return utils.RunPrivilegedCommand(ctx, cmd)
 }
 
 // InstallLocal package.
@@ -370,11 +364,11 @@ func (opkg *OpkgPackageManager) InstallLocal(ctx context.Context, pkgFilePath st
 
 	defer cache.Delete(opkgPackagesCacheKey)
 
-	return utils.RunPrivilegedCommand(ctx, opkg.elevationCmd, cmd)
+	return utils.RunPrivilegedCommand(ctx, cmd)
 }
 
 // PackageArchitecture returns the architecture of the package manager
-func (opkg *OpkgPackageManager) PackageArchitecture() (string, error) {
+func (opkg *OpkgPackageManager) PackageArchitecture(ctx context.Context) (string, error) {
 	if cachedArch, ok := cache.Get(opkgPkgArchCacheKey); ok {
 		return cachedArch.(string), nil
 	}
@@ -383,7 +377,12 @@ func (opkg *OpkgPackageManager) PackageArchitecture() (string, error) {
 
 	var arch string
 
-	err := utils.ForLinesInCommandOutput(context.Background(), cmd, func(line string) error {
+	output, err := utils.RunPrivilegedCommand(ctx, cmd)
+	if err != nil {
+		return "", fmt.Errorf("error getting package architecture: %w", err)
+	}
+
+	err = utils.ForLines(bytes.NewBuffer(output), func(line string) error {
 		fields := strings.Fields(line)
 
 		if len(fields) < 3 {
@@ -427,8 +426,8 @@ func (opkg *OpkgPackageManager) ParsePackageFile(ctx context.Context, pkgFilePat
 }
 
 // IsSupportedArchitecture returns true if architecture is supported by the system
-func (opkg *OpkgPackageManager) IsSupportedArchitecture(arch string) error {
-	mainArch, err := opkg.PackageArchitecture()
+func (opkg *OpkgPackageManager) IsSupportedArchitecture(ctx context.Context, arch string) error {
+	mainArch, err := opkg.PackageArchitecture(ctx)
 	if err != nil {
 		return err
 	}
