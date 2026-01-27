@@ -44,26 +44,24 @@ var startCommand = cmd.Command{
 	Target: func(opts cmd.Options) error {
 		runOnce := opts[startOnceOption] == "true"
 
-		ctx := context.Background()
-
 		cfg, err := loadConfig(opts)
 		if err != nil {
 			return err
 		}
 
-		ctxWithElevationCommand := context.WithValue(ctx, utils.ContextKeyElevationCommand, cfg.ElevationCommand)
+		ctx := context.WithValue(context.Background(), utils.ContextKeyElevationCommand, cfg.ElevationCommand)
 
 		if cfg.BootstrapKey != "" {
 			log.Infof("Found bootstrap key, bootstrapping device.")
-			if err := agent.Bootstrap(ctxWithElevationCommand, cfg); err != nil {
+			if err := agent.Bootstrap(ctx, cfg); err != nil {
 				return err
 			}
 		}
 
 		if runOnce {
-			return agent.RunOnce(ctxWithElevationCommand, cfg)
+			return agent.RunOnce(ctx, cfg)
 		}
 
-		return agent.Start(ctxWithElevationCommand, cfg)
+		return agent.Start(ctx, cfg)
 	},
 }

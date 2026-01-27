@@ -128,8 +128,6 @@ var bootstrapCommand = cmd.Command{
 			PrivilegeElevation:  opts[bootstrapPrivilegeElevation] == "true",
 		}
 
-		ctx := context.Background()
-
 		if cfg.PrivilegeElevation {
 			elevationCmd, err := utils.ParseCommandLine(opts[bootstrapElevationCommand])
 			if err != nil {
@@ -148,8 +146,8 @@ var bootstrapCommand = cmd.Command{
 			return fmt.Errorf("bootstrap key (-k) is required")
 		}
 
-		ctxWithElevationCommand := context.WithValue(ctx, utils.ContextKeyElevationCommand, cfg.ElevationCommand)
-		if err := agent.Bootstrap(ctxWithElevationCommand, cfg); err != nil {
+		ctx := context.WithValue(context.Background(), utils.ContextKeyElevationCommand, cfg.ElevationCommand)
+		if err := agent.Bootstrap(ctx, cfg); err != nil {
 			return fmt.Errorf("bootstrap error: %w", err)
 		}
 

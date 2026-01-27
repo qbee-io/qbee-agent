@@ -60,12 +60,12 @@ var configCommand = cmd.Command{
 		fromFile := opts[configFromFileOption]
 		reportToConsole := opts[configReportToConsoleOption] == "true"
 
-		ctx := context.Background()
-
 		cfg, err := loadConfig(opts)
 		if err != nil {
 			return err
 		}
+
+		ctx := context.WithValue(context.Background(), utils.ContextKeyElevationCommand, cfg.ElevationCommand)
 
 		var deviceAgent *agent.Agent
 
@@ -112,7 +112,6 @@ var configCommand = cmd.Command{
 			deviceAgent.Configuration.EnableConsoleReporting()
 		}
 
-		ctxWithElevationCommand := context.WithValue(ctx, utils.ContextKeyElevationCommand, cfg.ElevationCommand)
-		return deviceAgent.Configuration.Execute(ctxWithElevationCommand, configurationData)
+		return deviceAgent.Configuration.Execute(ctx, configurationData)
 	},
 }

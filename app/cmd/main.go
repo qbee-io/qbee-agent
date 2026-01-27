@@ -78,11 +78,5 @@ func loadConfig(opts cmd.Options) (*agent.Config, error) {
 		log.SetLevel(log.ERROR)
 	}
 
-	config, err := agent.LoadConfig(opts[mainConfigDirOption], opts[mainStateDirOption])
-
-	if err != nil {
-		return nil, err
-	}
-
-	return config, nil
+	return agent.LoadConfig(opts[mainConfigDirOption], opts[mainStateDirOption])
 }

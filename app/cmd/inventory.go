@@ -54,12 +54,12 @@ var inventoryCommand = cmd.Command{
 		inventoryType := inventory.Type(opts[inventoryTypeOption])
 		dryRun := opts[inventoryDryRunOption] == "true"
 
-		ctx := context.Background()
-
 		cfg, err := loadConfig(opts)
 		if err != nil {
 			return err
 		}
+
+		ctx := context.WithValue(context.Background(), utils.ContextKeyElevationCommand, cfg.ElevationCommand)
 
 		var inventoryData any
 
@@ -83,7 +83,7 @@ var inventoryCommand = cmd.Command{
 		case inventory.TypeDockerVolumes:
 			inventoryData, err = inventory.CollectDockerVolumesInventory(ctx)
 		case inventory.TypeRauc:
-			inventoryData, err = inventory.CollectRaucInventory(ctx, cfg.ElevationCommand)
+			inventoryData, err = inventory.CollectRaucInventory(ctx)
 		default:
 			return fmt.Errorf("unsupported inventory type")
 		}
@@ -101,7 +101,6 @@ var inventoryCommand = cmd.Command{
 			return fmt.Errorf("error initializing the agent: %w", err)
 		}
 
-		ctxWithElevationCommand := context.WithValue(ctx, utils.ContextKeyElevationCommand, cfg.ElevationCommand)
-		return deviceAgent.Inventory.Send(ctxWithElevationCommand, inventoryType, inventoryData)
+		return deviceAgent.Inventory.Send(ctx, inventoryType, inventoryData)
 	},
 }
