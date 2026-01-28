@@ -31,7 +31,7 @@ import (
 type cmdCtxKey int
 
 const (
-	ContextKeyElevationCommand cmdCtxKey = iota
+	contextKeyElevationCommand cmdCtxKey = iota
 )
 
 // RunCommand runs a command and returns its output.
@@ -196,12 +196,12 @@ func RebootCommand() ([]string, error) {
 
 // ContextWithElevationCommand returns a new context with the given elevation command
 func ContextWithElevationCommand(ctx context.Context, elevationCmd []string) context.Context {
-	return context.WithValue(ctx, ContextKeyElevationCommand, elevationCmd)
+	return context.WithValue(ctx, contextKeyElevationCommand, elevationCmd)
 }
 
 // GetElevationCommandFromContext retrieves the elevation command from the context
 func GetElevationCommandFromContext(ctx context.Context) ([]string, bool) {
-	elevationCmdFromCtx := ctx.Value(ContextKeyElevationCommand)
+	elevationCmdFromCtx := ctx.Value(contextKeyElevationCommand)
 	if elevationCmdFromCtx == nil {
 		return nil, false
 	}
