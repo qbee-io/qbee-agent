@@ -24,7 +24,7 @@ jobs:
 
       - name: Build and test
         env:
-          UNPRIVILEGED: ${{ matrix.unprivileged }}
+          UNPRIVILEGED_USER: ${{ matrix.unprivileged }}
         run: make docker-image test-src
 
       - id: govulncheck
