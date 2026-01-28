@@ -46,13 +46,7 @@ func NewPrivilegedCommand(ctx context.Context, cmd []string) (*exec.Cmd, error) 
 		return NewCommand(ctx, cmd), nil
 	}
 
-	// get elevation command from context if not provided
-	elevationCmdFromCtx := ctx.Value(ContextKeyElevationCommand)
-	if elevationCmdFromCtx == nil {
-		return NewCommand(ctx, cmd), nil
-	}
-	// assert type, must be []string, return regular command if not
-	elevationCmd, ok := elevationCmdFromCtx.([]string)
+	elevationCmd, ok := GetElevationCommandFromContext(ctx)
 	if !ok {
 		return NewCommand(ctx, cmd), nil
 	}
@@ -198,4 +192,19 @@ func RebootCommand() ([]string, error) {
 	}
 
 	return nil, fmt.Errorf("cannot reboot: %s or %s not found", shutdownBinPath, rebootBinPath)
+}
+
+// ContextWithElevationCommand returns a new context with the given elevation command
+func ContextWithElevationCommand(ctx context.Context, elevationCmd []string) context.Context {
+	return context.WithValue(ctx, ContextKeyElevationCommand, elevationCmd)
+}
+
+// GetElevationCommandFromContext retrieves the elevation command from the context
+func GetElevationCommandFromContext(ctx context.Context) ([]string, bool) {
+	elevationCmdFromCtx := ctx.Value(ContextKeyElevationCommand)
+	if elevationCmdFromCtx == nil {
+		return nil, false
+	}
+	elevationCmd, ok := elevationCmdFromCtx.([]string)
+	return elevationCmd, ok
 }

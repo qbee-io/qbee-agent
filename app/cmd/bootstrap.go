@@ -146,7 +146,7 @@ var bootstrapCommand = cmd.Command{
 			return fmt.Errorf("bootstrap key (-k) is required")
 		}
 
-		ctx := context.WithValue(context.Background(), utils.ContextKeyElevationCommand, cfg.ElevationCommand)
+		ctx := utils.ContextWithElevationCommand(context.Background(), cfg.ElevationCommand)
 		if err := agent.Bootstrap(ctx, cfg); err != nil {
 			return fmt.Errorf("bootstrap error: %w", err)
 		}

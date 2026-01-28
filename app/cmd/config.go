@@ -65,7 +65,7 @@ var configCommand = cmd.Command{
 			return err
 		}
 
-		ctx := context.WithValue(context.Background(), utils.ContextKeyElevationCommand, cfg.ElevationCommand)
+		ctx := utils.ContextWithElevationCommand(context.Background(), cfg.ElevationCommand)
 
 		var deviceAgent *agent.Agent
 

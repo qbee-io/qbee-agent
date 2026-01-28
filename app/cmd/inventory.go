@@ -59,7 +59,7 @@ var inventoryCommand = cmd.Command{
 			return err
 		}
 
-		ctx := context.WithValue(context.Background(), utils.ContextKeyElevationCommand, cfg.ElevationCommand)
+		ctx := utils.ContextWithElevationCommand(context.Background(), cfg.ElevationCommand)
 
 		var inventoryData any
 
