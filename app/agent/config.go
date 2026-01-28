@@ -70,9 +70,6 @@ type Config struct {
 	// CACert is the path to the CA certificate.
 	CACert string `json:"ca_cert,omitempty"`
 
-	// PrivilegeElevation indicates whether to use privilege elevation for commands requiring elevated privileges.
-	PrivilegeElevation bool `json:"privilege_elevation,omitempty"`
-
 	// ElevationCommand is the command to use for privilege elevation.
 	ElevationCommand []string `json:"elevation_command,omitempty"`
 }
@@ -107,24 +104,6 @@ func LoadConfig(configDir, stateDir string) (*Config, error) {
 		config.DeviceHubPort = DefaultDeviceHubPort
 	}
 
-	if !config.PrivilegeElevation {
-		return config, nil
-	}
-
-	// Set default elevation command if not set to use system sudo
-	if len(config.ElevationCommand) == 0 {
-		// attempt to auto-resolve sudo path
-		sudoPath, err := resolveSudoPath()
-		if err != nil {
-			return nil, fmt.Errorf("elevation command not set and cannot resolve sudo path: %w", err)
-		}
-		config.ElevationCommand = []string{sudoPath, "-n"}
-	}
-
-	if err := ValidateElevationCommand(config.ElevationCommand); err != nil {
-		return nil, err
-	}
-
 	return config, nil
 }
 
@@ -148,20 +127,6 @@ func ValidateElevationCommand(cmd []string) error {
 	}
 
 	return nil
-}
-
-func resolveSudoPath() (string, error) {
-	systemSudoPaths := []string{
-		"/usr/bin/sudo",
-		"/bin/sudo",
-	}
-
-	for _, path := range systemSudoPaths {
-		if _, err := os.Stat(path); err == nil {
-			return path, nil
-		}
-	}
-	return "", fmt.Errorf("sudo command not found in standard locations")
 }
 
 func (agent *Agent) saveConfig() error {

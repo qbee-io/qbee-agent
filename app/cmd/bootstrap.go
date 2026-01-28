@@ -97,15 +97,8 @@ var bootstrapCommand = cmd.Command{
 			Help: "Custom CA certificate to use for TLS.",
 		},
 		{
-			Name: bootstrapPrivilegeElevation,
-			Flag: "true",
-			Help: "Use privilege elevation for commands requiring elevated privileges.",
-		},
-		{
 			Name: bootstrapElevationCommand,
-			Help: "Command to use for privilege elevation (e.g. sudo). The default \"sudo -n\" " +
-				"requires passwordless sudo or appropriate sudoers configuration (e.g. NOPASSWD for the target user).",
-			Default: "/usr/bin/sudo -n",
+			Help: "Privilege elevation command command for non-root mode. Must be absolute path (e.g. \"/usr/bin/sudo -n\")",
 		},
 	},
 
@@ -125,10 +118,13 @@ var bootstrapCommand = cmd.Command{
 			DeviceName:          opts[bootstrapDeviceNameOption],
 			DisableRemoteAccess: opts[bootstrapDisableRemoteAccessOption] == "true",
 			CACert:              opts[bootstrapCACert],
-			PrivilegeElevation:  opts[bootstrapPrivilegeElevation] == "true",
 		}
 
-		if cfg.PrivilegeElevation {
+		if cfg.BootstrapKey == "" {
+			return fmt.Errorf("bootstrap key (-k) is required")
+		}
+
+		if opts[bootstrapElevationCommand] != "" {
 			elevationCmd, err := utils.ParseCommandLine(opts[bootstrapElevationCommand])
 			if err != nil {
 				return fmt.Errorf("cannot parse elevation command: %w", err)
@@ -139,11 +135,6 @@ var bootstrapCommand = cmd.Command{
 			}
 
 			cfg.ElevationCommand = elevationCmd
-
-		}
-
-		if cfg.BootstrapKey == "" {
-			return fmt.Errorf("bootstrap key (-k) is required")
 		}
 
 		ctx := utils.ContextWithElevationCommand(context.Background(), cfg.ElevationCommand)
