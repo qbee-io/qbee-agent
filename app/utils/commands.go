@@ -158,7 +158,7 @@ func generateSystemctlCommand(ctx context.Context, serviceName, command string) 
 
 	var output []byte
 	var err error
-	if output, err = RunCommand(ctx, cmd); err != nil {
+	if output, err = RunPrivilegedCommand(ctx, cmd); err != nil {
 		return nil, fmt.Errorf("error checking service status: %w", err)
 	}
 
