@@ -7,7 +7,10 @@ Cmnd_Alias RPM_CMDS = /usr/bin/rpm, /bin/rpm
 Cmnd_Alias DPKG_CMDS = /usr/bin/dpkg, /bin/dpkg
 Cmnd_Alias APT_GET_CMDS = /usr/bin/apt-get, /bin/apt-get
 Defaults!APT_GET_CMDS env_keep+=DEBIAN_FRONTEND
-Cmnd_Alias PKG_CMDS = APT_GET_CMDS, YUM_CMDS, RPM_CMDS, DPKG_CMDS
+Cmnd_Alias OPKG_CMDS = /bin/opkg
+Cmnd_Alias PKG_CMDS = APT_GET_CMDS, YUM_CMDS, RPM_CMDS, DPKG_CMDS, OPKG_CMDS
+Cmnd_Alias SYSTEMCTL_CMDS = /bin/systemctl, /usr/bin/systemctl
+Cmnd_Alias SERVICE_CMDS = SYSTEMCTL_CMDS
 
 # Firewall management
 Cmnd_Alias FIREWALL_CMDS = /usr/sbin/iptables, /sbin/iptables
@@ -24,4 +27,4 @@ Cmnd_Alias USER_CMDS = /usr/sbin/useradd, /sbin/useradd, /usr/sbin/userdel, /sbi
 # Suppress logging of sudo executions for user
 Defaults:qbee-agent !syslog, env_keep+="HTTP_PROXY HTTPS_PROXY http_proxy https_proxy NO_PROXY no_proxy"
 
-qbee-agent ALL=(ALL) NOPASSWD: SHUTDOWN_CMDS, OTA_CMDS, PKG_CMDS, FIREWALL_CMDS, USER_CMDS
+qbee-agent ALL=(ALL) NOPASSWD: SHUTDOWN_CMDS, OTA_CMDS, PKG_CMDS, FIREWALL_CMDS, USER_CMDS, SERVICE_CMDS
