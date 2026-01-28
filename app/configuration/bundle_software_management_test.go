@@ -18,7 +18,6 @@ package configuration_test
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -85,16 +84,6 @@ func Test_SoftwareManagementBundle_InstallPackageFromFile(t *testing.T) {
 
 func Test_SoftwareManagementBundle_InstallPackageFromFile_WithConflicts(t *testing.T) {
 
-	for _, tt := range privilegeTest {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			testSoftwareManagementBundleInstallPackageFromFileWithConflicts(t, tt.unprivileged)
-		})
-	}
-}
-
-func testSoftwareManagementBundleInstallPackageFromFileWithConflicts(t *testing.T, privileged bool) {
-
 	tt := []struct {
 		name     string
 		filename string
@@ -112,11 +101,6 @@ func testSoftwareManagementBundleInstallPackageFromFileWithConflicts(t *testing.
 		},
 	}
 
-	if !privileged {
-		for i := range tt {
-			tt[i].runner = tt[i].runner.WithUnprivileged()
-		}
-	}
 	wg := sync.WaitGroup{}
 
 	for _, test := range tt {
@@ -193,29 +177,12 @@ func Test_SoftwareManagementBundle_InstallPackageFromFile_WithDependencies(t *te
 }
 
 func Test_SoftwareManagementBundle_InstallPackage_WithConfigFileTemplate(t *testing.T) {
-
-	for _, tt := range privilegeTest {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			testSoftwareManagementBundleInstallPackageWithConfigFileTemplate(t, tt.unprivileged)
-		})
-	}
-}
-
-func testSoftwareManagementBundleInstallPackageWithConfigFileTemplate(t *testing.T, unprivileged bool) {
 	r := runner.New(t)
-
-	if unprivileged {
-		r = r.WithUnprivileged()
-	}
 
 	// upload a test file to the file manager
 	fileContents := []byte("test\nkey: {{k1}} / {{k2}}")
-	filename := fmt.Sprintf("%s_%d", strings.ReplaceAll(t.Name(), "/", "_"), time.Now().UnixNano())
+	filename := fmt.Sprintf("%s_%d", t.Name(), time.Now().UnixNano())
 	r.CreateFile("/"+filename, fileContents)
-	r.MustExec("chmod", "644", "/"+filename)
-
-	configLocation := "/var/lib/qbee-agent/config.test"
 
 	config := configuration.CommittedConfig{
 		Bundles: []string{configuration.BundleParameters, configuration.BundleSoftwareManagement},
@@ -234,7 +201,7 @@ func testSoftwareManagementBundleInstallPackageWithConfigFileTemplate(t *testing
 						ConfigFiles: []configuration.ConfigFile{
 							{
 								ConfigTemplate: "file:///" + filename,
-								ConfigLocation: configLocation,
+								ConfigLocation: "/etc/config.test",
 							},
 						},
 						Parameters: []configuration.TemplateParameter{
@@ -251,7 +218,7 @@ func testSoftwareManagementBundleInstallPackageWithConfigFileTemplate(t *testing
 
 	expectedReports := []string{
 		"[INFO] Successfully installed 'qbee-test'",
-		fmt.Sprintf("[INFO] Successfully rendered template file file:///%s to %s", filename, configLocation),
+		fmt.Sprintf("[INFO] Successfully rendered template file file:///%s to /etc/config.test", filename),
 		// since we are not installing systemctl on the test docker image, we will get the following warning
 		"[WARN] Required restart of 'qbee-test' cannot be performed",
 	}
@@ -262,7 +229,7 @@ func testSoftwareManagementBundleInstallPackageWithConfigFileTemplate(t *testing
 	assert.Equal(t, string(output), "2.1.1")
 
 	// check that the config files is present and correct
-	gotFileContents := r.ReadFile(configLocation)
+	gotFileContents := r.ReadFile("/etc/config.test")
 	expectedContents := "test\nkey: test-value / param-value"
 	assert.Equal(t, string(gotFileContents), expectedContents)
 }

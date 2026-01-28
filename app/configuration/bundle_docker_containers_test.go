@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -79,23 +78,11 @@ func Test_DockerContainers_Auths(t *testing.T) {
 }
 
 func Test_DockerContainers_Container_Start(t *testing.T) {
-	for _, tt := range privilegeTest {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			testDockerContainersContainerStart(t, tt.unprivileged)
-		})
-	}
-}
-
-func testDockerContainersContainerStart(t *testing.T, unprivileged bool) {
 	r := runner.New(t)
-	if unprivileged {
-		r = r.WithUnprivileged()
-	}
 
 	r.MustExec("apt-get", "install", "-y", "docker-ce-cli")
 
-	containerName := fmt.Sprintf("%s-%d", strings.ReplaceAll(t.Name(), "/", "_"), time.Now().Unix())
+	containerName := fmt.Sprintf("%s-%d", t.Name(), time.Now().Unix())
 
 	dockerBundle := configuration.DockerContainersBundle{
 		Containers: []configuration.Container{

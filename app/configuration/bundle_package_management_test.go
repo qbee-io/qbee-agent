@@ -31,11 +31,11 @@ func Test_PackageManagement_PreCondition(t *testing.T) {
 
 	// by touch-ing a file on the file system as a pre-condition, we can check if the pre-condition was executed
 	executePackageManagementBundle(r, configuration.PackageManagementBundle{
-		PreCondition: "touch /tmp/pre-condition",
+		PreCondition: "touch /pre-condition",
 	})
 
 	// check that the pre-condition was executed
-	if _, err := r.Exec("ls", "/tmp/pre-condition"); err != nil {
+	if _, err := r.Exec("ls", "/pre-condition"); err != nil {
 		t.Fatalf("expected file not found: %v", err)
 	}
 }
@@ -58,101 +58,71 @@ func Test_PackageManagement_InstallPackage_PreConditionFailed(t *testing.T) {
 }
 
 func Test_PackageManagement_InstallPackage_NoPrecondition(t *testing.T) {
+	r := runner.New(t)
 
-	for _, tt := range privilegeTest {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+	// with empty pre-condition system should work as if the pre-condition is successful
+	reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
+		Packages: []configuration.Package{{Name: "qbee-test"}},
+	})
 
-			r := runner.New(t)
-			if tt.unprivileged {
-				r = r.WithUnprivileged()
-			}
+	// check if a correct report is recorded
+	expectedReports := []string{"[INFO] Package 'qbee-test' successfully installed."}
+	assert.Equal(t, reports, expectedReports)
 
-			// with empty pre-condition system should work as if the pre-condition is successful
-			reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
-				Packages: []configuration.Package{{Name: "qbee-test"}},
-			})
-
-			// check if a correct report is recorded
-			expectedReports := []string{"[INFO] Package 'qbee-test' successfully installed."}
-			assert.Equal(t, reports, expectedReports)
-
-			// check that the newest version of test package is installed
-			installedVersion := checkInstalledVersionOfTestPackage(r)
-			assert.Equal(t, installedVersion, "2.1.1")
-		})
-	}
+	// check that the newest version of test package is installed
+	installedVersion := checkInstalledVersionOfTestPackage(r)
+	assert.Equal(t, installedVersion, "2.1.1")
 }
 
 func Test_PackageManagement_InstallPackage_PreconditionSuccess(t *testing.T) {
+	r := runner.New(t)
 
-	for _, tt := range privilegeTest {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+	// with condition returning zero exit code, package should be installed
+	reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
+		PreCondition: "true",
+		Packages:     []configuration.Package{{Name: "qbee-test"}},
+	})
 
-			r := runner.New(t)
-			if tt.unprivileged {
-				r = r.WithUnprivileged()
-			}
+	// check if a correct report is recorded
+	expectedReports := []string{"[INFO] Package 'qbee-test' successfully installed."}
+	assert.Equal(t, reports, expectedReports)
 
-			// with condition returning zero exit code, package should be installed
-			reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
-				PreCondition: "true",
-				Packages:     []configuration.Package{{Name: "qbee-test"}},
-			})
-
-			// check if a correct report is recorded
-			expectedReports := []string{"[INFO] Package 'qbee-test' successfully installed."}
-			assert.Equal(t, reports, expectedReports)
-
-			// check that the newest version of test package is installed
-			installedVersion := checkInstalledVersionOfTestPackage(r)
-			assert.Equal(t, installedVersion, "2.1.1")
-		})
-	}
+	// check that the newest version of test package is installed
+	installedVersion := checkInstalledVersionOfTestPackage(r)
+	assert.Equal(t, installedVersion, "2.1.1")
 }
 
 func Test_PackageManagement_InstallPackage_Downgrade(t *testing.T) {
 
-	for _, tt := range privilegeTest {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			runners := []*runner.Runner{
-				runner.New(t),
-				runner.NewRHELRunner(t),
-			}
-
-			wg := sync.WaitGroup{}
-
-			for _, r := range runners {
-				wg.Add(1)
-
-				if tt.unprivileged {
-					r = r.WithUnprivileged()
-				}
-
-				go func(r *runner.Runner) {
-					defer wg.Done()
-
-					installNewestVersionOfTestPackage(r)
-
-					// when specifying lower version, we should expect a downgrade operation
-					reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
-						Packages: []configuration.Package{{Name: "qbee-test", Version: "1.0.1"}},
-					})
-
-					// check if a correct report is recorded
-					expectedReports := []string{"[INFO] Package 'qbee-test' successfully installed."}
-					assert.Equal(t, reports, expectedReports)
-
-					// check that the newest version of test package is installed
-					installedVersion := checkInstalledVersionOfTestPackage(r)
-					assert.Equal(t, installedVersion, "1.0.1")
-				}(r)
-			}
-			wg.Wait()
-		})
+	runners := []*runner.Runner{
+		runner.New(t),
+		runner.NewRHELRunner(t),
 	}
+
+	wg := sync.WaitGroup{}
+
+	for _, r := range runners {
+		wg.Add(1)
+		go func(r *runner.Runner) {
+			defer wg.Done()
+
+			installNewestVersionOfTestPackage(r)
+
+			// when specifying lower version, we should expect a downgrade operation
+			reports := executePackageManagementBundle(r, configuration.PackageManagementBundle{
+				Packages: []configuration.Package{{Name: "qbee-test", Version: "1.0.1"}},
+			})
+
+			// check if a correct report is recorded
+			expectedReports := []string{"[INFO] Package 'qbee-test' successfully installed."}
+			assert.Equal(t, reports, expectedReports)
+
+			// check that the newest version of test package is installed
+			installedVersion := checkInstalledVersionOfTestPackage(r)
+			assert.Equal(t, installedVersion, "1.0.1")
+		}(r)
+	}
+	wg.Wait()
 }
 
 func Test_PackageManagement_InstallPackage_UpdateWithEmptyVersion(t *testing.T) {

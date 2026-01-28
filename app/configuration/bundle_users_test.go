@@ -25,47 +25,37 @@ import (
 )
 
 func Test_AddDeleteUsers(t *testing.T) {
-
-	for _, tt := range privilegeTest {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			r := runner.New(t)
-
-			if tt.unprivileged {
-				r = r.WithUnprivileged()
-			}
-			testuser := configuration.User{
-				Username: "testuser1",
-				Action:   configuration.UserAdd,
-			}
-
-			reports := executeUsersBundle(r, []configuration.User{
-				testuser,
-			})
-
-			expectedReports := []string{
-				"[INFO] Successfully added user 'testuser1'",
-			}
-
-			assert.Equal(t, reports, expectedReports)
-			r.MustExec("id", "-u", "testuser1")
-
-			testuser.Action = configuration.UserRemove
-
-			reports = executeUsersBundle(r, []configuration.User{
-				testuser,
-			})
-
-			expectedReports = []string{
-				"[INFO] Successfully removed user 'testuser1'",
-			}
-
-			assert.Equal(t, reports, expectedReports)
-
-			_, err := r.Exec("id", "-u", "testuser1")
-			assert.True(t, err != nil)
-		})
+	r := runner.New(t)
+	testuser := configuration.User{
+		Username: "testuser1",
+		Action:   configuration.UserAdd,
 	}
+
+	reports := executeUsersBundle(r, []configuration.User{
+		testuser,
+	})
+
+	expectedReports := []string{
+		"[INFO] Successfully added user 'testuser1'",
+	}
+
+	assert.Equal(t, reports, expectedReports)
+	r.MustExec("id", "-u", "testuser1")
+
+	testuser.Action = configuration.UserRemove
+
+	reports = executeUsersBundle(r, []configuration.User{
+		testuser,
+	})
+
+	expectedReports = []string{
+		"[INFO] Successfully removed user 'testuser1'",
+	}
+
+	assert.Equal(t, reports, expectedReports)
+
+	_, err := r.Exec("id", "-u", "testuser1")
+	assert.True(t, err != nil)
 }
 
 // executePasswordBundle is a helper method to quickly execute password bundle.

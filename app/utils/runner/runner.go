@@ -19,6 +19,9 @@ const OpenWRT = "openwrt:qbee"
 // RHEL is the RHEL based image used by the runner.
 const RHEL = "rhel:qbee"
 
+// UnprivilegedUser
+const UnprivilegedUser = "qbee-agent"
+
 // New creates a new runner for the given test.
 func New(t *testing.T) *Runner {
 	return NewWithImage(t, Debian, false)
@@ -80,6 +83,10 @@ func NewWithImage(t *testing.T, image string, privileged bool) *Runner {
 		image:     image,
 	}
 
+	if os.Getenv("UNPRIVILEGED_USER") == "true" {
+		runner.WithUnprivileged()
+	}
+
 	t.Cleanup(runner.Close)
 
 	return runner
@@ -97,6 +104,14 @@ type Runner struct {
 func (runner *Runner) WithUnprivileged() *Runner {
 	runner.execUnPrivileged = true
 	return runner
+}
+
+// GetStateDirectory returns the state directory path for the runner.
+func (runner *Runner) GetStateDirectory() string {
+	if runner.execUnPrivileged {
+		return "/var/lib/" + UnprivilegedUser + "/var"
+	}
+	return "/var/lib/qbee"
 }
 
 // GetUnprivileged returns whether commands are executed unprivileged.
@@ -220,6 +235,16 @@ func (runner *Runner) CreateFile(path string, contents []byte) {
 	containerPath := fmt.Sprintf("%s:%s", runner.container, path)
 
 	if err = exec.Command("docker", "cp", fd.Name(), containerPath).Run(); err != nil {
+		panic(err)
+	}
+}
+
+// CreateFileWorldReadable creates a file with the given path and contents that is world-readable.
+func (runner *Runner) CreateFileWithPerms(path string, contents []byte, perms os.FileMode) {
+	runner.CreateFile(path, contents)
+
+	// make sure the file can be read by non-root users
+	if err := exec.Command("docker", "exec", runner.container, "chmod", fmt.Sprintf("%o", perms), path).Run(); err != nil {
 		panic(err)
 	}
 }

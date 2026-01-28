@@ -27,111 +27,91 @@ import (
 )
 
 func Test_Firewall_NoIPTablesInstalled(t *testing.T) {
+	r := runner.New(t)
 
-	for _, tt := range privilegeTest {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			r := runner.New(t)
+	// Remove any installed iptables
+	r.MustExec("rm", "-f", "/sbin/iptables", "/usr/sbin/iptables")
 
-			if tt.unprivileged {
-				r = r.WithUnprivileged()
-			}
-
-			// Remove any installed iptables
-			r.MustExec("rm", "-f", "/sbin/iptables", "/usr/sbin/iptables")
-
-			reports := executeFirewallBundle(r, configuration.FirewallBundle{
-				Tables: map[configuration.FirewallTableName]configuration.FirewallTable{
-					configuration.Filter: {
-						configuration.Input: configuration.FirewallChain{
-							Policy: configuration.Drop,
-						},
-					},
+	reports := executeFirewallBundle(r, configuration.FirewallBundle{
+		Tables: map[configuration.FirewallTableName]configuration.FirewallTable{
+			configuration.Filter: {
+				configuration.Input: configuration.FirewallChain{
+					Policy: configuration.Drop,
 				},
-			})
+			},
+		},
+	})
 
-			expectedReports := []string{
-				"[ERR] Firewall configuration failed.",
-			}
-
-			assert.Equal(t, reports, expectedReports)
-		})
+	expectedReports := []string{
+		"[ERR] Firewall configuration failed.",
 	}
+
+	assert.Equal(t, reports, expectedReports)
 }
 
 func Test_Firewall(t *testing.T) {
+	r := runner.New(t)
 
-	for _, tt := range privilegeTest {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			r := runner.New(t)
+	r.MustExec("apt-get", "install", "-y", "iptables")
 
-			if tt.unprivileged {
-				r = r.WithUnprivileged()
-			}
-
-			r.MustExec("apt-get", "install", "-y", "iptables")
-
-			firewallBundle := configuration.FirewallBundle{
-				Tables: map[configuration.FirewallTableName]configuration.FirewallTable{
-					configuration.Filter: {
-						configuration.Input: configuration.FirewallChain{
-							Policy: configuration.Drop,
-							Rules: []configuration.FirewallRule{
-								// both source IP and destination port
-								{
-									SourceIP:        "1.1.1.1/32",
-									DestinationPort: "123",
-									Protocol:        configuration.TCP,
-									Target:          configuration.Accept,
-								},
-								// only source IP
-								{
-									SourceIP: "2.2.2.2/32",
-									Protocol: configuration.UDP,
-									Target:   configuration.Drop,
-								},
-								// only destination port
-								{
-									DestinationPort: "333",
-									Protocol:        configuration.TCP,
-									Target:          configuration.Accept,
-								},
-							},
+	firewallBundle := configuration.FirewallBundle{
+		Tables: map[configuration.FirewallTableName]configuration.FirewallTable{
+			configuration.Filter: {
+				configuration.Input: configuration.FirewallChain{
+					Policy: configuration.Drop,
+					Rules: []configuration.FirewallRule{
+						// both source IP and destination port
+						{
+							SourceIP:        "1.1.1.1/32",
+							DestinationPort: "123",
+							Protocol:        configuration.TCP,
+							Target:          configuration.Accept,
+						},
+						// only source IP
+						{
+							SourceIP: "2.2.2.2/32",
+							Protocol: configuration.UDP,
+							Target:   configuration.Drop,
+						},
+						// only destination port
+						{
+							DestinationPort: "333",
+							Protocol:        configuration.TCP,
+							Target:          configuration.Accept,
 						},
 					},
 				},
-			}
-
-			// check that the first run changes the firewall
-			reports := executeFirewallBundle(r, firewallBundle)
-			expectedReports := []string{
-				"[WARN] Current firewall rules are not in compliance.",
-				"[INFO] Load of new iptables rules succeeded for table filter.",
-			}
-
-			assert.Equal(t, reports, expectedReports)
-
-			// check that correct rules are set on the filter/INPUT
-			output := r.MustExec("iptables", "-t", "filter", "-S", "INPUT")
-
-			gotRules := strings.Split(string(output), "\n")
-			expectedRules := []string{
-				"-P INPUT DROP",
-				"-A INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT",
-				"-A INPUT -i lo -j ACCEPT",
-				"-A INPUT -s 1.1.1.1/32 -p tcp -m tcp --dport 123 -j ACCEPT",
-				"-A INPUT -s 2.2.2.2/32 -p udp -m udp -j DROP",
-				"-A INPUT -p tcp -m tcp --dport 333 -j ACCEPT",
-			}
-
-			assert.Equal(t, gotRules, expectedRules)
-
-			// check that the second run doesn't change the firewall
-			reports = executeFirewallBundle(r, firewallBundle)
-			assert.Empty(t, reports)
-		})
+			},
+		},
 	}
+
+	// check that the first run changes the firewall
+	reports := executeFirewallBundle(r, firewallBundle)
+	expectedReports := []string{
+		"[WARN] Current firewall rules are not in compliance.",
+		"[INFO] Load of new iptables rules succeeded for table filter.",
+	}
+
+	assert.Equal(t, reports, expectedReports)
+
+	// check that correct rules are set on the filter/INPUT
+	output := r.MustExec("iptables", "-t", "filter", "-S", "INPUT")
+
+	gotRules := strings.Split(string(output), "\n")
+	expectedRules := []string{
+		"-P INPUT DROP",
+		"-A INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT",
+		"-A INPUT -i lo -j ACCEPT",
+		"-A INPUT -s 1.1.1.1/32 -p tcp -m tcp --dport 123 -j ACCEPT",
+		"-A INPUT -s 2.2.2.2/32 -p udp -m udp -j DROP",
+		"-A INPUT -p tcp -m tcp --dport 333 -j ACCEPT",
+	}
+
+	assert.Equal(t, gotRules, expectedRules)
+
+	// check that the second run doesn't change the firewall
+	reports = executeFirewallBundle(r, firewallBundle)
+	assert.Empty(t, reports)
 }
 
 // executeFirewallBundle is a helper method to quickly execute firewall bundle.

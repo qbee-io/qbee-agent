@@ -39,7 +39,7 @@ func Test_FileDistributionBundle(t *testing.T) {
 			FileDistribution: &configuration.FileDistributionBundle{
 				Metadata: configuration.Metadata{Enabled: true},
 				FileSets: []configuration.FileSet{
-					{Files: []configuration.File{{Source: localFileRef, Destination: "/tmp/test1"}}},
+					{Files: []configuration.File{{Source: localFileRef, Destination: r.GetStateDirectory() + "/test1"}}},
 				},
 			},
 		},
@@ -48,21 +48,22 @@ func Test_FileDistributionBundle(t *testing.T) {
 	reports, _ := configuration.ExecuteTestConfigInDocker(r, agentConfig)
 
 	expectedReports := []string{
-		fmt.Sprintf("[INFO] Successfully downloaded file %[1]s to /tmp/test1",
-			localFileRef),
+		fmt.Sprintf("[INFO] Successfully downloaded file %[1]s to %s/test1",
+			localFileRef, r.GetStateDirectory()),
 	}
 	assert.Equal(t, reports, expectedReports)
 
-	output := r.MustExec("md5sum", "/tmp/test1")
-	assert.Equal(t, string(output), "e45340c618b94c459663efc454ea1a50  /tmp/test1")
+	output := r.MustExec("md5sum", r.GetStateDirectory()+"/test1")
+	assert.Equal(t, string(output), "e45340c618b94c459663efc454ea1a50  "+r.GetStateDirectory()+"/test1")
 }
 
 func Test_FileDistributionBundle_IsTemplate(t *testing.T) {
 	r := runner.New(t)
 
 	fileManagerPath := "/src.txt"
-	r.CreateFile(fileManagerPath, []byte("example: {{test-key}}, {{unknown-key}}, {{broken-tag"))
+	r.CreateFileWithPerms(fileManagerPath, []byte("example: {{test-key}}, {{unknown-key}}, {{broken-tag"), 0644)
 	localFileRef := "file://" + fileManagerPath
+	destFile := r.GetStateDirectory() + "/test1"
 
 	agentConfig := configuration.CommittedConfig{
 		Bundles: []string{configuration.BundleFileDistribution},
@@ -72,7 +73,7 @@ func Test_FileDistributionBundle_IsTemplate(t *testing.T) {
 				FileSets: []configuration.FileSet{
 					{
 						Files: []configuration.File{
-							{Source: localFileRef, Destination: "/tmp/test1", IsTemplate: true},
+							{Source: localFileRef, Destination: destFile, IsTemplate: true},
 						},
 						TemplateParameters: []configuration.TemplateParameter{
 							{Key: "test-key", Value: "test-value"},
@@ -86,11 +87,11 @@ func Test_FileDistributionBundle_IsTemplate(t *testing.T) {
 	reports, _ := configuration.ExecuteTestConfigInDocker(r, agentConfig)
 
 	expectedReports := []string{
-		fmt.Sprintf("[INFO] Successfully rendered template file %[1]s to /tmp/test1", localFileRef),
+		fmt.Sprintf("[INFO] Successfully rendered template file %[1]s to %s", localFileRef, destFile),
 	}
 	assert.Equal(t, reports, expectedReports)
 
-	output := r.MustExec("cat", "/tmp/test1")
+	output := r.MustExec("cat", destFile)
 	assert.Equal(t, string(output), "example: test-value, {{unknown-key}}, {{broken-tag")
 }
 
@@ -98,8 +99,9 @@ func Test_FileDistributionBundle_TemplateUsingParameters(t *testing.T) {
 	r := runner.New(t)
 
 	fileManagerPath := "/src.txt"
-	r.CreateFile(fileManagerPath, []byte("example: {{test-param}}, {{test-secret}}"))
+	r.CreateFileWithPerms(fileManagerPath, []byte("example: {{test-param}}, {{test-secret}}"), 0644)
 	localFileRef := "file://" + fileManagerPath
+	destFile := r.GetStateDirectory() + "/test1"
 
 	agentConfig := configuration.CommittedConfig{
 		Bundles: []string{configuration.BundleFileDistribution, configuration.BundleParameters},
@@ -118,7 +120,7 @@ func Test_FileDistributionBundle_TemplateUsingParameters(t *testing.T) {
 				FileSets: []configuration.FileSet{
 					{
 						Files: []configuration.File{
-							{Source: localFileRef, Destination: "/tmp/test1", IsTemplate: true},
+							{Source: localFileRef, Destination: destFile, IsTemplate: true},
 						},
 						TemplateParameters: []configuration.TemplateParameter{
 							{Key: "test-param", Value: "$(param1)"},
@@ -133,11 +135,11 @@ func Test_FileDistributionBundle_TemplateUsingParameters(t *testing.T) {
 	reports, _ := configuration.ExecuteTestConfigInDocker(r, agentConfig)
 
 	expectedReports := []string{
-		fmt.Sprintf("[INFO] Successfully rendered template file %[1]s to /tmp/test1", localFileRef),
+		fmt.Sprintf("[INFO] Successfully rendered template file %[1]s to %s", localFileRef, destFile),
 	}
 	assert.Equal(t, reports, expectedReports)
 
-	output := r.MustExec("cat", "/tmp/test1")
+	output := r.MustExec("cat", destFile)
 	assert.Equal(t, string(output), "example: plain-text-value, secret-value")
 }
 
@@ -145,6 +147,7 @@ func Test_FileDistributionBundle_AfterCommand(t *testing.T) {
 	r := runner.New(t)
 
 	localFileRef := "file:///apt-repo/repo/qbee-test_2.1.1_all.deb"
+	destFile := r.GetStateDirectory() + "/test1"
 
 	agentConfig := configuration.CommittedConfig{
 		Bundles: []string{configuration.BundleFileDistribution},
@@ -154,9 +157,9 @@ func Test_FileDistributionBundle_AfterCommand(t *testing.T) {
 				FileSets: []configuration.FileSet{
 					{
 						Files: []configuration.File{
-							{Source: localFileRef, Destination: "/tmp/test1"},
+							{Source: localFileRef, Destination: destFile},
 						},
-						AfterCommand: "echo 'it worked!' > /tmp/test2",
+						AfterCommand: "echo 'it worked!' > " + r.GetStateDirectory() + "/test2",
 					},
 				},
 			},
@@ -167,16 +170,16 @@ func Test_FileDistributionBundle_AfterCommand(t *testing.T) {
 
 	// execute configuration bundles
 	expectedReports := []string{
-		fmt.Sprintf("[INFO] Successfully downloaded file %[1]s to /tmp/test1", localFileRef),
+		fmt.Sprintf("[INFO] Successfully downloaded file %[1]s to %s", localFileRef, destFile),
 		"[INFO] Successfully executed after command",
 	}
 	assert.Equal(t, reports, expectedReports)
 
 	// check if package was correctly installed
-	output := r.MustExec("md5sum", "/tmp/test1")
-	assert.Equal(t, string(output), "e45340c618b94c459663efc454ea1a50  /tmp/test1")
+	output := r.MustExec("md5sum", destFile)
+	assert.Equal(t, string(output), "e45340c618b94c459663efc454ea1a50  "+destFile)
 
-	output = r.MustExec("cat", "/tmp/test2")
+	output = r.MustExec("cat", r.GetStateDirectory()+"/test2")
 	assert.Equal(t, string(output), "it worked!")
 }
 
@@ -184,7 +187,7 @@ func Test_FileDistributionBundle_PreCondition_True(t *testing.T) {
 	r := runner.New(t)
 
 	localFileRef := "file:///apt-repo/repo/qbee-test_2.1.1_all.deb"
-
+	destFile := r.GetStateDirectory() + "/test1"
 	// commit config for the device
 	agentConfig := configuration.CommittedConfig{
 		Bundles: []string{configuration.BundleFileDistribution},
@@ -194,7 +197,7 @@ func Test_FileDistributionBundle_PreCondition_True(t *testing.T) {
 				FileSets: []configuration.FileSet{
 					{
 						Files: []configuration.File{
-							{Source: localFileRef, Destination: "/tmp/test1"},
+							{Source: localFileRef, Destination: destFile},
 						},
 						PreCondition: "true",
 					},
@@ -207,14 +210,14 @@ func Test_FileDistributionBundle_PreCondition_True(t *testing.T) {
 
 	// execute configuration bundles
 	expectedReports := []string{
-		fmt.Sprintf("[INFO] Successfully downloaded file %[1]s to /tmp/test1",
-			localFileRef),
+		fmt.Sprintf("[INFO] Successfully downloaded file %[1]s to %s",
+			localFileRef, destFile),
 	}
 	assert.Equal(t, reports, expectedReports)
 
 	// check if package was correctly installed
-	output := r.MustExec("md5sum", "/tmp/test1")
-	assert.Equal(t, string(output), "e45340c618b94c459663efc454ea1a50  /tmp/test1")
+	output := r.MustExec("md5sum", destFile)
+	assert.Equal(t, string(output), "e45340c618b94c459663efc454ea1a50  "+destFile)
 }
 
 func Test_FileDistributionBundle_PreCondition_False(t *testing.T) {
@@ -252,7 +255,7 @@ func Test_FileDistributionBundle_PreCondition_False(t *testing.T) {
 func Test_FileDistributionBundle_Destination_Dirname_Exists(t *testing.T) {
 	r := runner.New(t)
 
-	destDir := "/tmp/"
+	destDir := r.GetStateDirectory()
 	filename := "qbee-test_2.1.1_all.deb"
 	localFileRef := "file:///apt-repo/repo/" + filename
 
@@ -291,7 +294,7 @@ func Test_FileDistributionBundle_Destination_Regular_Path(t *testing.T) {
 	r := runner.New(t)
 
 	localFileRef := "file:///apt-repo/repo/qbee-test_2.1.1_all.deb"
-	destFile := "/tmp/qbee-test_2.1.1_all.deb"
+	destFile := r.GetStateDirectory() + "/qbee-test_2.1.1_all.deb"
 
 	agentConfig := configuration.CommittedConfig{
 		Bundles: []string{configuration.BundleFileDistribution},
@@ -415,12 +418,18 @@ func Test_FileDistirbution_No_Reports_Connectivity_Issues(t *testing.T) {
 func Test_ResumeDownload(t *testing.T) {
 	r := runner.New(t)
 
+	// make sure we use a directory path that exists inside the container
 	sourcePath := "/var/lib/test.txt"
+	if r.GetUnprivileged() {
+		// this effectively maps to the unprivileged user's home directory
+		sourcePath = filepath.Dir(r.GetStateDirectory()) + "/test.txt"
+	}
+
 	destinationPath := fmt.Sprintf("%s.downloaded", sourcePath)
 	partialContents := "this is the cont"
 	fileContents := partialContents + "ents of the file"
 
-	r.CreateFile(sourcePath, []byte(fileContents))
+	r.CreateFileWithPerms(sourcePath, []byte(fileContents), 0644)
 
 	originalHash := strings.Fields(string(r.MustExec("sha256sum", sourcePath)))[0]
 
@@ -456,8 +465,14 @@ func Test_ResumeDownload(t *testing.T) {
 			r.MustExec("rm", "-f", destinationPath)
 			r.MustExec("rm", "-f", partialFilePath)
 
-			// write partial file to cache
+			// write partial file to cache, all users should be able to delete/read it
 			r.CreateFile(partialFilePath, []byte(tt.existingContents))
+
+			// make sure the unprivileged user can read the file if needed
+			if r.GetUnprivileged() {
+				r.MustExec("chown", runner.UnprivilegedUser+":"+runner.UnprivilegedUser, partialFilePath)
+			}
+
 			output := r.MustExec("cat", partialFilePath)
 			assert.Equal(t, string(output), tt.existingContents)
 
