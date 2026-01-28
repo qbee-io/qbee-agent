@@ -109,7 +109,7 @@ func (runner *Runner) WithUnprivileged() *Runner {
 // GetStateDirectory returns the state directory path for the runner.
 func (runner *Runner) GetStateDirectory() string {
 	if runner.execUnPrivileged {
-		return "/var/lib/" + UnprivilegedUser + "/var"
+		return "/home/" + UnprivilegedUser + "/var"
 	}
 	return "/var/lib/qbee"
 }
@@ -213,6 +213,16 @@ func (runner *Runner) MustExec(cmd ...string) []byte {
 	}
 
 	return output
+}
+
+// MustExecUnprivileged executes the given command unprivileged if the runner is set to unprivileged mode.
+func (runner *Runner) MustExecUnprivileged(cmd ...string) []byte {
+	if runner.execUnPrivileged {
+		suCmd := append([]string{"su", "-s", "/bin/sh", UnprivilegedUser, "-c"}, strings.Join(cmd, " "))
+		return runner.MustExec(suCmd...)
+	}
+
+	return runner.MustExec(cmd...)
 }
 
 // CreateFile creates a file with the given path and contents.

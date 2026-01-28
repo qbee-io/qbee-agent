@@ -47,16 +47,17 @@ func ExecuteTestConfigInDocker(r *runner.Runner, config CommittedConfig) ([]stri
 
 	// setup runner for unprivileged user if needed
 	if r.GetUnprivileged() {
-		// set up access to docker socket for unprivileged user
-		gidOutput := r.MustExec("stat", "-c", "%g", "/var/run/docker.sock")
-		gid := strings.TrimSpace(string(gidOutput))
-		r.MustExec("groupadd", "-fg", gid, "docker")
-		r.MustExec("usermod", "-aG", gid, runner.UnprivilegedUser)
+		// set up access to docker socket for unprivileged user if it exists
+		if gidOutput, err := r.Exec("stat", "-c", "%g", "/var/run/docker.sock"); err == nil {
+			gid := strings.TrimSpace(string(gidOutput))
+			r.MustExec("groupadd", "-fg", gid, "docker")
+			r.MustExec("usermod", "-aG", gid, runner.UnprivilegedUser)
+		}
 
 		etcDir := filepath.Join(filepath.Dir(r.GetStateDirectory()), "etc")
 
 		r.MustExec("mkdir", "-p", etcDir)
-		r.CreateFile(filepath.Join(etcDir, "qbee-agent.json"), []byte(`{"privilege_elevation": true}`))
+		r.CreateFile(filepath.Join(etcDir, "qbee-agent.json"), []byte(`{"elevation_command":["/usr/bin/sudo", "-n"]}`))
 		r.MustExec("chown", "-R", runner.UnprivilegedUser+":"+runner.UnprivilegedUser, etcDir)
 
 		suCmd := "qbee-agent -c " + etcDir + " -s " + r.GetStateDirectory() + " config -r -f /app/config.json"
