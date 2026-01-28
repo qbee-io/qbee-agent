@@ -128,7 +128,7 @@ func LoadConfig(configDir, stateDir string) (*Config, error) {
 	return config, nil
 }
 
-// validateElevationCommand ensures the elevation command is safe to use.
+// ValidateElevationCommand ensures the elevation command is safe to use.
 // It only allows a small, known-safe set of elevation tools or absolute paths.
 func ValidateElevationCommand(cmd []string) error {
 	if len(cmd) == 0 {
