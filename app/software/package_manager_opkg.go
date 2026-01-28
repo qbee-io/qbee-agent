@@ -73,7 +73,7 @@ func (opkg *OpkgPackageManager) IsSupported() bool {
 	return err == nil
 }
 
-// Busy returns true if opog is currently locked.
+// Busy returns true if opkg is currently locked.
 func (opkg *OpkgPackageManager) Busy() (bool, error) {
 	opkg.lock.Lock()
 	defer opkg.lock.Unlock()
@@ -87,6 +87,17 @@ func checkPackageManagerLockFile(lockPath string, lockMode os.FileMode) (bool, e
 	// check the lock by attempting to acquire one
 	file, err := os.OpenFile(lockPath, syscall.O_CREAT|syscall.O_RDWR|syscall.O_CLOEXEC, lockMode)
 	if err != nil {
+		if os.Geteuid() == 0 {
+			// we are root, so this is unexpected
+			return false, fmt.Errorf("cannot open file %s: %w", lockPath, err)
+		}
+
+		if os.IsPermission(err) {
+			// we do not have permission to check the lock, best effort assume it's not locked.
+			// We do not return error here as it would prevent any package operations.
+			return false, nil
+		}
+
 		return false, fmt.Errorf("cannot open file %s: %w", lockPath, err)
 	}
 
@@ -197,9 +208,14 @@ func (opkg *OpkgPackageManager) listInstalledPackages(ctx context.Context) ([]Pa
 
 	installedPackages := make([]Package, 0)
 
+	output, err := utils.RunPrivilegedCommand(ctx, cmd)
+	if err != nil {
+		return nil, fmt.Errorf("error listing installed packages: %w", err)
+	}
+
 	// only process lines matching the following format:
 	// ii  libsystemd0:amd64           232-25+deb9u13     amd64              systemd utility library
-	err := utils.ForLinesInCommandOutput(ctx, cmd, func(line string) error {
+	err = utils.ForLines(bytes.NewBuffer(output), func(line string) error {
 
 		fields := strings.Fields(line)
 		if len(fields) < 3 {
