@@ -19,7 +19,7 @@ const OpenWRT = "openwrt:qbee"
 // RHEL is the RHEL based image used by the runner.
 const RHEL = "rhel:qbee"
 
-// UnprivilegedUser
+// UnprivilegedUser is the unprivileged user used by the runner if the UNPRIVILEGED_USER environment variable is set to "true".
 const UnprivilegedUser = "qbee-agent"
 
 // New creates a new runner for the given test.
