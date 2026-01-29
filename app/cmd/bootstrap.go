@@ -37,7 +37,6 @@ const (
 	bootstrapDeviceNameOption          = "device-name"
 	bootstrapDisableRemoteAccessOption = "disable-remote-access"
 	bootstrapCACert                    = "ca-cert"
-	bootstrapPrivilegeElevation        = "privilege-elevation"
 	bootstrapElevationCommand          = "elevation-command"
 )
 

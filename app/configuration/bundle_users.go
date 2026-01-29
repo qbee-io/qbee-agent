@@ -58,7 +58,7 @@ type User struct {
 }
 
 // Execute users config on the system.
-func (u UsersBundle) Execute(ctx context.Context, service *Service) error {
+func (u UsersBundle) Execute(ctx context.Context, _ *Service) error {
 	usersInventory, err := inventory.CollectUsersInventory()
 	if err != nil {
 		return err

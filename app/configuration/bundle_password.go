@@ -55,7 +55,6 @@ const shadowFileMode = 0640
 
 // Execute password config on the system.
 func (p PasswordBundle) Execute(ctx context.Context, service *Service) error {
-
 	// convert user passwords to a map for quick lookup
 	passwordMap := make(map[string]string)
 	for _, user := range p.Users {

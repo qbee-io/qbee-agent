@@ -249,7 +249,7 @@ func (runner *Runner) CreateFile(path string, contents []byte) {
 	}
 }
 
-// CreateFileWorldReadable creates a file with the given path and contents that is world-readable.
+// CreateFileWithPerms creates a file with the given path and contents that is world-readable.
 func (runner *Runner) CreateFileWithPerms(path string, contents []byte, perms os.FileMode) {
 	runner.CreateFile(path, contents)
 
