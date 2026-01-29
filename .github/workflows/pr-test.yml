@@ -9,7 +9,10 @@ on:
       - main
 
 jobs:
-  test:
+  test-src:
+    strategy:
+      matrix:
+        unprivileged: ["true","false"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,7 +23,19 @@ jobs:
           go-version: stable
 
       - name: Build and test
+        env:
+          UNPRIVILEGED_USER: ${{ matrix.unprivileged }}
         run: make docker-image test-src
+
+  vulncheck-and-linters:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: stable
 
       - id: govulncheck
         uses: golang/govulncheck-action@v1
