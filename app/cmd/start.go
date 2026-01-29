@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 
 	"go.qbee.io/agent/app/agent"
 	"go.qbee.io/agent/app/log"
@@ -49,7 +50,10 @@ var startCommand = cmd.Command{
 			return err
 		}
 
-		ctx := utils.ContextWithElevationCommand(context.Background(), cfg.ElevationCommand)
+		ctx, err := utils.ContextWithElevationCommand(context.Background(), cfg.ElevationCommand)
+		if err != nil {
+			return fmt.Errorf("invalid elevation command: %w", err)
+		}
 
 		if cfg.BootstrapKey != "" {
 			log.Infof("Found bootstrap key, bootstrapping device.")

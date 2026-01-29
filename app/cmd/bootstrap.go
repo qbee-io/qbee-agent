@@ -128,15 +128,14 @@ var bootstrapCommand = cmd.Command{
 			if err != nil {
 				return fmt.Errorf("cannot parse elevation command: %w", err)
 			}
-
-			if err := agent.ValidateElevationCommand(elevationCmd); err != nil {
-				return fmt.Errorf("invalid elevation command: %w", err)
-			}
-
 			cfg.ElevationCommand = elevationCmd
 		}
 
-		ctx := utils.ContextWithElevationCommand(context.Background(), cfg.ElevationCommand)
+		ctx, err := utils.ContextWithElevationCommand(context.Background(), cfg.ElevationCommand)
+		if err != nil {
+			return fmt.Errorf("bootstrap error: %w", err)
+		}
+
 		if err := agent.Bootstrap(ctx, cfg); err != nil {
 			return fmt.Errorf("bootstrap error: %w", err)
 		}

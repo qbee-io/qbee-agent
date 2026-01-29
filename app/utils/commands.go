@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"syscall"
 	"time"
@@ -195,8 +196,17 @@ func RebootCommand() ([]string, error) {
 }
 
 // ContextWithElevationCommand returns a new context with the given elevation command
-func ContextWithElevationCommand(ctx context.Context, elevationCmd []string) context.Context {
-	return context.WithValue(ctx, contextKeyElevationCommand, elevationCmd)
+func ContextWithElevationCommand(ctx context.Context, elevationCmd []string) (context.Context, error) {
+	// check if elevation command exists
+	if len(elevationCmd) == 0 {
+		return ctx, nil
+	}
+
+	if err := ValidateElevationCommand(elevationCmd); err != nil {
+		return nil, err
+	}
+
+	return context.WithValue(ctx, contextKeyElevationCommand, elevationCmd), nil
 }
 
 // GetElevationCommandFromContext retrieves the elevation command from the context
@@ -207,4 +217,21 @@ func GetElevationCommandFromContext(ctx context.Context) ([]string, bool) {
 	}
 	elevationCmd, ok := elevationCmdFromCtx.([]string)
 	return elevationCmd, ok
+}
+
+// ValidateElevationCommand ensures the elevation command is safe to use.
+func ValidateElevationCommand(cmd []string) error {
+	// Otherwise require an absolute path to avoid PATH-based attacks.
+	if !filepath.IsAbs(cmd[0]) {
+		return fmt.Errorf("elevation command %q must be an absolute path", cmd[0])
+	}
+
+	// check that the command is executable
+	if fileInfo, err := os.Stat(cmd[0]); err != nil {
+		return fmt.Errorf("cannot stat elevation command %q: %w", cmd[0], err)
+	} else if fileInfo.Mode()&0111 == 0 {
+		return fmt.Errorf("elevation command %q is not executable", cmd[0])
+	}
+
+	return nil
 }

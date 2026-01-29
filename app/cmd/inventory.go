@@ -59,7 +59,10 @@ var inventoryCommand = cmd.Command{
 			return err
 		}
 
-		ctx := utils.ContextWithElevationCommand(context.Background(), cfg.ElevationCommand)
+		ctx, err := utils.ContextWithElevationCommand(context.Background(), cfg.ElevationCommand)
+		if err != nil {
+			return fmt.Errorf("invalid elevation command: %w", err)
+		}
 
 		var inventoryData any
 

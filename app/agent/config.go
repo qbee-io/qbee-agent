@@ -107,28 +107,6 @@ func LoadConfig(configDir, stateDir string) (*Config, error) {
 	return config, nil
 }
 
-// ValidateElevationCommand ensures the elevation command is safe to use.
-// It only allows a small, known-safe set of elevation tools or absolute paths.
-func ValidateElevationCommand(cmd []string) error {
-	if len(cmd) == 0 {
-		return fmt.Errorf("elevation command is empty")
-	}
-
-	// Otherwise require an absolute path to avoid PATH-based attacks.
-	if !filepath.IsAbs(cmd[0]) {
-		return fmt.Errorf("elevation command %q must be an absolute path", cmd[0])
-	}
-
-	// check that the command is executable
-	if fileInfo, err := os.Stat(cmd[0]); err != nil {
-		return fmt.Errorf("cannot stat elevation command %q: %w", cmd[0], err)
-	} else if fileInfo.Mode()&0111 == 0 {
-		return fmt.Errorf("elevation command %q is not executable", cmd[0])
-	}
-
-	return nil
-}
-
 func (agent *Agent) saveConfig() error {
 
 	if agent.cfg.BootstrapKey != "" {
