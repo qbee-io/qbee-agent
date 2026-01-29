@@ -1,0 +1,25 @@
+name: platform-pr-tests-unprivileged
+permissions:
+  contents: read
+  pull-requests: write
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test-unprivileged:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: stable
+
+      - name: Build and test
+        env:
+          UNPRIVILEGED_USER: true
+        run: make docker-image test-src

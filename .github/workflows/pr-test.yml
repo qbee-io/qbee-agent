@@ -10,9 +10,6 @@ on:
 
 jobs:
   test:
-    strategy:
-      matrix:
-        unprivileged: ["true","false"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,21 +20,16 @@ jobs:
           go-version: stable
 
       - name: Build and test
-        env:
-          UNPRIVILEGED_USER: ${{ matrix.unprivileged }}
         run: make docker-image test-src
 
       - id: govulncheck
-        if: matrix.unprivileged == 'false'
         uses: golang/govulncheck-action@v1
         with:
           go-version-input: stable
           go-package: ./...
 
       - name: golint
-        if: matrix.unprivileged == 'false'
         run: go run golang.org/x/lint/golint@latest ./...
 
       - name: govet
-        if: matrix.unprivileged == 'false'
         run: go vet ./...
