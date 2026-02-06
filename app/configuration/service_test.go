@@ -18,6 +18,12 @@ package configuration
 
 import (
 	"context"
+	"crypto/tls"
+	"errors"
+	"fmt"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -171,4 +177,42 @@ func TestService_persistConfig(t *testing.T) {
 
 		assert.Equal(t, committedConfig, cfg)
 	})
+}
+
+func Test_ConfigEndpointBooleanReset(t *testing.T) {
+	apiClient := api.NewClient("localhost", "12345")
+	apiClient.WithTLSConfig(&tls.Config{InsecureSkipVerify: true})
+	srv := New(apiClient, t.TempDir(), "")
+	// reset retry counter to avoid waiting for retries in the test
+	srv.firstRunRetryCounter = 0
+
+	// first attempt to get config should fail and mark the config endpoint as unreachable
+	if _, err := srv.get(t.Context()); !errors.As(err, new(api.ConnectionError)) {
+		t.Fatalf("expected connection error, got %t", err)
+	}
+
+	// config endpoint should be marked as unreachable after failed connection attempt
+	if srv.IsConfigEndpointUnreachable() != true {
+		t.Fatalf("expected config endpoint to be unreachable")
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc(deviceConfigurationAPIPath, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("{}"))
+	})
+	ts := httptest.NewTLSServer(mux)
+	defer ts.Close()
+
+	srv.api.WithPort(fmt.Sprintf("%d", ts.Listener.Addr().(*net.TCPAddr).Port))
+
+	// this should reset the config endpoint unreachable flag to false and return an empty config without error
+	if _, err := srv.get(t.Context()); err != nil {
+		t.Fatalf("expected connection error, got %s", err.Error())
+	}
+
+	// config endpoint should now be reachable
+	if srv.IsConfigEndpointUnreachable() != false {
+		t.Fatalf("expected config endpoint to be reachable")
+	}
 }

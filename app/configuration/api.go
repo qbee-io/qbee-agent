@@ -37,12 +37,14 @@ const deviceConfigurationAPIPath = "/v1/org/device/auth/config"
 func (srv *Service) get(ctx context.Context) (*CommittedConfig, error) {
 	cfg, err := srv.getWithRetry(ctx)
 
+	// set a flag if the config endpoint is unreachable, so we can flag configuration about network
+	srv.configEndpointUnreachable = err != nil
+
 	srv.reportAPIError(ctx, err)
 
 	if err != nil {
 		return nil, err
 	}
-
 	return cfg, nil
 }
 

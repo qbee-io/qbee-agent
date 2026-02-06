@@ -489,8 +489,6 @@ func (srv *Service) Get(ctx context.Context) (*CommittedConfig, error) {
 		}
 
 		log.Warnf("failed to get config from API: %v", err)
-		srv.configEndpointUnreachable = true
-
 		return cfg, nil
 	}
 
