@@ -188,11 +188,11 @@ func Test_ConfigEndpointBooleanReset(t *testing.T) {
 
 	// first attempt to get config should fail and mark the config endpoint as unreachable
 	if _, err := srv.get(t.Context()); !errors.As(err, new(api.ConnectionError)) {
-		t.Fatalf("expected connection error, got %t", err)
+		t.Fatalf("expected connection error, got %v", err)
 	}
 
 	// config endpoint should be marked as unreachable after failed connection attempt
-	if srv.IsConfigEndpointUnreachable() != true {
+	if !srv.IsConfigEndpointUnreachable() {
 		t.Fatalf("expected config endpoint to be unreachable")
 	}
 
@@ -208,11 +208,11 @@ func Test_ConfigEndpointBooleanReset(t *testing.T) {
 
 	// this should reset the config endpoint unreachable flag to false and return an empty config without error
 	if _, err := srv.get(t.Context()); err != nil {
-		t.Fatalf("expected connection error, got %s", err.Error())
+		t.Fatalf("expected no error, got %v", err)
 	}
 
 	// config endpoint should now be reachable
-	if srv.IsConfigEndpointUnreachable() != false {
+	if srv.IsConfigEndpointUnreachable() {
 		t.Fatalf("expected config endpoint to be reachable")
 	}
 }
