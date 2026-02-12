@@ -189,3 +189,9 @@ func compressRequestBody(body *bytes.Buffer) io.Reader {
 
 	return compressedBuffer
 }
+
+// WithPort sets the port for the API client.
+func (cli *Client) WithPort(port string) *Client {
+	cli.port = port
+	return cli
+}
