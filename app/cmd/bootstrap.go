@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"go.qbee.io/agent/app/agent"
+	"go.qbee.io/agent/app/utils"
 	"go.qbee.io/agent/app/utils/cmd"
 )
 
@@ -36,6 +37,7 @@ const (
 	bootstrapDeviceNameOption          = "device-name"
 	bootstrapDisableRemoteAccessOption = "disable-remote-access"
 	bootstrapCACert                    = "ca-cert"
+	bootstrapElevationCommand          = "elevation-command"
 )
 
 var bootstrapCommand = cmd.Command{
@@ -93,9 +95,14 @@ var bootstrapCommand = cmd.Command{
 			Name: bootstrapCACert,
 			Help: "Custom CA certificate to use for TLS.",
 		},
+		{
+			Name: bootstrapElevationCommand,
+			Help: "Privilege elevation command command for non-root mode. Must be absolute path (e.g. \"/usr/bin/sudo -n\")",
+		},
 	},
 
 	Target: func(opts cmd.Options) error {
+
 		cfg := &agent.Config{
 			BootstrapKey:        opts[bootstrapKeyOption],
 			Directory:           opts[mainConfigDirOption],
@@ -116,7 +123,18 @@ var bootstrapCommand = cmd.Command{
 			return fmt.Errorf("bootstrap key (-k) is required")
 		}
 
-		ctx := context.Background()
+		if opts[bootstrapElevationCommand] != "" {
+			elevationCmd, err := utils.ParseCommandLine(opts[bootstrapElevationCommand])
+			if err != nil {
+				return fmt.Errorf("cannot parse elevation command: %w", err)
+			}
+			cfg.ElevationCommand = elevationCmd
+		}
+
+		ctx, err := utils.ContextWithElevationCommand(context.Background(), cfg.ElevationCommand)
+		if err != nil {
+			return fmt.Errorf("bootstrap error: %w", err)
+		}
 
 		if err := agent.Bootstrap(ctx, cfg); err != nil {
 			return fmt.Errorf("bootstrap error: %w", err)

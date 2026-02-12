@@ -18,6 +18,7 @@ package software
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -72,7 +73,7 @@ func (opkg *OpkgPackageManager) IsSupported() bool {
 	return err == nil
 }
 
-// Busy returns true if opog is currently locked.
+// Busy returns true if opkg is currently locked.
 func (opkg *OpkgPackageManager) Busy() (bool, error) {
 	opkg.lock.Lock()
 	defer opkg.lock.Unlock()
@@ -86,6 +87,17 @@ func checkPackageManagerLockFile(lockPath string, lockMode os.FileMode) (bool, e
 	// check the lock by attempting to acquire one
 	file, err := os.OpenFile(lockPath, syscall.O_CREAT|syscall.O_RDWR|syscall.O_CLOEXEC, lockMode)
 	if err != nil {
+		if os.Geteuid() == 0 {
+			// we are root, so this is unexpected
+			return false, fmt.Errorf("cannot open file %s: %w", lockPath, err)
+		}
+
+		if os.IsPermission(err) {
+			// we do not have permission to check the lock, best effort assume it's not locked.
+			// We do not return error here as it would prevent any package operations.
+			return false, nil
+		}
+
 		return false, fmt.Errorf("cannot open file %s: %w", lockPath, err)
 	}
 
@@ -141,14 +153,19 @@ func (opkg *OpkgPackageManager) listAvailableUpdates(ctx context.Context) (map[s
 
 	updateCmd := []string{opkgCmd, "update"}
 
-	if _, err := utils.RunCommand(ctx, updateCmd); err != nil {
+	if _, err := utils.RunPrivilegedCommand(ctx, updateCmd); err != nil {
 		return nil, err
 	}
 
 	cmd := []string{opkgCmd, "list-upgradable"}
 	updates := make(map[string]string)
 
-	err := utils.ForLinesInCommandOutput(ctx, cmd, func(line string) error {
+	output, err := utils.RunPrivilegedCommand(ctx, cmd)
+	if err != nil {
+		return nil, fmt.Errorf("error listing available updates: %w", err)
+	}
+
+	err = utils.ForLines(bytes.NewBuffer(output), func(line string) error {
 		pkg := opkg.parseUpdateAvailableLine(line)
 		if pkg != nil {
 			updates[pkg.ID()] = pkg.Update
@@ -191,9 +208,14 @@ func (opkg *OpkgPackageManager) listInstalledPackages(ctx context.Context) ([]Pa
 
 	installedPackages := make([]Package, 0)
 
+	output, err := utils.RunPrivilegedCommand(ctx, cmd)
+	if err != nil {
+		return nil, fmt.Errorf("error listing installed packages: %w", err)
+	}
+
 	// only process lines matching the following format:
 	// ii  libsystemd0:amd64           232-25+deb9u13     amd64              systemd utility library
-	err := utils.ForLinesInCommandOutput(ctx, cmd, func(line string) error {
+	err = utils.ForLines(bytes.NewBuffer(output), func(line string) error {
 
 		fields := strings.Fields(line)
 		if len(fields) < 3 {
@@ -322,7 +344,7 @@ func (opkg *OpkgPackageManager) UpgradeAll(ctx context.Context) (int, []byte, er
 	var output []byte
 
 	for _, cmd := range cmdList {
-		tmpOut, err := utils.RunCommand(ctx, cmd)
+		tmpOut, err := utils.RunPrivilegedCommand(ctx, cmd)
 		output = append(output, tmpOut...)
 		if err != nil {
 			return 0, output, fmt.Errorf("error upgrading packages: %w", err)
@@ -346,7 +368,7 @@ func (opkg *OpkgPackageManager) Install(ctx context.Context, pkgName, version st
 
 	defer cache.Delete(opkgPackagesCacheKey)
 
-	return utils.RunCommand(ctx, cmd)
+	return utils.RunPrivilegedCommand(ctx, cmd)
 }
 
 // InstallLocal package.
@@ -358,11 +380,11 @@ func (opkg *OpkgPackageManager) InstallLocal(ctx context.Context, pkgFilePath st
 
 	defer cache.Delete(opkgPackagesCacheKey)
 
-	return utils.RunCommand(ctx, cmd)
+	return utils.RunPrivilegedCommand(ctx, cmd)
 }
 
 // PackageArchitecture returns the architecture of the package manager
-func (opkg *OpkgPackageManager) PackageArchitecture() (string, error) {
+func (opkg *OpkgPackageManager) PackageArchitecture(ctx context.Context) (string, error) {
 	if cachedArch, ok := cache.Get(opkgPkgArchCacheKey); ok {
 		return cachedArch.(string), nil
 	}
@@ -371,7 +393,12 @@ func (opkg *OpkgPackageManager) PackageArchitecture() (string, error) {
 
 	var arch string
 
-	err := utils.ForLinesInCommandOutput(context.Background(), cmd, func(line string) error {
+	output, err := utils.RunPrivilegedCommand(ctx, cmd)
+	if err != nil {
+		return "", fmt.Errorf("error getting package architecture: %w", err)
+	}
+
+	err = utils.ForLines(bytes.NewBuffer(output), func(line string) error {
 		fields := strings.Fields(line)
 
 		if len(fields) < 3 {
@@ -415,8 +442,8 @@ func (opkg *OpkgPackageManager) ParsePackageFile(ctx context.Context, pkgFilePat
 }
 
 // IsSupportedArchitecture returns true if architecture is supported by the system
-func (opkg *OpkgPackageManager) IsSupportedArchitecture(arch string) error {
-	mainArch, err := opkg.PackageArchitecture()
+func (opkg *OpkgPackageManager) IsSupportedArchitecture(ctx context.Context, arch string) error {
+	mainArch, err := opkg.PackageArchitecture(ctx)
 	if err != nil {
 		return err
 	}

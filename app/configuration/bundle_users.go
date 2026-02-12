@@ -88,7 +88,7 @@ const (
 
 // AddUser to the system.
 func (u UsersBundle) AddUser(ctx context.Context, username string) error {
-	output, err := utils.RunCommand(ctx, []string{
+	output, err := utils.RunPrivilegedCommand(ctx, []string{
 		userAddCmd,
 		"--comment", fmt.Sprintf("%s,,,,User added by qbee", username),
 		"--create-home",
@@ -113,7 +113,7 @@ func (u UsersBundle) RemoveUser(ctx context.Context, username string) error {
 		return fmt.Errorf("cannot delete root user")
 	}
 
-	output, err := utils.RunCommand(ctx, []string{
+	output, err := utils.RunPrivilegedCommand(ctx, []string{
 		userDeleteCmd,
 		"--remove",
 		username,

@@ -24,6 +24,7 @@ import (
 
 	"go.qbee.io/agent/app/agent"
 	"go.qbee.io/agent/app/inventory"
+	"go.qbee.io/agent/app/utils"
 	"go.qbee.io/agent/app/utils/cmd"
 )
 
@@ -53,11 +54,14 @@ var inventoryCommand = cmd.Command{
 		inventoryType := inventory.Type(opts[inventoryTypeOption])
 		dryRun := opts[inventoryDryRunOption] == "true"
 
-		ctx := context.Background()
-
 		cfg, err := loadConfig(opts)
 		if err != nil {
 			return err
+		}
+
+		ctx, err := utils.ContextWithElevationCommand(context.Background(), cfg.ElevationCommand)
+		if err != nil {
+			return fmt.Errorf("invalid elevation command: %w", err)
 		}
 
 		var inventoryData any

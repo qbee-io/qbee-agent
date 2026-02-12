@@ -31,11 +31,11 @@ func Test_PackageManagement_PreCondition(t *testing.T) {
 
 	// by touch-ing a file on the file system as a pre-condition, we can check if the pre-condition was executed
 	executePackageManagementBundle(r, configuration.PackageManagementBundle{
-		PreCondition: "touch /pre-condition",
+		PreCondition: "touch /tmp/pre-condition",
 	})
 
 	// check that the pre-condition was executed
-	if _, err := r.Exec("ls", "/pre-condition"); err != nil {
+	if _, err := r.Exec("ls", "/tmp/pre-condition"); err != nil {
 		t.Fatalf("expected file not found: %v", err)
 	}
 }

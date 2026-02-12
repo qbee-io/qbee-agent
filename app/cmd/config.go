@@ -24,6 +24,7 @@ import (
 
 	"go.qbee.io/agent/app/agent"
 	"go.qbee.io/agent/app/configuration"
+	"go.qbee.io/agent/app/utils"
 	"go.qbee.io/agent/app/utils/cmd"
 )
 
@@ -59,11 +60,14 @@ var configCommand = cmd.Command{
 		fromFile := opts[configFromFileOption]
 		reportToConsole := opts[configReportToConsoleOption] == "true"
 
-		ctx := context.Background()
-
 		cfg, err := loadConfig(opts)
 		if err != nil {
 			return err
+		}
+
+		ctx, err := utils.ContextWithElevationCommand(context.Background(), cfg.ElevationCommand)
+		if err != nil {
+			return fmt.Errorf("invalid elevation command: %w", err)
 		}
 
 		var deviceAgent *agent.Agent

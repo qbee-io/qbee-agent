@@ -129,7 +129,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	}
 
 	raucInstallCmd := []string{"rauc", "install", raucPath}
-	output, err := utils.RunCommand(ctx, raucInstallCmd)
+	output, err := utils.RunPrivilegedCommand(ctx, raucInstallCmd)
 
 	if err != nil {
 		ReportError(
@@ -193,7 +193,7 @@ type RaucBundleInfo struct {
 func (r RaucBundle) getRaucBundleInfo(ctx context.Context, url string) (*RaucBundleInfo, error) {
 
 	raucInfoCmd := []string{"rauc", "info", "--output-format", "json", url}
-	raucInfoBytes, err := utils.RunCommand(ctx, raucInfoCmd)
+	raucInfoBytes, err := utils.RunPrivilegedCommand(ctx, raucInfoCmd)
 
 	if err != nil {
 		return nil, err

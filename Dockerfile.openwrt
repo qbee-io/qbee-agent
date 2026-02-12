@@ -21,6 +21,7 @@ RUN --mount=type=cache,target=/go \
 ADD https://downloads.openwrt.org/releases/23.05.0/targets/x86/64/openwrt-23.05.0-x86-64-rootfs.tar.gz /src/rootfs.tar.gz
 RUN mkdir /rootfs
 RUN tar -xz -C /rootfs -f /src/rootfs.tar.gz
+RUN rm -f /rootfs/etc/resolv.conf
 
 FROM scratch
 COPY --from=builder /rootfs /
@@ -35,6 +36,11 @@ RUN sed -i '/option check_signature/d' /etc/opkg.conf
 
 RUN mkdir /etc/qbee && echo '{}' > /etc/qbee/qbee-agent.json
 COPY --from=builder /usr/bin/qbee-agent /usr/bin/qbee-agent
+
+RUN opkg update
+RUN opkg install shadow-useradd shadow-su sudo bash
+RUN useradd --create-home --home-dir /home/qbee-agent --shell /bin/bash qbee-agent
+COPY package/share/sudoers/99-qbee-agent /etc/sudoers.d/99-qbee-agent
 
 WORKDIR /app
 CMD [ "/bin/sh" ]

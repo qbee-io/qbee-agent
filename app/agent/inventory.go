@@ -19,9 +19,11 @@ package agent
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"go.qbee.io/agent/app"
 	"go.qbee.io/agent/app/inventory"
+	"go.qbee.io/agent/app/log"
 )
 
 // doInventories collects all inventories and delivers them to the device hub API.
@@ -45,7 +47,12 @@ func (agent *Agent) doInventories(ctx context.Context) error {
 
 	for name, fn := range inventories {
 		if err := fn(ctx); err != nil {
-			return fmt.Errorf("failed to do %s inventory: %w", name, err)
+			// allow permission errors to pass silently for non-root users
+			if os.IsPermission(err) && os.Geteuid() != 0 {
+				log.Debugf("inventory '%s' skipped due to insufficient permissions", name)
+				continue
+			}
+			return fmt.Errorf("failed to collect/send inventory '%s': %w", name, err)
 		}
 	}
 

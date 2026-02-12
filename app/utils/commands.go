@@ -21,24 +21,71 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"syscall"
 	"time"
 )
 
+type cmdCtxKey int
+
+const (
+	contextKeyElevationCommand cmdCtxKey = iota
+)
+
 // RunCommand runs a command and returns its output.
 func RunCommand(ctx context.Context, cmd []string) ([]byte, error) {
-	command := NewCommand(ctx, cmd)
+	return RunCommandOutput(NewCommand(ctx, cmd))
+}
 
+// NewPrivilegedCommand creates a new exec.Cmd with privilege elevation if needed.
+func NewPrivilegedCommand(ctx context.Context, cmd []string) (*exec.Cmd, error) {
+	// if already root, run command directly without elevation
+	if os.Geteuid() == 0 {
+		return NewCommand(ctx, cmd), nil
+	}
+
+	elevationCmd, ok := GetElevationCommandFromContext(ctx)
+	if !ok {
+		return NewCommand(ctx, cmd), nil
+	}
+
+	// no elevation command provided, assume capabilities are set
+	if len(elevationCmd) == 0 {
+		return NewCommand(ctx, cmd), nil
+	}
+
+	// check if elevation command exists
+	if _, err := exec.LookPath(elevationCmd[0]); err != nil {
+		return nil, fmt.Errorf("%s not found: %w", elevationCmd[0], err)
+	}
+
+	cmd = append(elevationCmd, cmd...)
+	return NewCommand(ctx, cmd), nil
+}
+
+// RunPrivilegedCommand runs a command with the configured elevation command and returns its output.
+func RunPrivilegedCommand(ctx context.Context, cmd []string) ([]byte, error) {
+	command, err := NewPrivilegedCommand(ctx, cmd)
+	if err != nil {
+		return nil, err
+	}
+	return RunCommandOutput(command)
+}
+
+// RunCommandOutput runs a command and returns its output as a string.
+func RunCommandOutput(command *exec.Cmd) ([]byte, error) {
 	output, err := command.Output()
+
 	if err != nil {
 		exitError := new(exec.ExitError)
 		if errors.As(err, &exitError) {
-			return nil, fmt.Errorf("error running command %v: %w\n%s", cmd, err, exitError.Stderr)
+			return nil, fmt.Errorf("error running command %v: %w\n%s", command.Args, err, exitError.Stderr)
 		}
 
-		return nil, fmt.Errorf("error running command %v: %w", cmd, err)
+		return nil, fmt.Errorf("error running command %v: %w", command.Args, err)
 	}
 	return output, nil
 }
@@ -112,7 +159,7 @@ func generateSystemctlCommand(ctx context.Context, serviceName, command string) 
 
 	var output []byte
 	var err error
-	if output, err = RunCommand(ctx, cmd); err != nil {
+	if output, err = RunPrivilegedCommand(ctx, cmd); err != nil {
 		return nil, fmt.Errorf("error checking service status: %w", err)
 	}
 
@@ -146,4 +193,45 @@ func RebootCommand() ([]string, error) {
 	}
 
 	return nil, fmt.Errorf("cannot reboot: %s or %s not found", shutdownBinPath, rebootBinPath)
+}
+
+// ContextWithElevationCommand returns a new context with the given elevation command
+func ContextWithElevationCommand(ctx context.Context, elevationCmd []string) (context.Context, error) {
+	// check if elevation command exists
+	if len(elevationCmd) == 0 {
+		return ctx, nil
+	}
+
+	if err := ValidateElevationCommand(elevationCmd); err != nil {
+		return nil, err
+	}
+
+	return context.WithValue(ctx, contextKeyElevationCommand, elevationCmd), nil
+}
+
+// GetElevationCommandFromContext retrieves the elevation command from the context
+func GetElevationCommandFromContext(ctx context.Context) ([]string, bool) {
+	elevationCmdFromCtx := ctx.Value(contextKeyElevationCommand)
+	if elevationCmdFromCtx == nil {
+		return nil, false
+	}
+	elevationCmd, ok := elevationCmdFromCtx.([]string)
+	return elevationCmd, ok
+}
+
+// ValidateElevationCommand ensures the elevation command is safe to use.
+func ValidateElevationCommand(cmd []string) error {
+	// Otherwise require an absolute path to avoid PATH-based attacks.
+	if !filepath.IsAbs(cmd[0]) {
+		return fmt.Errorf("elevation command %q must be an absolute path", cmd[0])
+	}
+
+	// check that the command is executable
+	if fileInfo, err := os.Stat(cmd[0]); err != nil {
+		return fmt.Errorf("cannot stat elevation command %q: %w", cmd[0], err)
+	} else if fileInfo.Mode()&0111 == 0 {
+		return fmt.Errorf("elevation command %q is not executable", cmd[0])
+	}
+
+	return nil
 }

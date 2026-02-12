@@ -19,6 +19,9 @@ const OpenWRT = "openwrt:qbee"
 // RHEL is the RHEL based image used by the runner.
 const RHEL = "rhel:qbee"
 
+// UnprivilegedUser is the unprivileged user used by the runner if the UNPRIVILEGED_USER environment variable is set to "true".
+const UnprivilegedUser = "qbee-agent"
+
 // New creates a new runner for the given test.
 func New(t *testing.T) *Runner {
 	return NewWithImage(t, Debian, false)
@@ -80,6 +83,10 @@ func NewWithImage(t *testing.T, image string, privileged bool) *Runner {
 		image:     image,
 	}
 
+	if os.Getenv("UNPRIVILEGED_USER") == "true" {
+		runner.WithUnprivileged()
+	}
+
 	t.Cleanup(runner.Close)
 
 	return runner
@@ -87,9 +94,29 @@ func NewWithImage(t *testing.T, image string, privileged bool) *Runner {
 
 // Runner provides a convenient way to run the agent in a container.
 type Runner struct {
-	t         *testing.T
-	container string
-	image     string
+	t                *testing.T
+	container        string
+	image            string
+	execUnPrivileged bool
+}
+
+// WithUnprivileged sets whether commands should be executed unprivileged.
+func (runner *Runner) WithUnprivileged() *Runner {
+	runner.execUnPrivileged = true
+	return runner
+}
+
+// GetStateDirectory returns the state directory path for the runner.
+func (runner *Runner) GetStateDirectory() string {
+	if runner.execUnPrivileged {
+		return "/home/" + UnprivilegedUser + "/var"
+	}
+	return "/var/lib/qbee"
+}
+
+// GetUnprivileged returns whether commands are executed unprivileged.
+func (runner *Runner) GetUnprivileged() bool {
+	return runner.execUnPrivileged
 }
 
 // Close kills the container.
@@ -188,6 +215,16 @@ func (runner *Runner) MustExec(cmd ...string) []byte {
 	return output
 }
 
+// MustExecUnprivileged executes the given command unprivileged if the runner is set to unprivileged mode.
+func (runner *Runner) MustExecUnprivileged(cmd ...string) []byte {
+	if runner.execUnPrivileged {
+		suCmd := append([]string{"su", "-s", "/bin/sh", UnprivilegedUser, "-c"}, strings.Join(cmd, " "))
+		return runner.MustExec(suCmd...)
+	}
+
+	return runner.MustExec(cmd...)
+}
+
 // CreateFile creates a file with the given path and contents.
 func (runner *Runner) CreateFile(path string, contents []byte) {
 	fd, err := os.CreateTemp(runner.t.TempDir(), "qbee-test-*")
@@ -208,6 +245,16 @@ func (runner *Runner) CreateFile(path string, contents []byte) {
 	containerPath := fmt.Sprintf("%s:%s", runner.container, path)
 
 	if err = exec.Command("docker", "cp", fd.Name(), containerPath).Run(); err != nil {
+		panic(err)
+	}
+}
+
+// CreateFileWithPerms creates a file with the given path and contents that is world-readable.
+func (runner *Runner) CreateFileWithPerms(path string, contents []byte, perms os.FileMode) {
+	runner.CreateFile(path, contents)
+
+	// make sure the file can be read by non-root users
+	if err := exec.Command("docker", "exec", runner.container, "chmod", fmt.Sprintf("%o", perms), path).Run(); err != nil {
 		panic(err)
 	}
 }

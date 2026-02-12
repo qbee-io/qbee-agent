@@ -182,7 +182,7 @@ func Test_SoftwareManagementBundle_InstallPackage_WithConfigFileTemplate(t *test
 	// upload a test file to the file manager
 	fileContents := []byte("test\nkey: {{k1}} / {{k2}}")
 	filename := fmt.Sprintf("%s_%d", t.Name(), time.Now().UnixNano())
-	r.CreateFile("/"+filename, fileContents)
+	r.CreateFileWithPerms("/"+filename, fileContents, 0644)
 
 	config := configuration.CommittedConfig{
 		Bundles: []string{configuration.BundleParameters, configuration.BundleSoftwareManagement},
@@ -201,7 +201,7 @@ func Test_SoftwareManagementBundle_InstallPackage_WithConfigFileTemplate(t *test
 						ConfigFiles: []configuration.ConfigFile{
 							{
 								ConfigTemplate: "file:///" + filename,
-								ConfigLocation: "/etc/config.test",
+								ConfigLocation: r.GetStateDirectory() + "/config.test",
 							},
 						},
 						Parameters: []configuration.TemplateParameter{
@@ -218,7 +218,7 @@ func Test_SoftwareManagementBundle_InstallPackage_WithConfigFileTemplate(t *test
 
 	expectedReports := []string{
 		"[INFO] Successfully installed 'qbee-test'",
-		fmt.Sprintf("[INFO] Successfully rendered template file file:///%s to /etc/config.test", filename),
+		fmt.Sprintf("[INFO] Successfully rendered template file file:///%s to %s/config.test", filename, r.GetStateDirectory()),
 		// since we are not installing systemctl on the test docker image, we will get the following warning
 		"[WARN] Required restart of 'qbee-test' cannot be performed",
 	}
@@ -229,7 +229,7 @@ func Test_SoftwareManagementBundle_InstallPackage_WithConfigFileTemplate(t *test
 	assert.Equal(t, string(output), "2.1.1")
 
 	// check that the config files is present and correct
-	gotFileContents := r.ReadFile("/etc/config.test")
+	gotFileContents := r.ReadFile(r.GetStateDirectory() + "/config.test")
 	expectedContents := "test\nkey: test-value / param-value"
 	assert.Equal(t, string(gotFileContents), expectedContents)
 }

@@ -174,7 +174,7 @@ func GetRaucStatus(ctx context.Context) (*RaucStatus, error) {
 
 	raucStatusCmd := []string{"rauc", "status", "--output-format", "json", "--detailed"}
 
-	raucInfoBytes, err := utils.RunCommand(ctx, raucStatusCmd)
+	raucInfoBytes, err := utils.RunPrivilegedCommand(ctx, raucStatusCmd)
 
 	if err != nil {
 		return nil, err
