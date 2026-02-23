@@ -26,7 +26,7 @@ jobs:
         env:
           UNPRIVILEGED_USER: ${{ matrix.unprivileged }}
         run: make docker-image test-src
-          
+
   vulncheck-and-linters:
     runs-on: ubuntu-latest
     steps:
