@@ -20,7 +20,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: stable
+          go-version: 1.25.7
 
       - name: Build and test
         env:
@@ -35,12 +35,12 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: stable
+          go-version: 1.25.7
 
       - id: govulncheck
         uses: golang/govulncheck-action@v1
         with:
-          go-version-input: stable
+          go-version-input: 1.25.7
           go-package: ./...
 
       - name: golint
