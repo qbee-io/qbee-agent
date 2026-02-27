@@ -238,12 +238,13 @@ func (agent *Agent) RebootSystem(ctx context.Context) {
 		return
 	}
 
-	if output, err := utils.RunPrivilegedCommand(ctx, rebootCmd); err != nil {
+	var output []byte
+	if output, err = utils.RunPrivilegedCommand(ctx, rebootCmd); err != nil {
 		log.Errorf("scheduling system reboot failed: %v", err)
 		return
-	} else {
-		log.Infof("scheduling system reboot completed: %s", output)
 	}
+
+	log.Infof("scheduling system reboot completed: %s", output)
 
 	agent.stop <- true
 }
