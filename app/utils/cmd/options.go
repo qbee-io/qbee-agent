@@ -1,7 +1,19 @@
 package cmd
 
+import "strings"
+
 // Options represent a mapping of Option.Name to Option.Value for options selected by a user.
 type Options map[string]string
+
+// RemainingArgs returns the remaining positional arguments stored in Options.
+func (o Options) RemainingArgs() []string {
+	v, ok := o[RemainingArgsKey]
+	if !ok || v == "" {
+		return nil
+	}
+
+	return strings.Split(v, "\x00")
+}
 
 // Option represents a command line option.
 type Option struct {
