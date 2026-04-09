@@ -35,9 +35,8 @@ const (
 var attributesCommand = cmd.Command{
 	Description: "Manage device attributes.",
 	SubCommands: map[string]cmd.Command{
-		"get":    attributesGetCommand,
-		"set":    attributesSetCommand,
-		"update": attributesUpdateCommand,
+		"get": attributesGetCommand,
+		"set": attributesSetCommand,
 	},
 }
 
@@ -47,7 +46,7 @@ var attributesGetCommand = cmd.Command{
 		{
 			Name:    attributesFormatOption,
 			Short:   "f",
-			Help:    "Output format: json or export.",
+			Help:    "Output format: json or shell.",
 			Default: "json",
 		},
 	},
@@ -70,24 +69,29 @@ var attributesGetCommand = cmd.Command{
 		switch opts[attributesFormatOption] {
 		case "json":
 			return json.NewEncoder(os.Stdout).Encode(attrs)
-		case "export":
+		case "shell":
 			for _, attr := range attrs {
-				fmt.Printf("export %s=%q\n", attr.Key, attr.Value)
+				varName := attributes.ToShellVarName(attr.Key)
+				value := ""
+				if attr.Value != nil {
+					value = *attr.Value
+				}
+				fmt.Printf("%s=%q\n", varName, value)
 			}
 			return nil
 		default:
-			return fmt.Errorf("unsupported format %q, use json or export", opts[attributesFormatOption])
+			return fmt.Errorf("unsupported format %q, use json or shell", opts[attributesFormatOption])
 		}
 	},
 }
 
 var attributesSetCommand = cmd.Command{
-	Description: "Set device attributes, replacing all existing attributes.",
+	Description: "Set device attributes. Empty or null values delete the attribute.",
 	Options: []cmd.Option{
 		{
 			Name:  attributesJSONOption,
 			Short: "j",
-			Help:  `Attributes as a JSON array, e.g. '[{"key":"key1","value":"value1"}]'.`,
+			Help:  `Attributes as a JSON array, e.g. '[{"key":"key1","value":"value1"}]'. Use null to delete an attribute.`,
 		},
 	},
 	Target: func(opts cmd.Options) error {
@@ -107,35 +111,6 @@ var attributesSetCommand = cmd.Command{
 		}
 
 		return deviceAgent.Attributes.Set(context.Background(), attrs)
-	},
-}
-
-var attributesUpdateCommand = cmd.Command{
-	Description: "Update device attributes, merging with existing attributes.",
-	Options: []cmd.Option{
-		{
-			Name:  attributesJSONOption,
-			Short: "j",
-			Help:  `Attributes as a JSON array, e.g. '[{"key":"key1","value":"value1"}]'.`,
-		},
-	},
-	Target: func(opts cmd.Options) error {
-		attrs, err := parseAttributesInput(opts)
-		if err != nil {
-			return err
-		}
-
-		cfg, err := loadConfig(opts)
-		if err != nil {
-			return err
-		}
-
-		deviceAgent, err := agent.New(cfg)
-		if err != nil {
-			return fmt.Errorf("error initializing the agent: %w", err)
-		}
-
-		return deviceAgent.Attributes.Update(context.Background(), attrs)
 	},
 }
 
