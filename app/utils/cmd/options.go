@@ -15,6 +15,16 @@ func (o Options) RemainingArgs() []string {
 	return strings.Split(v, "\x00")
 }
 
+// MultiValues returns all values accumulated for a multi-value option.
+func (o Options) MultiValues(key string) []string {
+	v, ok := o[key]
+	if !ok || v == "" {
+		return nil
+	}
+
+	return strings.Split(v, "\x00")
+}
+
 // Option represents a command line option.
 type Option struct {
 	// Name of the option argument. When set to "option", "--option <val>" arguments will be expected.
@@ -43,4 +53,8 @@ type Option struct {
 	// Hidden if set, the option won't be returned in the help message.
 	// This is useful for internal options.
 	Hidden bool
+
+	// Multi if set, the option can be specified multiple times.
+	// All values are stored as null-byte separated string and can be retrieved with Options.MultiValues.
+	Multi bool
 }

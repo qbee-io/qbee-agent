@@ -29,6 +29,7 @@ import (
 
 const (
 	attributesFormatOption = "format"
+	attributesKeyOption    = "key"
 	attributesJSONOption   = "json"
 )
 
@@ -49,6 +50,12 @@ var attributesGetCommand = cmd.Command{
 			Help:    "Output format: json or shell.",
 			Default: "json",
 		},
+		{
+			Name:  attributesKeyOption,
+			Short: "k",
+			Help:  "Filter output to a specific attribute key. Can be repeated.",
+			Multi: true,
+		},
 	},
 	Target: func(opts cmd.Options) error {
 		cfg, err := loadConfig(opts)
@@ -66,10 +73,23 @@ var attributesGetCommand = cmd.Command{
 			return err
 		}
 
+		keys := opts.MultiValues(attributesKeyOption)
+
 		switch opts[attributesFormatOption] {
 		case "json":
+			if len(keys) > 0 {
+				return json.NewEncoder(os.Stdout).Encode(deviceAttrs.FilterToMap(keys))
+			}
 			return json.NewEncoder(os.Stdout).Encode(deviceAttrs)
 		case "shell":
+			if len(keys) > 0 {
+				for _, key := range keys {
+					if v, ok := deviceAttrs.GetValue(key); ok {
+						fmt.Printf("%s=%q\n", attributes.ToShellVarName(key), v)
+					}
+				}
+				return nil
+			}
 			for _, line := range deviceAttrs.ShellLines() {
 				fmt.Println(line)
 			}

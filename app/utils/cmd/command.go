@@ -192,7 +192,15 @@ func (cmd Command) evaluateArgs(args []string, opts Options) ([]string, Options,
 					return nil, nil, fmt.Errorf("value required for %s", arg)
 				}
 
-				opts[opt.Name] = args[i]
+				if opt.Multi {
+					if existing, hasExisting := opts[opt.Name]; hasExisting {
+						opts[opt.Name] = existing + "\x00" + args[i]
+					} else {
+						opts[opt.Name] = args[i]
+					}
+				} else {
+					opts[opt.Name] = args[i]
+				}
 			}
 		} else {
 			args = args[i:]

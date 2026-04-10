@@ -95,6 +95,42 @@ func (d DeviceAttributes) ShellLines() []string {
 	return lines
 }
 
+// GetValue returns the value for a given normalized attribute key (e.g. "device_name", "custom.mykey").
+// Returns ("", false) if the key is not present.
+func (d DeviceAttributes) GetValue(key string) (string, bool) {
+	switch key {
+	case "device_name":
+		return d.DeviceName, true
+	case "longitude":
+		return d.Longitude, true
+	case "latitude":
+		return d.Latitude, true
+	default:
+		if strings.HasPrefix(key, "custom.") {
+			suffix := key[len("custom."):]
+			if d.Custom != nil {
+				v, ok := d.Custom[suffix]
+				return v, ok
+			}
+		}
+		return "", false
+	}
+}
+
+// FilterToMap returns a flat map containing only the specified keys and their values.
+// Unknown or missing keys are silently omitted.
+func (d DeviceAttributes) FilterToMap(keys []string) map[string]string {
+	result := make(map[string]string, len(keys))
+
+	for _, key := range keys {
+		if v, ok := d.GetValue(key); ok {
+			result[key] = v
+		}
+	}
+
+	return result
+}
+
 // toAPIPayload converts an Attributes slice into a map suitable for JSON-encoding and sending to the
 // API. Only attributes present in the slice are included in the payload, so callers control which
 // fields are touched. A nil or empty Value signals deletion (encoded as JSON null).
@@ -205,7 +241,7 @@ func (srv *Service) Get(ctx context.Context) (DeviceAttributes, error) {
 func (srv *Service) Set(ctx context.Context, attrs Attributes) error {
 	payload := attrs.toAPIPayload()
 
-	if err := srv.api.Post(ctx, attributesAPIPath, payload, nil); err != nil {
+	if err := srv.api.Patch(ctx, attributesAPIPath, payload, nil); err != nil {
 		return fmt.Errorf("error setting attributes: %w", err)
 	}
 
