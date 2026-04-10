@@ -35,7 +35,7 @@ const (
 
 // prepareDirectories makes sure that agent's directories are in place.
 func prepareDirectories(cfgDirectory, stateDirectory string) error {
-	log.Infof("Preparing agent directories")
+	log.Debugf("Preparing agent directories")
 
 	cacheDirectoryPath := filepath.Join(stateDirectory, appWorkingDirectory, cacheDirectory)
 

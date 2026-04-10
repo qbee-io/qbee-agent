@@ -57,11 +57,12 @@ var Main = cmd.Command{
 		},
 	},
 	SubCommands: map[string]cmd.Command{
-		"bootstrap": bootstrapCommand,
-		"config":    configCommand,
-		"inventory": inventoryCommand,
-		"start":     startCommand,
-		"version":   versionCommand,
+		"attributes": attributesCommand,
+		"bootstrap":  bootstrapCommand,
+		"config":     configCommand,
+		"inventory":  inventoryCommand,
+		"start":      startCommand,
+		"version":    versionCommand,
 	},
 }
 

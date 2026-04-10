@@ -10,6 +10,10 @@ import (
 
 const (
 	helpOption = "help"
+
+	// RemainingArgsKey is the key used to store remaining positional arguments in Options.
+	// The arguments are stored as a null-byte separated string.
+	RemainingArgsKey = "\x00"
 )
 
 // Command represents a level in the command tree.
@@ -44,6 +48,9 @@ func (cmd Command) Execute(args []string, opts Options) error {
 	}
 
 	if cmd.Target != nil {
+		if len(args) > 0 {
+			opts[RemainingArgsKey] = strings.Join(args, "\x00")
+		}
 		return cmd.Target(opts)
 	}
 
@@ -185,7 +192,15 @@ func (cmd Command) evaluateArgs(args []string, opts Options) ([]string, Options,
 					return nil, nil, fmt.Errorf("value required for %s", arg)
 				}
 
-				opts[opt.Name] = args[i]
+				if opt.Multi {
+					if existing, hasExisting := opts[opt.Name]; hasExisting {
+						opts[opt.Name] = existing + "\x00" + args[i]
+					} else {
+						opts[opt.Name] = args[i]
+					}
+				} else {
+					opts[opt.Name] = args[i]
+				}
 			}
 		} else {
 			args = args[i:]
