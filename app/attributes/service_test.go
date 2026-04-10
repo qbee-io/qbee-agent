@@ -101,7 +101,7 @@ func TestDeviceAttributesJSON(t *testing.T) {
 		t.Fatalf("json.Marshal failed: %v", err)
 	}
 
-	var gotMap, wantMap map[string]interface{}
+	var gotMap, wantMap map[string]any
 	_ = json.Unmarshal(b, &gotMap)
 	_ = json.Unmarshal([]byte(apiJSON), &wantMap)
 
@@ -191,7 +191,7 @@ func TestToAPIPayload(t *testing.T) {
 			}
 
 			// Compare as unmarshaled maps to avoid key-ordering issues.
-			var got, want map[string]interface{}
+			var got, want map[string]any
 			if err := json.Unmarshal(gotBytes, &got); err != nil {
 				t.Fatalf("unmarshal got: %v", err)
 			}

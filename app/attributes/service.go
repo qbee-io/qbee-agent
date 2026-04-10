@@ -120,8 +120,8 @@ func (d DeviceAttributes) GetValue(key string) (string, bool) {
 // Filter returns a map containing only the specified keys with their values, using the same
 // nested structure as the full DeviceAttributes JSON (custom.* keys are nested under "custom").
 // Unknown or missing keys are silently omitted.
-func (d DeviceAttributes) Filter(keys []string) map[string]interface{} {
-	result := make(map[string]interface{})
+func (d DeviceAttributes) Filter(keys []string) map[string]any {
+	result := make(map[string]any)
 	var custom map[string]string
 
 	for _, key := range keys {
@@ -157,14 +157,14 @@ func (d DeviceAttributes) Filter(keys []string) map[string]interface{} {
 // toAPIPayload converts an Attributes slice into a map suitable for JSON-encoding and sending to the
 // API. Only attributes present in the slice are included in the payload, so callers control which
 // fields are touched. A nil or empty Value signals deletion (encoded as JSON null).
-func (attrs Attributes) toAPIPayload() map[string]interface{} {
-	payload := make(map[string]interface{})
-	custom := make(map[string]interface{})
+func (attrs Attributes) toAPIPayload() map[string]any {
+	payload := make(map[string]any)
+	custom := make(map[string]any)
 	hasCustom := false
 
 	for _, attr := range attrs {
 		// Nil or empty string → null (delete); otherwise keep the value.
-		var val interface{}
+		var val any
 		if attr.Value != nil && *attr.Value != "" {
 			val = *attr.Value
 		}
