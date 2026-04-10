@@ -17,6 +17,7 @@
 package attributes
 
 import (
+	"sort"
 	"testing"
 
 	"go.qbee.io/agent/app/utils/assert"
@@ -55,6 +56,7 @@ func TestDeviceAttributesShellLines(t *testing.T) {
 	}
 
 	lines := d.ShellLines()
+	sort.Strings(lines)
 
 	want := []string{
 		`QBEE_ATTRIBUTE_DEVICE_NAME="qbee-dev-1"`,
@@ -62,6 +64,7 @@ func TestDeviceAttributesShellLines(t *testing.T) {
 		`QBEE_ATTRIBUTE_LATITUDE="12.34"`,
 		`QBEE_ATTRIBUTE_CUSTOM_MYKEY="myvalue"`,
 	}
+	sort.Strings(want)
 
 	assert.Equal(t, lines, want)
 }
