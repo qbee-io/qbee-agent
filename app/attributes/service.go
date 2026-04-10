@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"go.qbee.io/agent/app/api"
@@ -27,7 +28,7 @@ import (
 
 const attributesAPIPath = "/v1/org/device/auth/attributes"
 
-// allowedKeys lists the attribute keys that are not custom (i.e. predefined).
+// allowedKeys lists the predefined (non-custom) attribute keys.
 var allowedKeys = map[string]bool{
 	"device_name": true,
 	"longitude":   true,
@@ -61,7 +62,75 @@ func ToShellVarName(key string) string {
 	return "QBEE_ATTRIBUTE_" + strings.ToUpper(strings.NewReplacer(".", "_", "-", "_").Replace(key))
 }
 
-// Attribute represents a single key-value attribute.
+// deviceAttributesResponse matches the flat-object JSON format returned by the API:
+//
+//	{"device_name":"...","longitude":"...","latitude":"...","custom":{"key":"value",...}}
+type deviceAttributesResponse struct {
+	DeviceName string            `json:"device_name"`
+	Longitude  string            `json:"longitude"`
+	Latitude   string            `json:"latitude"`
+	Custom     map[string]string `json:"custom"`
+}
+
+// toAttributes converts the API response into the internal Attributes slice.
+// All fields are always included (even when empty) so the caller can see the full current state.
+func (r deviceAttributesResponse) toAttributes() Attributes {
+	attrs := Attributes{
+		{Key: "device_name", Value: &r.DeviceName},
+		{Key: "longitude", Value: &r.Longitude},
+		{Key: "latitude", Value: &r.Latitude},
+	}
+
+	keys := make([]string, 0, len(r.Custom))
+	for k := range r.Custom {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		v := r.Custom[k]
+		attrs = append(attrs, Attribute{Key: "custom." + k, Value: &v})
+	}
+
+	return attrs
+}
+
+// toAPIPayload converts an Attributes slice into a map suitable for JSON-encoding and sending to the
+// API. Only attributes present in the slice are included in the payload, so callers control which
+// fields are touched. A nil or empty Value signals deletion (encoded as JSON null).
+func (attrs Attributes) toAPIPayload() map[string]interface{} {
+	payload := make(map[string]interface{})
+	custom := make(map[string]interface{})
+	hasCustom := false
+
+	for _, attr := range attrs {
+		// Nil or empty string → null (delete); otherwise keep the value.
+		var val interface{}
+		if attr.Value != nil && *attr.Value != "" {
+			val = *attr.Value
+		}
+
+		switch attr.Key {
+		case "device_name", "longitude", "latitude":
+			payload[attr.Key] = val
+		default:
+			if strings.HasPrefix(attr.Key, "custom.") {
+				suffix := attr.Key[len("custom."):]
+				custom[suffix] = val
+				hasCustom = true
+			}
+		}
+	}
+
+	if hasCustom {
+		payload["custom"] = custom
+	}
+
+	return payload
+}
+
+// Attribute represents a single key-value attribute in the internal/CLI representation.
 // Value is a pointer to allow null values, which will delete the attribute.
 type Attribute struct {
 	Key   string  `json:"key"`
@@ -72,7 +141,7 @@ type Attribute struct {
 type Attributes []Attribute
 
 // ParseKeyValueArgs parses "key=value" strings into Attributes.
-// An empty value (e.g. "key=") is treated as an empty string and will delete the attribute.
+// An empty value (e.g. "key=") signals deletion of that attribute.
 func ParseKeyValueArgs(args []string) (Attributes, error) {
 	attrs := make(Attributes, 0, len(args))
 
@@ -93,8 +162,8 @@ func ParseKeyValueArgs(args []string) (Attributes, error) {
 	return attrs, nil
 }
 
-// ParseJSONArgs parses a JSON list of attribute objects into Attributes.
-// A null value will delete the attribute.
+// ParseJSONArgs parses a JSON array of {"key":"...","value":"..."} objects into Attributes.
+// A null value signals deletion of that attribute.
 func ParseJSONArgs(data string) (Attributes, error) {
 	var attrs Attributes
 
@@ -123,19 +192,21 @@ func New(apiClient *api.Client) *Service {
 
 // Get retrieves current device attributes from the device hub.
 func (srv *Service) Get(ctx context.Context) (Attributes, error) {
-	var attrs Attributes
+	var response deviceAttributesResponse
 
-	if err := srv.api.Get(ctx, attributesAPIPath, &attrs); err != nil {
+	if err := srv.api.Get(ctx, attributesAPIPath, &response); err != nil {
 		return nil, fmt.Errorf("error getting attributes: %w", err)
 	}
 
-	return attrs, nil
+	return response.toAttributes(), nil
 }
 
-// Set replaces all device attributes.
-// Attributes with a null or empty value will be deleted.
+// Set updates device attributes. Only the supplied attributes are sent to the API.
+// An empty or null Value signals that the attribute should be deleted.
 func (srv *Service) Set(ctx context.Context, attrs Attributes) error {
-	if err := srv.api.Post(ctx, attributesAPIPath, attrs, nil); err != nil {
+	payload := attrs.toAPIPayload()
+
+	if err := srv.api.Post(ctx, attributesAPIPath, payload, nil); err != nil {
 		return fmt.Errorf("error setting attributes: %w", err)
 	}
 

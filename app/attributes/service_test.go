@@ -17,6 +17,7 @@
 package attributes
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 )
@@ -72,6 +73,105 @@ func TestToShellVarName(t *testing.T) {
 	}
 }
 
+// TestDeviceAttributesResponseToAttributes verifies that the API flat-object response is
+// correctly converted to the internal Attributes slice.
+
+func TestDeviceAttributesResponseToAttributes(t *testing.T) {
+	// Simulate what the API returns.
+	apiJSON := `{"device_name":"qbee-dev-1","longitude":"","latitude":"","custom":{"mykey":"myvalue"}}`
+
+	var response deviceAttributesResponse
+	if err := json.Unmarshal([]byte(apiJSON), &response); err != nil {
+		t.Fatalf("failed to unmarshal API response: %v", err)
+	}
+
+	got := response.toAttributes()
+
+	want := Attributes{
+		{Key: "device_name", Value: strPtr("qbee-dev-1")},
+		{Key: "longitude", Value: strPtr("")},
+		{Key: "latitude", Value: strPtr("")},
+		{Key: "custom.mykey", Value: strPtr("myvalue")},
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("toAttributes() = %v, want %v", got, want)
+	}
+}
+
+// TestToAPIPayload verifies that Attributes are serialised into the flat-object map the API
+// expects, including null values for deletions and omission of unspecified fields.
+func TestToAPIPayload(t *testing.T) {
+	tests := []struct {
+		name    string
+		attrs   Attributes
+		wantJSON string
+	}{
+		{
+			name:     "set device_name",
+			attrs:    Attributes{{Key: "device_name", Value: strPtr("mydevice")}},
+			wantJSON: `{"device_name":"mydevice"}`,
+		},
+		{
+			name:     "delete device_name via empty string",
+			attrs:    Attributes{{Key: "device_name", Value: strPtr("")}},
+			wantJSON: `{"device_name":null}`,
+		},
+		{
+			name:     "delete device_name via nil",
+			attrs:    Attributes{{Key: "device_name", Value: nil}},
+			wantJSON: `{"device_name":null}`,
+		},
+		{
+			name: "set custom attribute",
+			attrs: Attributes{{Key: "custom.mykey", Value: strPtr("myvalue")}},
+			wantJSON: `{"custom":{"mykey":"myvalue"}}`,
+		},
+		{
+			name: "delete custom attribute via empty string",
+			attrs: Attributes{{Key: "custom.mykey", Value: strPtr("")}},
+			wantJSON: `{"custom":{"mykey":null}}`,
+		},
+		{
+			name: "mixed predefined and custom",
+			attrs: Attributes{
+				{Key: "device_name", Value: strPtr("dev1")},
+				{Key: "custom.env", Value: strPtr("prod")},
+			},
+			wantJSON: `{"custom":{"env":"prod"},"device_name":"dev1"}`,
+		},
+		{
+			name:     "empty attrs produces empty payload",
+			attrs:    Attributes{},
+			wantJSON: `{}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			payload := tt.attrs.toAPIPayload()
+
+			gotBytes, err := json.Marshal(payload)
+			if err != nil {
+				t.Fatalf("json.Marshal failed: %v", err)
+			}
+
+			// Compare as unmarshaled maps to avoid key-ordering issues.
+			var got, want map[string]interface{}
+			if err := json.Unmarshal(gotBytes, &got); err != nil {
+				t.Fatalf("unmarshal got: %v", err)
+			}
+			if err := json.Unmarshal([]byte(tt.wantJSON), &want); err != nil {
+				t.Fatalf("unmarshal want: %v", err)
+			}
+
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("toAPIPayload() JSON = %s, want %s", gotBytes, tt.wantJSON)
+			}
+		})
+	}
+}
+
 func TestParseKeyValueArgs(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -103,7 +203,7 @@ func TestParseKeyValueArgs(t *testing.T) {
 			want: Attributes{{Key: "custom.url", Value: strPtr("http://example.com?a=1")}},
 		},
 		{
-			name: "empty value deletes attribute",
+			name: "empty value signals deletion",
 			args: []string{"device_name="},
 			want: Attributes{{Key: "device_name", Value: strPtr("")}},
 		},
@@ -151,7 +251,7 @@ func TestParseJSONArgs(t *testing.T) {
 			want:  Attributes{{Key: "device_name", Value: strPtr("mydevice")}},
 		},
 		{
-			name:  "null value deletes attribute",
+			name:  "null value signals deletion",
 			input: `[{"key":"longitude","value":null}]`,
 			want:  Attributes{{Key: "longitude", Value: nil}},
 		},
