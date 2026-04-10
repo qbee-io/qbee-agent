@@ -107,7 +107,7 @@ var attributesSetCommand = cmd.Command{
 		{
 			Name:  attributesJSONOption,
 			Short: "j",
-			Help:  `Attributes as a JSON array, e.g. '[{"key":"key1","value":"value1"}]'. Use null to delete an attribute.`,
+			Help:  `Attributes as a JSON array, e.g. '{"device_name":"mydevie","custom":{"mykey":"myvalue"}}'. Use null to delete an attribute.`,
 		},
 	},
 	Target: func(opts cmd.Options) error {
@@ -131,9 +131,15 @@ var attributesSetCommand = cmd.Command{
 }
 
 // parseAttributesInput parses attributes from either --json option or key=value positional arguments.
-func parseAttributesInput(opts cmd.Options) (attributes.Attributes, error) {
+func parseAttributesInput(opts cmd.Options) (*attributes.DeviceAttributes, error) {
 	if jsonInput, ok := opts[attributesJSONOption]; ok {
-		return attributes.ParseJSONArgs(jsonInput)
+		var attrs attributes.DeviceAttributes
+
+		if err := json.Unmarshal([]byte(jsonInput), &attrs); err != nil {
+			return nil, fmt.Errorf("invalid JSON attributes: %w", err)
+		}
+
+		return &attrs, nil
 	}
 
 	return attributes.ParseKeyValueArgs(opts.RemainingArgs())

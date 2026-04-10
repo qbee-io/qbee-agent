@@ -17,38 +17,10 @@
 package attributes
 
 import (
-	"encoding/json"
-	"reflect"
 	"testing"
+
+	"go.qbee.io/agent/app/utils/assert"
 )
-
-func strPtr(s string) *string { return &s }
-
-func TestValidateKey(t *testing.T) {
-	tests := []struct {
-		name    string
-		key     string
-		wantErr bool
-	}{
-		{name: "device_name", key: "device_name"},
-		{name: "longitude", key: "longitude"},
-		{name: "latitude", key: "latitude"},
-		{name: "custom with suffix", key: "custom.foo"},
-		{name: "custom with dot suffix", key: "custom.foo.bar"},
-		{name: "custom prefix only is invalid", key: "custom.", wantErr: true},
-		{name: "arbitrary key is invalid", key: "hostname", wantErr: true},
-		{name: "empty key is invalid", key: "", wantErr: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateKey(tt.key)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateKey(%q) error = %v, wantErr %v", tt.key, err, tt.wantErr)
-			}
-		})
-	}
-}
 
 func TestToShellVarName(t *testing.T) {
 	tests := []struct {
@@ -73,49 +45,12 @@ func TestToShellVarName(t *testing.T) {
 	}
 }
 
-// TestDeviceAttributesJSON verifies that DeviceAttributes round-trips JSON correctly,
-// including the exact format returned by the backend API.
-func TestDeviceAttributesJSON(t *testing.T) {
-	// Simulate what the API returns.
-	apiJSON := `{"device_name":"qbee-dev-1","longitude":"","latitude":"","custom":{"mykey":"myvalue"}}`
-
-	var got DeviceAttributes
-	if err := json.Unmarshal([]byte(apiJSON), &got); err != nil {
-		t.Fatalf("failed to unmarshal API response: %v", err)
-	}
-
-	want := DeviceAttributes{
-		DeviceName: "qbee-dev-1",
-		Longitude:  "",
-		Latitude:   "",
-		Custom:     map[string]string{"mykey": "myvalue"},
-	}
-
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Unmarshal DeviceAttributes = %+v, want %+v", got, want)
-	}
-
-	// Re-marshal and compare JSON strings.
-	b, err := json.Marshal(got)
-	if err != nil {
-		t.Fatalf("json.Marshal failed: %v", err)
-	}
-
-	var gotMap, wantMap map[string]any
-	_ = json.Unmarshal(b, &gotMap)
-	_ = json.Unmarshal([]byte(apiJSON), &wantMap)
-
-	if !reflect.DeepEqual(gotMap, wantMap) {
-		t.Errorf("re-marshaled JSON = %s, want %s", b, apiJSON)
-	}
-}
-
 // TestDeviceAttributesShellLines verifies that ShellLines produces correctly named shell variables.
 func TestDeviceAttributesShellLines(t *testing.T) {
-	d := DeviceAttributes{
+	d := &DeviceAttributes{
 		DeviceName: "qbee-dev-1",
 		Longitude:  "12.34",
-		Latitude:   "",
+		Latitude:   "12.34",
 		Custom:     map[string]string{"mykey": "myvalue"},
 	}
 
@@ -124,122 +59,47 @@ func TestDeviceAttributesShellLines(t *testing.T) {
 	want := []string{
 		`QBEE_ATTRIBUTE_DEVICE_NAME="qbee-dev-1"`,
 		`QBEE_ATTRIBUTE_LONGITUDE="12.34"`,
-		`QBEE_ATTRIBUTE_LATITUDE=""`,
+		`QBEE_ATTRIBUTE_LATITUDE="12.34"`,
 		`QBEE_ATTRIBUTE_CUSTOM_MYKEY="myvalue"`,
 	}
 
-	if !reflect.DeepEqual(lines, want) {
-		t.Errorf("ShellLines() = %v, want %v", lines, want)
-	}
-}
-
-// TestToAPIPayload verifies that Attributes are serialised into the flat-object map the API
-// expects, including null values for deletions and omission of unspecified fields.
-func TestToAPIPayload(t *testing.T) {
-	tests := []struct {
-		name    string
-		attrs   Attributes
-		wantJSON string
-	}{
-		{
-			name:     "set device_name",
-			attrs:    Attributes{{Key: "device_name", Value: strPtr("mydevice")}},
-			wantJSON: `{"device_name":"mydevice"}`,
-		},
-		{
-			name:     "delete device_name via empty string",
-			attrs:    Attributes{{Key: "device_name", Value: strPtr("")}},
-			wantJSON: `{"device_name":null}`,
-		},
-		{
-			name:     "delete device_name via nil",
-			attrs:    Attributes{{Key: "device_name", Value: nil}},
-			wantJSON: `{"device_name":null}`,
-		},
-		{
-			name: "set custom attribute",
-			attrs: Attributes{{Key: "custom.mykey", Value: strPtr("myvalue")}},
-			wantJSON: `{"custom":{"mykey":"myvalue"}}`,
-		},
-		{
-			name: "delete custom attribute via empty string",
-			attrs: Attributes{{Key: "custom.mykey", Value: strPtr("")}},
-			wantJSON: `{"custom":{"mykey":null}}`,
-		},
-		{
-			name: "mixed predefined and custom",
-			attrs: Attributes{
-				{Key: "device_name", Value: strPtr("dev1")},
-				{Key: "custom.env", Value: strPtr("prod")},
-			},
-			wantJSON: `{"custom":{"env":"prod"},"device_name":"dev1"}`,
-		},
-		{
-			name:     "empty attrs produces empty payload",
-			attrs:    Attributes{},
-			wantJSON: `{}`,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			payload := tt.attrs.toAPIPayload()
-
-			gotBytes, err := json.Marshal(payload)
-			if err != nil {
-				t.Fatalf("json.Marshal failed: %v", err)
-			}
-
-			// Compare as unmarshaled maps to avoid key-ordering issues.
-			var got, want map[string]any
-			if err := json.Unmarshal(gotBytes, &got); err != nil {
-				t.Fatalf("unmarshal got: %v", err)
-			}
-			if err := json.Unmarshal([]byte(tt.wantJSON), &want); err != nil {
-				t.Fatalf("unmarshal want: %v", err)
-			}
-
-			if !reflect.DeepEqual(got, want) {
-				t.Errorf("toAPIPayload() JSON = %s, want %s", gotBytes, tt.wantJSON)
-			}
-		})
-	}
+	assert.Equal(t, lines, want)
 }
 
 func TestParseKeyValueArgs(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    []string
-		want    Attributes
+		want    *DeviceAttributes
 		wantErr bool
 	}{
 		{
 			name: "device_name key=value",
 			args: []string{"device_name=mydevice"},
-			want: Attributes{{Key: "device_name", Value: strPtr("mydevice")}},
+			want: &DeviceAttributes{DeviceName: "mydevice"},
 		},
 		{
 			name: "multiple allowed keys",
 			args: []string{"longitude=12.34", "latitude=56.78"},
-			want: Attributes{
-				{Key: "longitude", Value: strPtr("12.34")},
-				{Key: "latitude", Value: strPtr("56.78")},
+			want: &DeviceAttributes{
+				Longitude: "12.34",
+				Latitude:  "56.78",
 			},
 		},
 		{
 			name: "custom key",
 			args: []string{"custom.env=production"},
-			want: Attributes{{Key: "custom.env", Value: strPtr("production")}},
+			want: &DeviceAttributes{Custom: map[string]string{"env": "production"}},
 		},
 		{
 			name: "value with equals sign",
 			args: []string{"custom.url=http://example.com?a=1"},
-			want: Attributes{{Key: "custom.url", Value: strPtr("http://example.com?a=1")}},
+			want: &DeviceAttributes{Custom: map[string]string{"url": "http://example.com?a=1"}},
 		},
 		{
 			name: "empty value signals deletion",
 			args: []string{"device_name="},
-			want: Attributes{{Key: "device_name", Value: strPtr("")}},
+			want: &DeviceAttributes{DeviceName: ""},
 		},
 		{
 			name:    "missing equals sign",
@@ -247,93 +107,98 @@ func TestParseKeyValueArgs(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "invalid key rejected",
-			args:    []string{"hostname=foo"},
-			wantErr: true,
+			name: "invalid key rejected",
+			args: []string{"hostname=foo"},
+			want: &DeviceAttributes{},
 		},
 		{
 			name: "empty args",
 			args: []string{},
-			want: Attributes{},
+			want: &DeviceAttributes{},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := ParseKeyValueArgs(tt.args)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ParseKeyValueArgs() error = %v, wantErr %v", err, tt.wantErr)
+
+			if err != nil {
+				if !tt.wantErr {
+					t.Errorf("ParseKeyValueArgs() error = %v, wantErr %v", err, tt.wantErr)
+
+				}
+				return // error was expected, test passed
+			}
+
+			if tt.wantErr {
+				t.Errorf("ParseKeyValueArgs() expected error but got nil")
 				return
 			}
-			if !tt.wantErr && !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("ParseKeyValueArgs() = %v, want %v", got, tt.want)
-			}
+
+			assert.Equal(t, got, tt.want)
 		})
 	}
 }
 
-func TestParseJSONArgs(t *testing.T) {
+func TestFilter(t *testing.T) {
+	attrs := &DeviceAttributes{
+		DeviceName: "mydevice",
+		Longitude:  "12.34",
+		Latitude:   "56.78",
+		Custom:     map[string]string{"env": "prod", "version": "1.0"},
+	}
+
 	tests := []struct {
-		name    string
-		input   string
-		want    Attributes
-		wantErr bool
+		name string
+		keys []string
+		want map[string]any
 	}{
 		{
-			name:  "device_name attribute",
-			input: `[{"key":"device_name","value":"mydevice"}]`,
-			want:  Attributes{{Key: "device_name", Value: strPtr("mydevice")}},
-		},
-		{
-			name:  "null value signals deletion",
-			input: `[{"key":"longitude","value":null}]`,
-			want:  Attributes{{Key: "longitude", Value: nil}},
-		},
-		{
-			name:  "custom attribute",
-			input: `[{"key":"custom.env","value":"prod"}]`,
-			want:  Attributes{{Key: "custom.env", Value: strPtr("prod")}},
-		},
-		{
-			name:  "multiple attributes",
-			input: `[{"key":"longitude","value":"12.34"},{"key":"custom.env","value":"prod"}]`,
-			want: Attributes{
-				{Key: "longitude", Value: strPtr("12.34")},
-				{Key: "custom.env", Value: strPtr("prod")},
+			name: "predefined attributes",
+			keys: []string{"device_name", "longitude"},
+			want: map[string]any{
+				"device_name": "mydevice",
+				"longitude":   "12.34",
 			},
 		},
 		{
-			name:  "empty array",
-			input: `[]`,
-			want:  Attributes{},
+			name: "custom attributes",
+			keys: []string{"custom.env", "custom.version"},
+			want: map[string]any{
+				"custom": map[string]string{
+					"env":     "prod",
+					"version": "1.0",
+				},
+			},
 		},
 		{
-			name:    "invalid key rejected",
-			input:   `[{"key":"hostname","value":"foo"}]`,
-			wantErr: true,
+			name: "mixed predefined and custom",
+			keys: []string{"latitude", "custom.env"},
+			want: map[string]any{
+				"latitude": "56.78",
+				"custom": map[string]string{
+					"env": "prod",
+				},
+			},
 		},
 		{
-			name:    "invalid json",
-			input:   `not json`,
-			wantErr: true,
+			name: "unknown keys are ignored",
+			keys: []string{"device_name", "unknown_key", "custom.unknown"},
+			want: map[string]any{
+				"device_name": "mydevice",
+			},
 		},
 		{
-			name:    "json object instead of array",
-			input:   `{"key":"device_name","value":"foo"}`,
-			wantErr: true,
+			name: "empty keys",
+			keys: []string{},
+			want: map[string]any{},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseJSONArgs(tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ParseJSONArgs() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !tt.wantErr && !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("ParseJSONArgs() = %v, want %v", got, tt.want)
-			}
+			got := attrs.Filter(tt.keys)
+			assert.Equal(t, got, tt.want)
 		})
 	}
 }
