@@ -7,12 +7,12 @@ type Options map[string]string
 
 // RemainingArgs returns the remaining positional arguments stored in Options.
 func (o Options) RemainingArgs() []string {
-	v, ok := o[RemainingArgsKey]
+	v, ok := o[nullByte]
 	if !ok || v == "" {
 		return nil
 	}
 
-	return strings.Split(v, "\x00")
+	return strings.Split(v, nullByte)
 }
 
 // MultiValues returns all values accumulated for a multi-value option.
@@ -22,7 +22,7 @@ func (o Options) MultiValues(key string) []string {
 		return nil
 	}
 
-	return strings.Split(v, "\x00")
+	return strings.Split(v, nullByte)
 }
 
 // Option represents a command line option.
