@@ -106,12 +106,13 @@ func (d DeviceAttributes) GetValue(key string) (string, bool) {
 	case "latitude":
 		return d.Latitude, true
 	default:
-		if strings.HasPrefix(key, "custom.") {
-			suffix := key[len("custom."):]
-			if d.Custom != nil {
-				v, ok := d.Custom[suffix]
-				return v, ok
-			}
+		if !strings.HasPrefix(key, "custom.") {
+			return "", false
+		}
+		suffix := key[len("custom."):]
+		if d.Custom != nil {
+			v, ok := d.Custom[suffix]
+			return v, ok
 		}
 		return "", false
 	}
@@ -133,17 +134,24 @@ func (d DeviceAttributes) Filter(keys []string) map[string]any {
 		case "latitude":
 			result["latitude"] = d.Latitude
 		default:
-			if strings.HasPrefix(key, "custom.") {
-				suffix := key[len("custom."):]
-				if d.Custom != nil {
-					if v, ok := d.Custom[suffix]; ok {
-						if custom == nil {
-							custom = make(map[string]string)
-						}
-						custom[suffix] = v
-					}
-				}
+			if !strings.HasPrefix(key, "custom.") {
+				continue
 			}
+
+			suffix := key[len("custom."):]
+			if d.Custom == nil {
+				continue
+			}
+
+			v, ok := d.Custom[suffix]
+			if !ok {
+				continue
+			}
+
+			if custom == nil {
+				custom = make(map[string]string)
+			}
+			custom[suffix] = v
 		}
 	}
 
@@ -173,11 +181,12 @@ func (attrs Attributes) toAPIPayload() map[string]any {
 		case "device_name", "longitude", "latitude":
 			payload[attr.Key] = val
 		default:
-			if strings.HasPrefix(attr.Key, "custom.") {
-				suffix := attr.Key[len("custom."):]
-				custom[suffix] = val
-				hasCustom = true
+			if !strings.HasPrefix(attr.Key, "custom.") {
+				continue
 			}
+			suffix := attr.Key[len("custom."):]
+			custom[suffix] = val
+			hasCustom = true
 		}
 	}
 

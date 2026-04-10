@@ -82,18 +82,19 @@ var attributesGetCommand = cmd.Command{
 			}
 			return json.NewEncoder(os.Stdout).Encode(deviceAttrs)
 		case "shell":
-			if len(keys) > 0 {
-				for _, key := range keys {
-					if v, ok := deviceAttrs.GetValue(key); ok {
-						fmt.Printf("%s=%q\n", attributes.ToShellVarName(key), v)
-					}
+			if len(keys) == 0 {
+				for _, line := range deviceAttrs.ShellLines() {
+					fmt.Println(line)
 				}
 				return nil
 			}
-			for _, line := range deviceAttrs.ShellLines() {
-				fmt.Println(line)
+			for _, key := range keys {
+				if v, ok := deviceAttrs.GetValue(key); ok {
+					fmt.Printf("%s=%q\n", attributes.ToShellVarName(key), v)
+				}
 			}
 			return nil
+
 		default:
 			return fmt.Errorf("unsupported format %q, use json or shell", opts[attributesFormatOption])
 		}
