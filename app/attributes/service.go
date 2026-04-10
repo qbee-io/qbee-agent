@@ -117,15 +117,38 @@ func (d DeviceAttributes) GetValue(key string) (string, bool) {
 	}
 }
 
-// FilterToMap returns a flat map containing only the specified keys and their values.
+// Filter returns a map containing only the specified keys with their values, using the same
+// nested structure as the full DeviceAttributes JSON (custom.* keys are nested under "custom").
 // Unknown or missing keys are silently omitted.
-func (d DeviceAttributes) FilterToMap(keys []string) map[string]string {
-	result := make(map[string]string, len(keys))
+func (d DeviceAttributes) Filter(keys []string) map[string]interface{} {
+	result := make(map[string]interface{})
+	var custom map[string]string
 
 	for _, key := range keys {
-		if v, ok := d.GetValue(key); ok {
-			result[key] = v
+		switch key {
+		case "device_name":
+			result["device_name"] = d.DeviceName
+		case "longitude":
+			result["longitude"] = d.Longitude
+		case "latitude":
+			result["latitude"] = d.Latitude
+		default:
+			if strings.HasPrefix(key, "custom.") {
+				suffix := key[len("custom."):]
+				if d.Custom != nil {
+					if v, ok := d.Custom[suffix]; ok {
+						if custom == nil {
+							custom = make(map[string]string)
+						}
+						custom[suffix] = v
+					}
+				}
+			}
 		}
+	}
+
+	if custom != nil {
+		result["custom"] = custom
 	}
 
 	return result

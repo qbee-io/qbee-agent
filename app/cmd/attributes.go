@@ -78,7 +78,7 @@ var attributesGetCommand = cmd.Command{
 		switch opts[attributesFormatOption] {
 		case "json":
 			if len(keys) > 0 {
-				return json.NewEncoder(os.Stdout).Encode(deviceAttrs.FilterToMap(keys))
+				return json.NewEncoder(os.Stdout).Encode(deviceAttrs.Filter(keys))
 			}
 			return json.NewEncoder(os.Stdout).Encode(deviceAttrs)
 		case "shell":
