@@ -62,38 +62,37 @@ func ToShellVarName(key string) string {
 	return "QBEE_ATTRIBUTE_" + strings.ToUpper(strings.NewReplacer(".", "_", "-", "_").Replace(key))
 }
 
-// deviceAttributesResponse matches the flat-object JSON format returned by the API:
+// DeviceAttributes matches the flat-object JSON format used by the API:
 //
 //	{"device_name":"...","longitude":"...","latitude":"...","custom":{"key":"value",...}}
-type deviceAttributesResponse struct {
+type DeviceAttributes struct {
 	DeviceName string            `json:"device_name"`
 	Longitude  string            `json:"longitude"`
 	Latitude   string            `json:"latitude"`
 	Custom     map[string]string `json:"custom"`
 }
 
-// toAttributes converts the API response into the internal Attributes slice.
-// All fields are always included (even when empty) so the caller can see the full current state.
-func (r deviceAttributesResponse) toAttributes() Attributes {
-	attrs := Attributes{
-		{Key: "device_name", Value: &r.DeviceName},
-		{Key: "longitude", Value: &r.Longitude},
-		{Key: "latitude", Value: &r.Latitude},
+// ShellLines returns QBEE_ATTRIBUTE_*="value" lines suitable for shell sourcing.
+// Predefined attributes are always included; custom attributes are sorted for determinism.
+func (d DeviceAttributes) ShellLines() []string {
+	lines := []string{
+		fmt.Sprintf("%s=%q", ToShellVarName("device_name"), d.DeviceName),
+		fmt.Sprintf("%s=%q", ToShellVarName("longitude"), d.Longitude),
+		fmt.Sprintf("%s=%q", ToShellVarName("latitude"), d.Latitude),
 	}
 
-	keys := make([]string, 0, len(r.Custom))
-	for k := range r.Custom {
+	keys := make([]string, 0, len(d.Custom))
+	for k := range d.Custom {
 		keys = append(keys, k)
 	}
 
 	sort.Strings(keys)
 
 	for _, k := range keys {
-		v := r.Custom[k]
-		attrs = append(attrs, Attribute{Key: "custom." + k, Value: &v})
+		lines = append(lines, fmt.Sprintf("%s=%q", ToShellVarName("custom."+k), d.Custom[k]))
 	}
 
-	return attrs
+	return lines
 }
 
 // toAPIPayload converts an Attributes slice into a map suitable for JSON-encoding and sending to the
@@ -191,14 +190,14 @@ func New(apiClient *api.Client) *Service {
 }
 
 // Get retrieves current device attributes from the device hub.
-func (srv *Service) Get(ctx context.Context) (Attributes, error) {
-	var response deviceAttributesResponse
+func (srv *Service) Get(ctx context.Context) (DeviceAttributes, error) {
+	var response DeviceAttributes
 
 	if err := srv.api.Get(ctx, attributesAPIPath, &response); err != nil {
-		return nil, fmt.Errorf("error getting attributes: %w", err)
+		return DeviceAttributes{}, fmt.Errorf("error getting attributes: %w", err)
 	}
 
-	return response.toAttributes(), nil
+	return response, nil
 }
 
 // Set updates device attributes. Only the supplied attributes are sent to the API.

@@ -73,29 +73,63 @@ func TestToShellVarName(t *testing.T) {
 	}
 }
 
-// TestDeviceAttributesResponseToAttributes verifies that the API flat-object response is
-// correctly converted to the internal Attributes slice.
-
-func TestDeviceAttributesResponseToAttributes(t *testing.T) {
+// TestDeviceAttributesJSON verifies that DeviceAttributes round-trips JSON correctly,
+// including the exact format returned by the backend API.
+func TestDeviceAttributesJSON(t *testing.T) {
 	// Simulate what the API returns.
 	apiJSON := `{"device_name":"qbee-dev-1","longitude":"","latitude":"","custom":{"mykey":"myvalue"}}`
 
-	var response deviceAttributesResponse
-	if err := json.Unmarshal([]byte(apiJSON), &response); err != nil {
+	var got DeviceAttributes
+	if err := json.Unmarshal([]byte(apiJSON), &got); err != nil {
 		t.Fatalf("failed to unmarshal API response: %v", err)
 	}
 
-	got := response.toAttributes()
-
-	want := Attributes{
-		{Key: "device_name", Value: strPtr("qbee-dev-1")},
-		{Key: "longitude", Value: strPtr("")},
-		{Key: "latitude", Value: strPtr("")},
-		{Key: "custom.mykey", Value: strPtr("myvalue")},
+	want := DeviceAttributes{
+		DeviceName: "qbee-dev-1",
+		Longitude:  "",
+		Latitude:   "",
+		Custom:     map[string]string{"mykey": "myvalue"},
 	}
 
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("toAttributes() = %v, want %v", got, want)
+		t.Errorf("Unmarshal DeviceAttributes = %+v, want %+v", got, want)
+	}
+
+	// Re-marshal and compare JSON strings.
+	b, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	var gotMap, wantMap map[string]interface{}
+	_ = json.Unmarshal(b, &gotMap)
+	_ = json.Unmarshal([]byte(apiJSON), &wantMap)
+
+	if !reflect.DeepEqual(gotMap, wantMap) {
+		t.Errorf("re-marshaled JSON = %s, want %s", b, apiJSON)
+	}
+}
+
+// TestDeviceAttributesShellLines verifies that ShellLines produces correctly named shell variables.
+func TestDeviceAttributesShellLines(t *testing.T) {
+	d := DeviceAttributes{
+		DeviceName: "qbee-dev-1",
+		Longitude:  "12.34",
+		Latitude:   "",
+		Custom:     map[string]string{"mykey": "myvalue"},
+	}
+
+	lines := d.ShellLines()
+
+	want := []string{
+		`QBEE_ATTRIBUTE_DEVICE_NAME="qbee-dev-1"`,
+		`QBEE_ATTRIBUTE_LONGITUDE="12.34"`,
+		`QBEE_ATTRIBUTE_LATITUDE=""`,
+		`QBEE_ATTRIBUTE_CUSTOM_MYKEY="myvalue"`,
+	}
+
+	if !reflect.DeepEqual(lines, want) {
+		t.Errorf("ShellLines() = %v, want %v", lines, want)
 	}
 }
 

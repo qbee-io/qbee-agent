@@ -61,22 +61,17 @@ var attributesGetCommand = cmd.Command{
 			return fmt.Errorf("error initializing the agent: %w", err)
 		}
 
-		attrs, err := deviceAgent.Attributes.Get(context.Background())
+		deviceAttrs, err := deviceAgent.Attributes.Get(context.Background())
 		if err != nil {
 			return err
 		}
 
 		switch opts[attributesFormatOption] {
 		case "json":
-			return json.NewEncoder(os.Stdout).Encode(attrs)
+			return json.NewEncoder(os.Stdout).Encode(deviceAttrs)
 		case "shell":
-			for _, attr := range attrs {
-				varName := attributes.ToShellVarName(attr.Key)
-				value := ""
-				if attr.Value != nil {
-					value = *attr.Value
-				}
-				fmt.Printf("%s=%q\n", varName, value)
+			for _, line := range deviceAttrs.ShellLines() {
+				fmt.Println(line)
 			}
 			return nil
 		default:
