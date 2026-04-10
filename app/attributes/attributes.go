@@ -2,6 +2,7 @@ package attributes
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -62,6 +63,8 @@ func (d DeviceAttributes) Filter(keys []string) map[string]any {
 const attributeShellVarPrefix = "QBEE_ATTRIBUTE_"
 const customAttributeShellVarPrefix = "QBEE_ATTRIBUTE_CUSTOM_"
 
+var shellReplaceRE = regexp.MustCompile(`[.\-]`)
+
 // ToShellVarName converts an attribute key to its QBEE_ATTRIBUTE_ shell variable name.
 // Custom attributes (custom.*) get the QBEE_ATTRIBUTE_CUSTOM_ prefix.
 // All other allowed attributes get the QBEE_ATTRIBUTE_ prefix.
@@ -75,7 +78,7 @@ func ToShellVarName(key string) string {
 		prefix = customAttributeShellVarPrefix
 	}
 
-	suffix := strings.ToUpper(strings.NewReplacer(".", "_", "-", "_").Replace(lowerCaseSuffix))
+	suffix := strings.ToUpper(shellReplaceRE.ReplaceAllString(lowerCaseSuffix, "_"))
 
 	return prefix + suffix
 }
