@@ -101,7 +101,7 @@ var bootstrapCommand = cmd.Command{
 		},
 	},
 
-	Target: func(opts cmd.Options) error {
+	Target: func(opts cmd.Options, args ...string) error {
 
 		cfg := &agent.Config{
 			BootstrapKey:        opts[bootstrapKeyOption],

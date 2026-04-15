@@ -50,7 +50,7 @@ var inventoryCommand = cmd.Command{
 			Flag:  "true",
 		},
 	},
-	Target: func(opts cmd.Options) error {
+	Target: func(opts cmd.Options, args ...string) error {
 		inventoryType := inventory.Type(opts[inventoryTypeOption])
 		dryRun := opts[inventoryDryRunOption] == "true"
 

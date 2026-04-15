@@ -1,4 +1,4 @@
-// Copyright 2024 qbee.io
+// Copyright 2026 qbee.io
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,13 +28,15 @@ import (
 )
 
 const (
-	attributesFormatOption = "format"
-	attributesKeyOption    = "key"
-	attributesJSONOption   = "json"
+	attributesJSONOption  = "json"
+	attributesShellOption = "shell"
 )
+
+const defaultAttributesFormat = "json"
 
 var attributesCommand = cmd.Command{
 	Description: "Manage device attributes.",
+	Options:     []cmd.Option{},
 	SubCommands: map[string]cmd.Command{
 		"get": attributesGetCommand,
 		"set": attributesSetCommand,
@@ -45,19 +47,19 @@ var attributesGetCommand = cmd.Command{
 	Description: "Get device attributes.",
 	Options: []cmd.Option{
 		{
-			Name:    attributesFormatOption,
-			Short:   "f",
-			Help:    "Output format: json or shell.",
-			Default: "json",
+			Name:  attributesJSONOption,
+			Short: "j",
+			Help:  "Output json (default).",
+			Flag:  "true",
 		},
 		{
-			Name:  attributesKeyOption,
-			Short: "k",
-			Help:  "Filter output to a specific attribute key. Can be repeated.",
-			Multi: true,
+			Name:  attributesShellOption,
+			Short: "s",
+			Help:  "Output shell variables.",
+			Flag:  "true",
 		},
 	},
-	Target: func(opts cmd.Options) error {
+	Target: func(opts cmd.Options, args ...string) error {
 		cfg, err := loadConfig(opts)
 		if err != nil {
 			return err
@@ -73,22 +75,30 @@ var attributesGetCommand = cmd.Command{
 			return err
 		}
 
-		keys := opts.MultiValues(attributesKeyOption)
+		format := defaultAttributesFormat
+		if opts[attributesShellOption] == "true" {
+			format = "shell"
+		}
 
-		switch opts[attributesFormatOption] {
+		// override to json if both options are set, since it's more structured and less error-prone for scripting
+		if opts[attributesJSONOption] == "true" {
+			format = "json"
+		}
+
+		switch format {
 		case "json":
-			if len(keys) > 0 {
-				return json.NewEncoder(os.Stdout).Encode(deviceAttrs.Filter(keys))
+			if len(args) > 0 {
+				return json.NewEncoder(os.Stdout).Encode(deviceAttrs.Filter(args))
 			}
 			return json.NewEncoder(os.Stdout).Encode(deviceAttrs)
 		case "shell":
-			if len(keys) == 0 {
+			if len(args) == 0 {
 				for _, line := range deviceAttrs.ShellLines() {
 					fmt.Println(line)
 				}
 				return nil
 			}
-			for _, key := range keys {
+			for _, key := range args {
 				if v, ok := deviceAttrs.GetValue(key); ok {
 					fmt.Printf("%s=%q\n", attributes.ToShellVarName(key), v)
 				}
@@ -96,7 +106,7 @@ var attributesGetCommand = cmd.Command{
 			return nil
 
 		default:
-			return fmt.Errorf("unsupported format %q, use json or shell", opts[attributesFormatOption])
+			return fmt.Errorf("unsupported format %q, use json or shell", format)
 		}
 	},
 }
@@ -110,8 +120,8 @@ var attributesSetCommand = cmd.Command{
 			Help:  `Attributes as a JSON array, e.g. '{"device_name":"mydevie","custom":{"mykey":"myvalue"}}'. Use null to delete an attribute.`,
 		},
 	},
-	Target: func(opts cmd.Options) error {
-		attrs, err := parseAttributesInput(opts)
+	Target: func(opts cmd.Options, args ...string) error {
+		attrs, err := parseAttributesInput(opts, args)
 		if err != nil {
 			return err
 		}
@@ -131,7 +141,7 @@ var attributesSetCommand = cmd.Command{
 }
 
 // parseAttributesInput parses attributes from either --json option or key=value positional arguments.
-func parseAttributesInput(opts cmd.Options) (*attributes.DeviceAttributes, error) {
+func parseAttributesInput(opts cmd.Options, args []string) (*attributes.DeviceAttributes, error) {
 	if jsonInput, ok := opts[attributesJSONOption]; ok {
 		var attrs attributes.DeviceAttributes
 
@@ -142,5 +152,5 @@ func parseAttributesInput(opts cmd.Options) (*attributes.DeviceAttributes, error
 		return &attrs, nil
 	}
 
-	return attributes.ParseKeyValueArgs(opts.RemainingArgs())
+	return attributes.ParseKeyValueArgs(args)
 }

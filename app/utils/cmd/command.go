@@ -10,10 +10,6 @@ import (
 
 const (
 	helpOption = "help"
-
-	// nullByte used as in relation to multi-value options. Values are stored as null-byte separated
-	// string and can be retrieved with Options.MultiValues.
-	nullByte = "\x00"
 )
 
 // Command represents a level in the command tree.
@@ -31,7 +27,7 @@ type Command struct {
 	SubCommands map[string]Command
 
 	// Target function to be executed when the Command is called.
-	Target func(opts Options) error
+	Target func(opts Options, args ...string) error
 }
 
 // Execute Target of the Command (if set), one of the sub-commands or show help.
@@ -48,10 +44,7 @@ func (cmd Command) Execute(args []string, opts Options) error {
 	}
 
 	if cmd.Target != nil {
-		if len(args) > 0 {
-			opts[nullByte] = strings.Join(args, nullByte)
-		}
-		return cmd.Target(opts)
+		return cmd.Target(opts, args...)
 	}
 
 	if len(args) == 0 {
@@ -170,12 +163,13 @@ func (cmd Command) evaluateArgs(args []string, opts Options) ([]string, Options,
 		}
 	}
 
+	var remainingArgs []string
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 
 		if arg == "--help" || arg == "-h" {
 			opts[helpOption] = "y"
-			return args, opts, nil
+			return remainingArgs, opts, nil
 		}
 
 		if strings.HasPrefix(arg, "-") {
@@ -192,19 +186,10 @@ func (cmd Command) evaluateArgs(args []string, opts Options) ([]string, Options,
 					return nil, nil, fmt.Errorf("value required for %s", arg)
 				}
 
-				if !opt.Multi {
-					opts[opt.Name] = args[i]
-					continue
-				}
-
-				if existing, hasExisting := opts[opt.Name]; hasExisting {
-					opts[opt.Name] = existing + nullByte + args[i]
-				} else {
-					opts[opt.Name] = args[i]
-				}
+				opts[opt.Name] = args[i]
 			}
 		} else {
-			args = args[i:]
+			remainingArgs = append(remainingArgs, args[i:]...)
 			break
 		}
 	}
@@ -216,5 +201,5 @@ func (cmd Command) evaluateArgs(args []string, opts Options) ([]string, Options,
 		}
 	}
 
-	return args, opts, nil
+	return remainingArgs, opts, nil
 }

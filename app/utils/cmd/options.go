@@ -1,29 +1,7 @@
 package cmd
 
-import "strings"
-
 // Options represent a mapping of Option.Name to Option.Value for options selected by a user.
 type Options map[string]string
-
-// RemainingArgs returns the remaining positional arguments stored in Options.
-func (o Options) RemainingArgs() []string {
-	v, ok := o[nullByte]
-	if !ok || v == "" {
-		return nil
-	}
-
-	return strings.Split(v, nullByte)
-}
-
-// MultiValues returns all values accumulated for a multi-value option.
-func (o Options) MultiValues(key string) []string {
-	v, ok := o[key]
-	if !ok || v == "" {
-		return nil
-	}
-
-	return strings.Split(v, nullByte)
-}
 
 // Option represents a command line option.
 type Option struct {
@@ -53,8 +31,4 @@ type Option struct {
 	// Hidden if set, the option won't be returned in the help message.
 	// This is useful for internal options.
 	Hidden bool
-
-	// Multi if set, the option can be specified multiple times.
-	// All values are stored as null-byte separated string and can be retrieved with Options.MultiValues.
-	Multi bool
 }

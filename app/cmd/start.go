@@ -42,7 +42,7 @@ var startCommand = cmd.Command{
 		},
 	},
 
-	Target: func(opts cmd.Options) error {
+	Target: func(opts cmd.Options, args ...string) error {
 		runOnce := opts[startOnceOption] == "true"
 
 		cfg, err := loadConfig(opts)
