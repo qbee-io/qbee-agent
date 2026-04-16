@@ -17,6 +17,7 @@
 package attributes
 
 import (
+	"encoding/json"
 	"sort"
 	"testing"
 
@@ -152,49 +153,72 @@ func TestFilter(t *testing.T) {
 	}
 
 	tests := []struct {
-		name string
-		keys []string
-		want map[string]any
+		name       string
+		keys       []string
+		want       *DeviceAttributes
+		json       []byte
+		shellLines []string
 	}{
 		{
 			name: "predefined attributes",
 			keys: []string{"device_name", "longitude"},
-			want: map[string]any{
-				"device_name": "mydevice",
-				"longitude":   "12.34",
+			want: &DeviceAttributes{
+				DeviceName: "mydevice",
+				Longitude:  "12.34",
 			},
+			shellLines: []string{
+				`QBEE_ATTRIBUTE_DEVICE_NAME="mydevice"`,
+				`QBEE_ATTRIBUTE_LONGITUDE="12.34"`,
+			},
+			json: []byte(`{"device_name":"mydevice","longitude":"12.34"}`),
 		},
 		{
 			name: "custom attributes",
 			keys: []string{"custom.env", "custom.version"},
-			want: map[string]any{
-				"custom": map[string]string{
+			want: &DeviceAttributes{
+				Custom: map[string]string{
 					"env":     "prod",
 					"version": "1.0",
 				},
 			},
+			shellLines: []string{
+				`QBEE_ATTRIBUTE_CUSTOM_ENV="prod"`,
+				`QBEE_ATTRIBUTE_CUSTOM_VERSION="1.0"`,
+			},
+			json: []byte(`{"custom":{"env":"prod","version":"1.0"}}`),
 		},
 		{
 			name: "mixed predefined and custom",
 			keys: []string{"latitude", "custom.env"},
-			want: map[string]any{
-				"latitude": "56.78",
-				"custom": map[string]string{
+			want: &DeviceAttributes{
+				Latitude: "56.78",
+				Custom: map[string]string{
 					"env": "prod",
 				},
 			},
+			shellLines: []string{
+				`QBEE_ATTRIBUTE_LATITUDE="56.78"`,
+				`QBEE_ATTRIBUTE_CUSTOM_ENV="prod"`,
+			},
+			json: []byte(`{"latitude":"56.78","custom":{"env":"prod"}}`),
 		},
 		{
 			name: "unknown keys are ignored",
 			keys: []string{"device_name", "unknown_key", "custom.unknown"},
-			want: map[string]any{
-				"device_name": "mydevice",
+			want: &DeviceAttributes{
+				DeviceName: "mydevice",
 			},
+			shellLines: []string{
+				`QBEE_ATTRIBUTE_DEVICE_NAME="mydevice"`,
+			},
+			json: []byte(`{"device_name":"mydevice"}`),
 		},
 		{
-			name: "empty keys",
-			keys: []string{},
-			want: map[string]any{},
+			name:       "empty keys",
+			keys:       []string{},
+			want:       &DeviceAttributes{},
+			shellLines: []string{},
+			json:       []byte(`{}`),
 		},
 	}
 
@@ -202,6 +226,21 @@ func TestFilter(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := attrs.Filter(tt.keys)
 			assert.Equal(t, got, tt.want)
+
+			if tt.shellLines != nil {
+				lines := got.ShellLines()
+				sort.Strings(lines)
+				sort.Strings(tt.shellLines)
+				assert.Equal(t, lines, tt.shellLines)
+			}
+
+			if tt.json != nil {
+				jsonData, err := json.Marshal(got)
+				if err != nil {
+					t.Fatalf("MarshalJSON() error: %v", err)
+				}
+				assert.Equal(t, jsonData, tt.json)
+			}
 		})
 	}
 }
