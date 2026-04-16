@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"go.qbee.io/agent/app/agent"
 	"go.qbee.io/agent/app/attributes"
@@ -28,8 +29,8 @@ import (
 )
 
 const (
-	attributesJSONOption  = "json"
 	attributesShellOption = "shell"
+	attributesKeyValueArg = "attributes"
 )
 
 var attributesCommand = cmd.Command{
@@ -85,9 +86,9 @@ var attributesSetCommand = cmd.Command{
 	Description: "Set device attributes. Empty or null values delete the attribute.",
 	Options: []cmd.Option{
 		{
-			Name:  attributesJSONOption,
-			Short: "j",
-			Help:  `Attributes as a JSON array, e.g. '{"device_name":"mydevie","custom":{"mykey":"myvalue"}}'. Use null to delete an attribute.`,
+			Name:  attributesKeyValueArg,
+			Short: "a",
+			Help:  `Attributes as a commma-separated list of key=value pairs (e.g. "device_name=mydevice,custom.env=prod"). Keys must be valid identifiers or start with "custom.".`,
 		},
 	},
 	Target: func(opts cmd.Options, args ...string) error {
@@ -112,15 +113,19 @@ var attributesSetCommand = cmd.Command{
 
 // parseAttributesInput parses attributes from either --json option or key=value positional arguments.
 func parseAttributesInput(opts cmd.Options, args []string) (*attributes.DeviceAttributes, error) {
-	if jsonInput, ok := opts[attributesJSONOption]; ok {
-		var attrs attributes.DeviceAttributes
-
-		if err := json.Unmarshal([]byte(jsonInput), &attrs); err != nil {
-			return nil, fmt.Errorf("invalid JSON attributes: %w", err)
-		}
-
-		return &attrs, nil
+	if keyValuePars, ok := opts[attributesKeyValueArg]; ok {
+		args := strings.Split(keyValuePars, ",")
+		return attributes.ParseKeyValueArgs(args)
 	}
 
-	return attributes.ParseKeyValueArgs(args)
+	if len(args) == 0 {
+		return nil, fmt.Errorf("no attributes provided. Use --%s or key=value arguments", attributesKeyValueArg)
+	}
+
+	var attrs attributes.DeviceAttributes
+	if err := json.Unmarshal([]byte(args[0]), &attrs); err != nil {
+		return nil, fmt.Errorf("invalid JSON attributes: %w", err)
+	}
+
+	return &attrs, nil
 }
