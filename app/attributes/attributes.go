@@ -55,7 +55,7 @@ func (d DeviceAttributes) Filter(keys []string) *DeviceAttributes {
 	result := &DeviceAttributes{} // Start with zero values to omit empty fields in JSON
 
 	for _, key := range keys {
-		value, ok := d.GetValue(key)
+		value, ok := d.getValue(key)
 		if !ok || value == "" {
 			continue
 		}
@@ -132,9 +132,9 @@ func (d DeviceAttributes) ShellLines() []string {
 	return lines
 }
 
-// GetValue returns the value for a given normalized attribute key (e.g. "device_name", "custom.mykey").
+// getValue returns the value for a given normalized attribute key (e.g. "device_name", "custom.mykey").
 // Returns ("", false) if the key is not present.
-func (d DeviceAttributes) GetValue(key string) (string, bool) {
+func (d DeviceAttributes) getValue(key string) (string, bool) {
 	if getter, ok := attributeGetters[key]; ok {
 		return getter(&d)
 	}
