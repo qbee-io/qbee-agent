@@ -43,12 +43,12 @@ var attributesCommand = cmd.Command{
 }
 
 var attributesGetCommand = cmd.Command{
-	Description: "Get device attributes.",
+	Description: "Get device attributes in JSON format. All attributes by, but filters can be applied by specifying keys as arguments (e.g. device_name custom.env).",
 	Options: []cmd.Option{
 		{
 			Name:  attributesShellOption,
 			Short: "s",
-			Help:  "Output shell variables.",
+			Help:  "Output shell variable formatted lines instead of JSON (e.g. QBEE_ATTRIBUTE_DEVICE_NAME=...)",
 			Flag:  "true",
 		},
 	},
@@ -83,7 +83,7 @@ var attributesGetCommand = cmd.Command{
 }
 
 var attributesSetCommand = cmd.Command{
-	Description: "Set device attributes. Empty or null values delete the attribute.",
+	Description: "Set device attributes. Empty or null values delete the attribute. Default input is JSON payload",
 	Options: []cmd.Option{
 		{
 			Name:  attributesKeyValueArg,
@@ -119,7 +119,7 @@ func parseAttributesInput(opts cmd.Options, args []string) (*attributes.DeviceAt
 	}
 
 	if len(args) == 0 {
-		return nil, fmt.Errorf("no attributes provided. Use --%s or key=value arguments", attributesKeyValueArg)
+		return nil, fmt.Errorf("no JSON payload provided")
 	}
 
 	var attrs attributes.DeviceAttributes
