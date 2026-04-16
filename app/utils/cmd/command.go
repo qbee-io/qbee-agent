@@ -27,7 +27,7 @@ type Command struct {
 	SubCommands map[string]Command
 
 	// Target function to be executed when the Command is called.
-	Target func(opts Options) error
+	Target func(opts Options, args ...string) error
 }
 
 // Execute Target of the Command (if set), one of the sub-commands or show help.
@@ -44,7 +44,7 @@ func (cmd Command) Execute(args []string, opts Options) error {
 	}
 
 	if cmd.Target != nil {
-		return cmd.Target(opts)
+		return cmd.Target(opts, args...)
 	}
 
 	if len(args) == 0 {
@@ -163,12 +163,13 @@ func (cmd Command) evaluateArgs(args []string, opts Options) ([]string, Options,
 		}
 	}
 
+	var remainingArgs []string
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 
 		if arg == "--help" || arg == "-h" {
 			opts[helpOption] = "y"
-			return args, opts, nil
+			return remainingArgs, opts, nil
 		}
 
 		if strings.HasPrefix(arg, "-") {
@@ -188,7 +189,7 @@ func (cmd Command) evaluateArgs(args []string, opts Options) ([]string, Options,
 				opts[opt.Name] = args[i]
 			}
 		} else {
-			args = args[i:]
+			remainingArgs = append(remainingArgs, args[i:]...)
 			break
 		}
 	}
@@ -200,5 +201,5 @@ func (cmd Command) evaluateArgs(args []string, opts Options) ([]string, Options,
 		}
 	}
 
-	return args, opts, nil
+	return remainingArgs, opts, nil
 }

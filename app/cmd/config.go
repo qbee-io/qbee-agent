@@ -55,7 +55,7 @@ var configCommand = cmd.Command{
 			Flag:  "true",
 		},
 	},
-	Target: func(opts cmd.Options) error {
+	Target: func(opts cmd.Options, args ...string) error {
 		dryRun := opts[configDryRunOption] == "true"
 		fromFile := opts[configFromFileOption]
 		reportToConsole := opts[configReportToConsoleOption] == "true"

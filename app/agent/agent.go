@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"go.qbee.io/agent/app/api"
+	"go.qbee.io/agent/app/attributes"
 	"go.qbee.io/agent/app/configuration"
 	"go.qbee.io/agent/app/inventory"
 	"go.qbee.io/agent/app/log"
@@ -57,6 +58,7 @@ type Agent struct {
 	Inventory     *inventory.Service
 	Configuration *configuration.Service
 	Metrics       *metrics.Service
+	Attributes    *attributes.Service
 	remoteAccess  *remoteaccess.Service
 	// disableRemoteAccess is used to disable remote access for RunOnce
 	disableRemoteAccess bool
@@ -299,6 +301,7 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 
 	agent.Inventory = inventory.New(agent.api)
 	agent.Metrics = metrics.New(agent.api)
+	agent.Attributes = attributes.New(agent.api)
 	agent.Configuration = configuration.New(agent.api, appDir, cacheDir).WithURLSigner(agent).WithMetricsService(agent.Metrics)
 	agent.remoteAccess = remoteaccess.New().
 		WithConfigReloadNotifier(agent.update)
