@@ -51,9 +51,8 @@ var attributeGetters = map[string]func(attrs *DeviceAttributes) (string, bool){
 // Filter returns a map containing only the specified keys with their values, using the same
 // nested structure as the full DeviceAttributes JSON (custom.* keys are nested under "custom").
 // Unknown or missing keys are silently omitted.
-func (d DeviceAttributes) Filter(keys []string) map[string]any {
-	result := make(map[string]any)
-	custom := make(map[string]string)
+func (d DeviceAttributes) Filter(keys []string) *DeviceAttributes {
+	result := &DeviceAttributes{} // Start with zero values to omit empty fields in JSON
 
 	for _, key := range keys {
 		value, ok := d.GetValue(key)
@@ -61,16 +60,19 @@ func (d DeviceAttributes) Filter(keys []string) map[string]any {
 			continue
 		}
 
-		if strings.HasPrefix(key, "custom.") {
-			suffix := key[len("custom."):]
-			custom[suffix] = value
-		} else {
-			result[key] = value
+		if !strings.HasPrefix(key, "custom.") {
+			if setter, ok := attributeSetters[key]; ok {
+				setter(result, value)
+			}
+			continue
 		}
-	}
 
-	if len(custom) > 0 {
-		result["custom"] = custom
+		if result.Custom == nil {
+			result.Custom = make(map[string]string)
+		}
+
+		suffix := key[len("custom."):]
+		result.Custom[suffix] = value
 	}
 
 	return result
