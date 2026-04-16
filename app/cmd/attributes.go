@@ -32,8 +32,6 @@ const (
 	attributesShellOption = "shell"
 )
 
-const defaultAttributesFormat = "json"
-
 var attributesCommand = cmd.Command{
 	Description: "Manage device attributes.",
 	Options:     []cmd.Option{},
@@ -46,12 +44,6 @@ var attributesCommand = cmd.Command{
 var attributesGetCommand = cmd.Command{
 	Description: "Get device attributes.",
 	Options: []cmd.Option{
-		{
-			Name:  attributesJSONOption,
-			Short: "j",
-			Help:  "Output json (default).",
-			Flag:  "true",
-		},
 		{
 			Name:  attributesShellOption,
 			Short: "s",
@@ -79,27 +71,13 @@ var attributesGetCommand = cmd.Command{
 			deviceAttrs = deviceAttrs.Filter(args)
 		}
 
-		format := defaultAttributesFormat
 		if opts[attributesShellOption] == "true" {
-			format = "shell"
-		}
-
-		// override to json if both options are set, since it's more structured and less error-prone for scripting
-		if opts[attributesJSONOption] == "true" {
-			format = "json"
-		}
-
-		switch format {
-		case "json":
-			return json.NewEncoder(os.Stdout).Encode(deviceAttrs)
-		case "shell":
 			for _, line := range deviceAttrs.ShellLines() {
 				fmt.Println(line)
 			}
 			return nil
-		default:
-			return fmt.Errorf("unsupported format %q, use json or shell", format)
 		}
+		return json.NewEncoder(os.Stdout).Encode(deviceAttrs)
 	},
 }
 
