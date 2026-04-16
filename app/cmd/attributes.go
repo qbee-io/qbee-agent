@@ -43,7 +43,7 @@ var attributesCommand = cmd.Command{
 }
 
 var attributesGetCommand = cmd.Command{
-	Description: "Get device attributes in JSON format. All attributes by, but filters can be applied by specifying keys as arguments (e.g. device_name custom.env).",
+	Description: "Get device attributes in JSON format. All attributes by default, but filters can be applied by specifying keys as arguments (e.g. device_name custom.env).",
 	Options: []cmd.Option{
 		{
 			Name:  attributesShellOption,
