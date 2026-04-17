@@ -3,6 +3,7 @@ package configuration
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"testing"
 
 	"go.qbee.io/agent/app/api"
@@ -369,10 +370,12 @@ func Test_SimpleArtifactInstall(t *testing.T) {
 	r := runner.NewRaucRunner(t)
 
 	raucBundlePath := "file:///rauc/test-bundle-1.0.0.raucb"
+	destinationPath := filepath.Join(r.GetStateDirectory(), "rauc", "bundle.raucb")
 
 	raucConfig := RaucBundle{
-		RaucBundle: raucBundlePath,
-		Download:   true,
+		RaucBundle:   raucBundlePath,
+		Download:     true,
+		DownloadPath: destinationPath,
 	}
 	raucConfig.Enabled = true
 
@@ -402,10 +405,12 @@ func Test_InstallWithRebootCondition(t *testing.T) {
 	r := runner.NewRaucRunner(t)
 
 	raucBundlePath := "file:///rauc/test-bundle-1.0.0.raucb"
+	destinationPath := filepath.Join(r.GetStateDirectory(), "rauc", "bundle.raucb")
 
 	raucConfig := RaucBundle{
 		RaucBundle:      raucBundlePath,
 		Download:        true,
+		DownloadPath:    destinationPath,
 		RebootCondition: "/bin/false",
 	}
 	raucConfig.Enabled = true
@@ -433,10 +438,13 @@ func Test_UpgradeNoReboot(t *testing.T) {
 	r := runner.NewRaucRunner(t)
 
 	raucBundlePath := "file:///rauc/test-bundle-1.0.0.raucb"
+	destinationPath := filepath.Join(r.GetStateDirectory(), "rauc", "bundle.raucb")
+	raucStatePath := filepath.Join(r.GetStateDirectory(), "app_workdir", "cache", "rauc", "state.json")
 
 	raucConfig := RaucBundle{
 		RaucBundle:      raucBundlePath,
 		Download:        true,
+		DownloadPath:    destinationPath,
 		RebootCondition: "/bin/false",
 	}
 	raucConfig.Enabled = true
@@ -478,7 +486,7 @@ func Test_UpgradeNoReboot(t *testing.T) {
 		"[INFO] Successfully downloaded file " + raucUpgradeBundlePath + " to /tmp/bundle.raucb",
 	}
 
-	r.MustExec("rm", "-f", "/var/lib/qbee/app_workdir/cache/rauc/state.json")
+	r.MustExec("rm", "-f", raucStatePath)
 	reports, _ = ExecuteTestConfigInDocker(r, config)
 	assert.Equal(t, reports, expectedReports)
 
