@@ -387,7 +387,7 @@ func Test_SimpleArtifactInstall(t *testing.T) {
 	}
 
 	expectedReports := []string{
-		"[INFO] Successfully downloaded file " + raucBundlePath + " to /tmp/bundle.raucb",
+		"[INFO] Successfully downloaded file " + raucBundlePath + " to " + destinationPath,
 		"[INFO] RAUC bundle successfully installed '" + raucBundlePath + "'",
 		"[WARN] Scheduling system reboot.",
 	}
@@ -395,7 +395,7 @@ func Test_SimpleArtifactInstall(t *testing.T) {
 	reports, _ := ExecuteTestConfigInDocker(r, config)
 	assert.Equal(t, reports, expectedReports)
 
-	r.MustExec("rm", "-f", "/tmp/bundle.raucb")
+	r.MustExec("rm", "-f", destinationPath)
 
 	reports, _ = ExecuteTestConfigInDocker(r, config)
 	assert.Equal(t, len(reports), 0)
@@ -423,7 +423,7 @@ func Test_InstallWithRebootCondition(t *testing.T) {
 	}
 
 	expectedReports := []string{
-		"[INFO] Successfully downloaded file " + raucBundlePath + " to /tmp/bundle.raucb",
+		"[INFO] Successfully downloaded file " + raucBundlePath + " to " + destinationPath,
 		"[INFO] RAUC bundle successfully installed '" + raucBundlePath + "'",
 	}
 	reports, _ := ExecuteTestConfigInDocker(r, config)
@@ -457,7 +457,7 @@ func Test_UpgradeNoReboot(t *testing.T) {
 	}
 
 	expectedReports := []string{
-		"[INFO] Successfully downloaded file " + raucBundlePath + " to /tmp/bundle.raucb",
+		"[INFO] Successfully downloaded file " + raucBundlePath + " to " + destinationPath,
 		"[INFO] RAUC bundle successfully installed '" + raucBundlePath + "'",
 	}
 
@@ -467,7 +467,7 @@ func Test_UpgradeNoReboot(t *testing.T) {
 	raucUpgradeBundlePath := "file:///rauc/test-bundle-2.0.0.raucb"
 	raucConfig.RaucBundle = raucUpgradeBundlePath
 	expectedReports = []string{
-		"[INFO] Successfully downloaded file " + raucUpgradeBundlePath + " to /tmp/bundle.raucb",
+		"[INFO] Successfully downloaded file " + raucUpgradeBundlePath + " to " + destinationPath,
 		"[INFO] RAUC bundle successfully installed '" + raucUpgradeBundlePath + "'",
 	}
 
@@ -475,7 +475,7 @@ func Test_UpgradeNoReboot(t *testing.T) {
 	assert.Equal(t, reports, expectedReports)
 
 	// check that bundle is not installed or downloaded again as long as we have the state file
-	r.MustExec("rm", "-f", "/tmp/bundle.raucb")
+	r.MustExec("rm", "-f", destinationPath)
 
 	reports, _ = ExecuteTestConfigInDocker(r, config)
 	assert.Equal(t, len(reports), 0)
@@ -483,7 +483,7 @@ func Test_UpgradeNoReboot(t *testing.T) {
 	// check that if we remove the state file, the bundle is not installed again. It will be downloaded again
 	// because we need it to compare metadata.
 	expectedReports = []string{
-		"[INFO] Successfully downloaded file " + raucUpgradeBundlePath + " to /tmp/bundle.raucb",
+		"[INFO] Successfully downloaded file " + raucUpgradeBundlePath + " to " + destinationPath,
 	}
 
 	r.MustExec("rm", "-f", raucStatePath)
