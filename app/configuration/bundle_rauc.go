@@ -155,7 +155,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		r.RaucBundle,
 	)
 
-	if CheckPreCondition(ctx, r.RebootCondition) {
+	if checkCondition(ctx, r.RebootCondition) {
 		service.RebootAfterRun(ctx)
 	}
 	return nil
