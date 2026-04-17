@@ -471,12 +471,17 @@ func Test_UpgradeNoReboot(t *testing.T) {
 		"[INFO] RAUC bundle successfully installed '" + raucUpgradeBundlePath + "'",
 	}
 
+	// rauc install changes ownership of the bundle to root when installing so we need to change it if
+	// we are running as unprivileged user.
+	if r.GetUnprivileged() {
+		r.MustExec("chown", runner.UnprivilegedUser+":"+runner.UnprivilegedUser, destinationPath)
+	}
+
 	reports, _ = ExecuteTestConfigInDocker(r, config)
 	assert.Equal(t, reports, expectedReports)
 
 	// check that bundle is not installed or downloaded again as long as we have the state file
 	r.MustExec("rm", "-f", destinationPath)
-
 	reports, _ = ExecuteTestConfigInDocker(r, config)
 	assert.Equal(t, len(reports), 0)
 
@@ -489,5 +494,4 @@ func Test_UpgradeNoReboot(t *testing.T) {
 	r.MustExec("rm", "-f", raucStatePath)
 	reports, _ = ExecuteTestConfigInDocker(r, config)
 	assert.Equal(t, reports, expectedReports)
-
 }
