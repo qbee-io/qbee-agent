@@ -23,20 +23,24 @@ import (
 	"go.qbee.io/agent/app/utils"
 )
 
-// CheckPreCondition checks if the provided pre-condition is met.
-func CheckPreCondition(ctx context.Context, preCondition string) bool {
-	preCondition = resolveParameters(ctx, preCondition)
+func checkCondition(ctx context.Context, condition string) bool {
+	condition = resolveParameters(ctx, condition)
 
-	preCondition = strings.TrimSpace(preCondition)
+	condition = strings.TrimSpace(condition)
 
-	if preCondition == "" {
+	if condition == "" {
 		return true
 	}
 
 	// return with no error when pre-condition fails
-	if _, err := utils.RunCommand(ctx, []string{getShell(), "-c", preCondition}); err != nil {
+	if _, err := utils.RunCommand(ctx, []string{getShell(), "-c", condition}); err != nil {
 		return false
 	}
 
 	return true
+}
+
+// CheckPreCondition checks if the provided pre-condition is met.
+func CheckPreCondition(ctx context.Context, preCondition string) bool {
+	return checkCondition(ctx, preCondition)
 }

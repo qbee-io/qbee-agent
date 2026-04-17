@@ -1,0 +1,43 @@
+FROM golang:1.25.9 as builder
+
+ARG version
+ENV VERSION_VAR=go.qbee.io/agent/app.Version
+
+ENV CGO_ENABLED=0
+
+WORKDIR /src
+
+COPY . /src
+
+# build the agent
+RUN --mount=type=cache,target=/go \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go build \
+    -ldflags "-s -w -X ${VERSION_VAR}=$version" \
+    -o /usr/sbin/qbee-agent \
+    main.go
+
+FROM debian:trixie-slim
+
+RUN apt-get update && \
+  apt-get install -y rauc dbus adduser squashfs-tools sudo
+
+# create empty agent configuration directory
+RUN mkdir /etc/qbee && echo '{}' > /etc/qbee/qbee-agent.json
+
+WORKDIR /app
+
+# copy the agent
+COPY --from=builder /usr/sbin/qbee-agent /usr/sbin/qbee-agent
+
+# rauc related test files
+COPY test/resources/rauc/artifacts /rauc
+COPY test/resources/rauc/files /usr/local/bin
+
+# add an unprivileged user (with subuid/subgid ranges for rootless containers)
+RUN adduser --system --group --home /home/qbee-agent qbee-agent
+RUN usermod --add-subuids 100000-165535 --add-subgids 100000-165535 qbee-agent
+
+# add sudoers file for qbee user
+COPY package/share/sudoers/99-qbee-agent /etc/sudoers.d/99-qbee-agent
+

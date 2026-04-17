@@ -51,6 +51,9 @@ type RaucBundle struct {
 
 	// DownloadPath is the path where the RAUC bundle should be downloaded.
 	DownloadPath string `json:"download_path"`
+
+	// RebootCondition is a condition that must be met before the system is rebooted
+	RebootCondition string `json:"reboot_condition"`
 }
 
 // defaultDownloadPath is the default path where the RAUC bundle is downloaded.
@@ -75,7 +78,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	isCompatible := image.IsRaucCompatible(raucVersion)
 	if !isCompatible {
 		ReportError(ctx, nil, "RAUC version '%s' is not compatible with the agent", raucVersion)
-		return err
+		return fmt.Errorf("RAUC version '%s' is not compatible with the agent", raucVersion)
 	}
 
 	if !CheckPreCondition(ctx, r.PreCondition) {
@@ -86,6 +89,11 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	if err != nil {
 		ReportError(ctx, err, "Failed to get RAUC status")
 		return err
+	}
+
+	if raucStatus.BootPrimary == "" {
+		ReportError(ctx, nil, "RAUC primary boot slot not found")
+		return fmt.Errorf("RAUC primary boot slot not found")
 	}
 
 	r.RaucBundle = resolveParameters(ctx, r.RaucBundle)
@@ -147,7 +155,9 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		r.RaucBundle,
 	)
 
-	service.RebootAfterRun(ctx)
+	if checkCondition(ctx, r.RebootCondition) {
+		service.RebootAfterRun(ctx)
+	}
 	return nil
 }
 
@@ -208,11 +218,12 @@ func (r RaucBundle) getRaucBundleInfo(ctx context.Context, url string) (*RaucBun
 }
 
 func shouldInstall(localRaucInfo *image.RaucStatus, remoteBundleData *RaucBundleInfo) (bool, error) {
+
 	if remoteBundleData.Compatible != localRaucInfo.Compatible {
 		return false, fmt.Errorf("RAUC bundle '%s' is not compatible with the system '%s'", remoteBundleData.Compatible, localRaucInfo.Compatible)
 	}
 
-	_, currentSlotData, err := getCurrentSlot(localRaucInfo)
+	_, currentSlotData, err := getPrimarySlot(localRaucInfo)
 	if err != nil {
 		return false, err
 	}
@@ -225,10 +236,10 @@ func shouldInstall(localRaucInfo *image.RaucStatus, remoteBundleData *RaucBundle
 	return true, nil
 }
 
-func getCurrentSlot(localRaucInfo *image.RaucStatus) (string, *image.SlotData, error) {
+func getPrimarySlot(localRaucInfo *image.RaucStatus) (string, *image.SlotData, error) {
 	for _, slot := range localRaucInfo.Slots {
 		for slotName, slotData := range slot {
-			if slotData.Bootname == localRaucInfo.Booted {
+			if slotName == localRaucInfo.BootPrimary {
 				return slotName, &slotData, nil
 			}
 		}
@@ -251,7 +262,7 @@ func (r *RaucBundle) resolveRaucPath(ctx context.Context, service *Service) (str
 }
 
 func downloadRaucBundle(ctx context.Context, service *Service, raucPath, raucDownloadPath string) (string, error) {
-	bundleMetadata, err := service.getFileMetadataFromAPI(ctx, raucPath)
+	bundleMetadata, err := service.getFileMetadata(ctx, raucPath)
 	if err != nil {
 		return "", err
 	}
