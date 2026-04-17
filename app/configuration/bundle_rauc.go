@@ -78,7 +78,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	isCompatible := image.IsRaucCompatible(raucVersion)
 	if !isCompatible {
 		ReportError(ctx, nil, "RAUC version '%s' is not compatible with the agent", raucVersion)
-		return err
+		return fmt.Errorf("RAUC version '%s' is not compatible with the agent", raucVersion)
 	}
 
 	if !CheckPreCondition(ctx, r.PreCondition) {
@@ -89,6 +89,11 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	if err != nil {
 		ReportError(ctx, err, "Failed to get RAUC status")
 		return err
+	}
+
+	if raucStatus.BootPrimary == "" {
+		ReportError(ctx, nil, "RAUC primary boot slot not found")
+		return fmt.Errorf("RAUC primary boot slot not found")
 	}
 
 	r.RaucBundle = resolveParameters(ctx, r.RaucBundle)
@@ -213,6 +218,7 @@ func (r RaucBundle) getRaucBundleInfo(ctx context.Context, url string) (*RaucBun
 }
 
 func shouldInstall(localRaucInfo *image.RaucStatus, remoteBundleData *RaucBundleInfo) (bool, error) {
+
 	if remoteBundleData.Compatible != localRaucInfo.Compatible {
 		return false, fmt.Errorf("RAUC bundle '%s' is not compatible with the system '%s'", remoteBundleData.Compatible, localRaucInfo.Compatible)
 	}

@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-echo "---"
 echo "Setting up RAUC Daemon environment..."
 mkdir -p /mnt/rauc
 mkdir -p /etc/rauc
@@ -53,7 +52,7 @@ cat <<EOF > /etc/dbus-1/system.d/rauc.conf
 </busconfig>
 EOF
 
-# FAKE THE KERNEL COMMAND LINE HERE
+# Fake the kernel command line
 echo "rauc.slot=A" > /tmp/cmdline
 mount --bind /tmp/cmdline /proc/cmdline
 
@@ -71,7 +70,7 @@ for _ in {1..30}; do
 done
 
 # Start the RAUC Daemon
-rauc service > "$OUTPUT_DIR/rauc-daemon.log" 2>&1 &
+rauc service > "/tmp/rauc-daemon.log" 2>&1 &
 
 # Wait for RAUC service to be ready
 echo "Waiting for RAUC service to be ready..."
