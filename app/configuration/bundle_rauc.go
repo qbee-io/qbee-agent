@@ -81,7 +81,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return fmt.Errorf("RAUC version '%s' is not compatible with the agent", raucVersion)
 	}
 
-	if !CheckPreCondition(ctx, r.PreCondition) {
+	if !CheckCondition(ctx, r.PreCondition) {
 		return nil
 	}
 
@@ -155,7 +155,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		r.RaucBundle,
 	)
 
-	if checkCondition(ctx, r.RebootCondition) {
+	if CheckCondition(ctx, r.RebootCondition) {
 		service.RebootAfterRun(ctx)
 	}
 	return nil

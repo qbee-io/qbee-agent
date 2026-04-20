@@ -69,7 +69,7 @@ func (c Container) execute(ctx context.Context, srv *Service, containerBin strin
 	var err error
 	var needRestart bool
 
-	if !CheckPreCondition(ctx, c.PreCondition) {
+	if !CheckCondition(ctx, c.PreCondition) {
 		// skip container if pre-condition is not met
 		return nil
 	}

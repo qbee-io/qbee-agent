@@ -23,7 +23,8 @@ import (
 	"go.qbee.io/agent/app/utils"
 )
 
-func checkCondition(ctx context.Context, condition string) bool {
+// CheckCondition checks if the provided condition is met (eg. 0 exit code)
+func CheckCondition(ctx context.Context, condition string) bool {
 	condition = resolveParameters(ctx, condition)
 
 	condition = strings.TrimSpace(condition)
@@ -38,9 +39,4 @@ func checkCondition(ctx context.Context, condition string) bool {
 	}
 
 	return true
-}
-
-// CheckPreCondition checks if the provided pre-condition is met.
-func CheckPreCondition(ctx context.Context, preCondition string) bool {
-	return checkCondition(ctx, preCondition)
 }
