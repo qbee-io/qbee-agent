@@ -19,6 +19,9 @@ const OpenWRT = "openwrt:qbee"
 // RHEL is the RHEL based image used by the runner.
 const RHEL = "rhel:qbee"
 
+// RAUC is the RAUC based image used by the runner.
+const RAUC = "rauc:qbee"
+
 // UnprivilegedUser is the unprivileged user used by the runner if the UNPRIVILEGED_USER environment variable is set to "true".
 const UnprivilegedUser = "qbee-agent"
 
@@ -42,6 +45,13 @@ func NewRHELRunner(t *testing.T) *Runner {
 // NewPodmanRunner creates a new runner for the given test using the debian:qbee-podman image.
 func NewPodmanRunner(t *testing.T) *Runner {
 	return NewWithImage(t, Debian, true)
+}
+
+// NewRaucRunner creates a new runner for rauc related tests.
+func NewRaucRunner(t *testing.T) *Runner {
+	runner := NewWithImage(t, RAUC, true)
+	runner.MustExec("prepare-rauc-environment.sh")
+	return runner
 }
 
 // NewWithImage creates a new runner for the given test using the given image.

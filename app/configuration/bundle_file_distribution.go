@@ -91,7 +91,7 @@ type File struct {
 // Execute file distribution config on the system.
 func (fd FileDistributionBundle) Execute(ctx context.Context, service *Service) error {
 	for _, fileSet := range fd.FileSets {
-		if !CheckPreCondition(ctx, fileSet.PreCondition) {
+		if !CheckCondition(ctx, fileSet.PreCondition) {
 			continue
 		}
 

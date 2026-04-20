@@ -122,7 +122,7 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 	}
 
 	for _, project := range d.Projects {
-		if !CheckPreCondition(ctx, project.PreCondition) {
+		if !CheckCondition(ctx, project.PreCondition) {
 			continue
 		}
 

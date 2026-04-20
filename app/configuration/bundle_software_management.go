@@ -132,7 +132,7 @@ func (s Software) serviceName(ctx context.Context, srv *Service) string {
 
 // Execute a Software configuration on the system.
 func (s Software) Execute(ctx context.Context, srv *Service, pkgManager software.PackageManager) error {
-	if !CheckPreCondition(ctx, s.PreCondition) {
+	if !CheckCondition(ctx, s.PreCondition) {
 		return nil
 	}
 
