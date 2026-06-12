@@ -17,7 +17,7 @@ RUN --mount=type=cache,target=/go \
     -o /usr/sbin/qbee-agent \
     main.go
 
-FROM debian:bookworm
+FROM debian:12.14
 
 ARG version
 
