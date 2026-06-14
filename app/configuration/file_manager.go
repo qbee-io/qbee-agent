@@ -491,13 +491,18 @@ func calculateTemplateDigest(src string, params map[string]string) (string, erro
 }
 
 // createFile under provided path and with provided uid and gid.
+//
+// The agent typically runs as root, so all path resolution here must refuse
+// to follow attacker-controlled symlinks (CWE-59). makeDirectories rejects
+// symlinked intermediate components; O_NOFOLLOW rejects a symlinked final
+// component so we never open, truncate, or chown an attacker-chosen target.
 func createFile(path string, fileCreateData *fileCreateData, permission os.FileMode, truncate bool) (*os.File, error) {
 	var err error
 	if err = makeDirectories(path, fileManagerDefaultDirectoryPermission, fileCreateData.uid, fileCreateData.gid); err != nil {
 		return nil, err
 	}
 
-	openFlags := os.O_RDWR | os.O_CREATE
+	openFlags := os.O_RDWR | os.O_CREATE | syscall.O_NOFOLLOW
 
 	if truncate {
 		openFlags = openFlags | os.O_TRUNC
@@ -608,6 +613,10 @@ func determineFileCreateData(dst string) (*fileCreateData, error) {
 }
 
 // makeDirectories checks if all directories for the dst file exist, if not, create them with provided owner and group.
+//
+// All ancestor components are inspected with os.Lstat so that a symlinked
+// directory (e.g. an attacker's ~/.ssh pointing at /root/.ssh) is rejected
+// rather than transparently traversed by the kernel (CWE-59).
 func makeDirectories(dst string, permissions os.FileMode, uid, gid int) error {
 	if dst == "/" {
 		return nil
@@ -615,13 +624,14 @@ func makeDirectories(dst string, permissions os.FileMode, uid, gid int) error {
 
 	dirPath := filepath.Dir(dst)
 
-	dirInfo, err := os.Stat(dirPath)
-	if errors.Is(err, os.ErrNotExist) {
-		// ensure parent exists
-		if err = makeDirectories(dirPath, permissions, uid, gid); err != nil {
-			return err
-		}
+	// Always validate / materialize ancestors first so that symlinks higher
+	// up the path are caught even when dirPath itself already exists.
+	if err := makeDirectories(dirPath, permissions, uid, gid); err != nil {
+		return err
+	}
 
+	dirInfo, err := os.Lstat(dirPath)
+	if errors.Is(err, os.ErrNotExist) {
 		if err = os.Mkdir(dirPath, permissions); err != nil {
 			return fmt.Errorf("cannot create directorty %s: %w", dirPath, err)
 		}
@@ -635,6 +645,10 @@ func makeDirectories(dst string, permissions os.FileMode, uid, gid int) error {
 
 	if err != nil {
 		return fmt.Errorf("cannot create directory %s: %w", dirPath, err)
+	}
+
+	if dirInfo.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("refusing to traverse symlinked path component %s", dirPath)
 	}
 
 	if !dirInfo.IsDir() {
