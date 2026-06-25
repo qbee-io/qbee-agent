@@ -31,9 +31,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: 1.26
+          go-version-file: 'go.mod'
 
       - name: Install Cosign for attestation and signing
         uses: sigstore/cosign-installer@v3.9.2
