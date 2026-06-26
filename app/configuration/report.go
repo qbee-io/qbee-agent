@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -92,6 +93,13 @@ func (reporter *Reporter) Redact(value string) string {
 
 // NewReporter returns a new instance of Reporter.
 func NewReporter(commitID string, reportToConsole bool, secrets []string) *Reporter {
+
+	// delete secrets which are empty or consist of whitespace only
+	// otherwise all spaces and empty strings in the log would be replaced with redactedValue
+	secrets = slices.DeleteFunc(secrets, func(secret string) bool {
+		return strings.TrimSpace(secret) == ""
+	})
+
 	return &Reporter{
 		commitID:        commitID,
 		reports:         make([]Report, 0),
