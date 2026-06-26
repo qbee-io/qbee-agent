@@ -66,6 +66,24 @@ func Test_Reporter_Redact(t *testing.T) {
 			expectedReportText: "log message",
 			expectedReportLog:  "recording ******** in extra log",
 		},
+		{
+			name:    "reporter with empty secret",
+			secrets: []string{""},
+			testFn: func(ctx context.Context) {
+				ReportInfo(ctx, "extra log", "log message")
+			},
+			expectedReportText: "log message",
+			expectedReportLog:  "extra log",
+		},
+		{
+			name:    "reporter with secret consisting of whitespace",
+			secrets: []string{" "},
+			testFn: func(ctx context.Context) {
+				ReportInfo(ctx, "extra log", "log message")
+			},
+			expectedReportText: "log message",
+			expectedReportLog:  "extra log",
+		},
 	}
 
 	for _, c := range cases {
