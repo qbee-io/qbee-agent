@@ -17,8 +17,8 @@
 package metrics
 
 import (
+	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -26,6 +26,7 @@ import (
 
 	"go.qbee.io/agent/app/inventory/linux"
 	"go.qbee.io/agent/app/log"
+	"go.qbee.io/agent/app/utils"
 )
 
 // TemperatureValues represents temperature metrics
@@ -105,7 +106,11 @@ func (c *cpuTemperatures) hwMonTemperatureMetrics() error {
 		// Get the label of the temperature you are reading
 		label := ""
 
-		if raw, _ = os.ReadFile(basepath + "_label"); len(raw) != 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), utils.KernelVirtualFSReadTimeout)
+		raw, _ = utils.ReadFileContext(ctx, basepath+"_label")
+		cancel()
+
+		if len(raw) != 0 {
 			// Format the label from "Core 0" to "core_0"
 			label = strings.Join(strings.Split(strings.TrimSpace(strings.ToLower(string(raw))), " "), "_")
 		}
@@ -164,7 +169,9 @@ func (c *cpuTemperatures) thermalZoneTemperatureMetrics() error {
 
 	for _, file := range files {
 		// Get the name of the temperature you are reading
-		rawName, err := os.ReadFile(filepath.Join(file, "type"))
+		ctx, cancel := context.WithTimeout(context.Background(), utils.KernelVirtualFSReadTimeout)
+		rawName, err := utils.ReadFileContext(ctx, filepath.Join(file, "type"))
+		cancel()
 		if err != nil {
 			continue
 		}
@@ -202,7 +209,10 @@ func (c *cpuTemperatures) thermalZoneTemperatureMetrics() error {
 
 // parseTemperatureFile reads a temperature file and returns the temperature in degrees Celsius
 func parseTemperatureFile(file string) (float64, error) {
-	raw, err := os.ReadFile(file)
+	ctx, cancel := context.WithTimeout(context.Background(), utils.KernelVirtualFSReadTimeout)
+	defer cancel()
+
+	raw, err := utils.ReadFileContext(ctx, file)
 	if err != nil {
 		return 0, err
 	}

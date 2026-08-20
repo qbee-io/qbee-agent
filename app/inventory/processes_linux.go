@@ -20,10 +20,10 @@ package inventory
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"go.qbee.io/agent/app/inventory/linux"
+	"go.qbee.io/agent/app/utils"
 )
 
 // CollectProcessesInventory returns populated Processes inventory based on current system status.
@@ -133,17 +134,17 @@ const procStatBufferSize = 1024
 func getProcessStats(runningProcesses []string) (map[string]linux.ProcessStats, error) {
 	processStats := make(map[string]linux.ProcessStats)
 
-	var n int
 	var err error
-	var procStatFile *os.File
 	var statFilePath string
-
-	buf := make([]byte, procStatBufferSize)
+	ctx, cancel := context.WithTimeout(context.Background(), utils.KernelVirtualFSReadTimeout)
+	defer cancel()
 
 	for _, pid := range runningProcesses {
 		statFilePath = filepath.Join(linux.ProcFS, pid, "stat")
 
-		if procStatFile, err = os.Open(statFilePath); err != nil {
+		data, readErr := utils.ReadFileContext(ctx, statFilePath)
+		if readErr != nil {
+			err = readErr
 			if errors.Is(err, fs.ErrNotExist) {
 				continue
 			}
@@ -151,18 +152,7 @@ func getProcessStats(runningProcesses []string) (map[string]linux.ProcessStats, 
 			return nil, fmt.Errorf("error opening %s: %w", statFilePath, err)
 		}
 
-		// read file contents to a buffer
-		n, err = procStatFile.Read(buf)
-
-		// close the file
-		_ = procStatFile.Close()
-
-		// check for errors
-		if err != nil {
-			return nil, fmt.Errorf("error reading %s: %w", statFilePath, err)
-		}
-
-		if processStats[pid], err = linux.NewProcessStats(string(buf[0:n])); err != nil {
+		if processStats[pid], err = linux.NewProcessStats(string(data)); err != nil {
 			return nil, err
 		}
 	}
@@ -174,18 +164,12 @@ func getProcessStats(runningProcesses []string) (map[string]linux.ProcessStats, 
 // We could use C.sysconf(C._SC_CLK_TCK), but that would require CGO and that's not helping with portability.
 func getTotalJiffies() (uint64, error) {
 	filePath := filepath.Join(linux.ProcFS, "stat")
+	ctx, cancel := context.WithTimeout(context.Background(), utils.KernelVirtualFSReadTimeout)
+	defer cancel()
 
-	file, err := os.Open(filePath)
+	buf, err := utils.ReadFileContext(ctx, filePath)
 	if err != nil {
 		return 0, fmt.Errorf("error reading %s: %w", filePath, err)
-	}
-
-	defer func() { _ = file.Close() }()
-
-	// we don't need to read the whole file, we only care about the first line
-	buf := make([]byte, 512)
-	if _, err = file.Read(buf); err != nil {
-		return 0, fmt.Errorf("error reading contents of %s: %w", filePath, err)
 	}
 
 	firstLine := string(buf[0:bytes.Index(buf, []byte("\n"))])
