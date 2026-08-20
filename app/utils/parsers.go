@@ -23,10 +23,8 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // ForLines runs fn for every line in the provided io.Reader.
@@ -49,34 +47,28 @@ func ForLines(reader io.Reader, fn func(string) error) error {
 	return nil
 }
 
-func ForLinesInFile(filePath string, fn func(string) error) error {
-	if blockingFilePathsRE.MatchString(filePath) {
-		return forLinesInFileContext(filePath, fn)
-
-	}
-	return forLinesInFile(filePath, fn)
-}
-
-var blockingFilePathsRE = regexp.MustCompile(`^/proc/|^/sys/|^/dev/`)
-
-func forLinesInFileContext(filePath string, fn func(string) error) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	file, err := OpenFileContext(ctx, filePath)
-	if err != nil {
-		return fmt.Errorf("error opening file %s: %w", filePath, err)
-	}
-	defer func() {
-		if closer, ok := file.(io.Closer); ok {
-			_ = closer.Close()
-		}
-	}()
-
-	return ForLines(file, fn)
-}
-
 // ForLinesInFile runs fn for every line in the provided filePath.
-func forLinesInFile(filePath string, fn func(string) error) error {
+func ForLinesInFile(filePath string, fn func(string) error) error {
+	if pathNeedsContextRead(filePath) {
+		ctx, cancel := context.WithTimeout(context.Background(), KernelVirtualFSReadTimeout)
+		defer cancel()
+
+		reader, err := OpenFileContext(ctx, filePath)
+		if err != nil {
+			return fmt.Errorf("error opening file %s: %w", filePath, err)
+		}
+
+		if closer, ok := reader.(io.Closer); ok {
+			defer func() { _ = closer.Close() }()
+		}
+
+		if err = ForLines(reader, fn); err != nil {
+			return fmt.Errorf("error processing file %s: %w", filePath, err)
+		}
+
+		return nil
+	}
+
 	file, err := os.Open(filePath)
 	if err != nil {
 		return fmt.Errorf("error opening file %s: %w", filePath, err)
@@ -89,6 +81,12 @@ func forLinesInFile(filePath string, fn func(string) error) error {
 	}
 
 	return nil
+}
+
+func pathNeedsContextRead(filePath string) bool {
+	return filePath == "/proc" || strings.HasPrefix(filePath, "/proc/") ||
+		filePath == "/sys" || strings.HasPrefix(filePath, "/sys/") ||
+		filePath == "/dev" || strings.HasPrefix(filePath, "/dev/")
 }
 
 // ForLinesInCommandOutput executes a command and runs fn for each line of the stdout.

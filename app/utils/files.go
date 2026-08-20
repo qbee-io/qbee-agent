@@ -2,9 +2,12 @@ package utils
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
+	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // WriteFileSync writes data to a file named by filename and syncs to disk.
@@ -39,47 +42,64 @@ var goroutineCount int64
 
 const maxGoroutines = 500
 
-func ReadFileContext(ctx context.Context, filePath string) ([]byte, error) {
-	atomic.AddInt64(&goroutineCount, 1)
-	defer atomic.AddInt64(&goroutineCount, -1)
+// GoroutinesExhausted reports whether the context file IO goroutine budget is exhausted.
+func GoroutinesExhausted() bool {
+	return atomic.LoadInt64(&goroutineCount) >= maxGoroutines
+}
 
-	ch := make(chan []byte, 1)
-	errCh := make(chan error, 1)
-
-	go func() {
-		data, err := os.ReadFile(filePath)
-		if err != nil {
-			errCh <- err
-			return
+// reserveGoroutineSlot attempts to reserve a slot for a new goroutine. It returns true if successful, false if the maximum number of goroutines has been reached.
+func reserveGoroutineSlot() bool {
+	for {
+		current := atomic.LoadInt64(&goroutineCount)
+		if current >= maxGoroutines {
+			return false
 		}
-		ch <- data
-	}()
 
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case err := <-errCh:
-		return nil, err
-	case data := <-ch:
-		return data, nil
+		if atomic.CompareAndSwapInt64(&goroutineCount, current, current+1) {
+			return true
+		}
 	}
+}
+
+// KernelVirtualFSReadTimeout limits reads/opens on virtual kernel filesystems.
+const KernelVirtualFSReadTimeout = 2 * time.Second
+
+func ReadFileContext(ctx context.Context, filePath string) ([]byte, error) {
+	reader, err := OpenFileContext(ctx, filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	if closer, ok := reader.(io.Closer); ok {
+		defer func() { _ = closer.Close() }()
+	}
+
+	return io.ReadAll(reader)
 }
 
 // OpenFileContext opens a file with context cancellation support.
 func OpenFileContext(ctx context.Context, filePath string) (io.Reader, error) {
-	atomic.AddInt64(&goroutineCount, 1)
+	if !reserveGoroutineSlot() {
+		return nil, fmt.Errorf("goroutine budget exhausted")
+	}
 
 	ch := make(chan *os.File, 1)
 	errCh := make(chan error, 1)
 
 	go func() {
-		defer atomic.AddInt64(&goroutineCount, -1)
 		f, err := os.Open(filePath)
 		if err != nil {
+			atomic.AddInt64(&goroutineCount, -1)
 			errCh <- err
 			return
 		}
-		ch <- f
+
+		select {
+		case <-ctx.Done():
+			_ = f.Close()
+			atomic.AddInt64(&goroutineCount, -1)
+		case ch <- f:
+		}
 	}()
 
 	select {
@@ -89,23 +109,43 @@ func OpenFileContext(ctx context.Context, filePath string) (io.Reader, error) {
 		return nil, err
 	case f := <-ch:
 		return &contextReader{
-			ctx: ctx,
-			f:   f,
+			ctx:  ctx,
+			f:    f,
+			done: func() { atomic.AddInt64(&goroutineCount, -1) },
 		}, nil
 	}
 }
 
 type contextReader struct {
-	ctx context.Context
-	f   *os.File
+	ctx  context.Context
+	f    *os.File
+	done func()
+	once sync.Once
+}
+
+func (cr *contextReader) markDone() {
+	cr.once.Do(cr.done)
 }
 
 func (cr *contextReader) Read(p []byte) (n int, err error) {
 	select {
 	case <-cr.ctx.Done():
-		cr.f.Close()
+		_ = cr.f.Close()
+		cr.markDone()
 		return 0, cr.ctx.Err()
 	default:
 	}
-	return cr.f.Read(p)
+
+	n, err = cr.f.Read(p)
+	if err != nil {
+		cr.markDone()
+	}
+
+	return n, err
+}
+
+func (cr *contextReader) Close() error {
+	err := cr.f.Close()
+	cr.markDone()
+	return err
 }

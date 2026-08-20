@@ -19,8 +19,8 @@
 package linux
 
 import (
+	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -72,8 +72,10 @@ func ListRunningProcessesNames() (map[string]string, error) {
 // GetProcessCommand returns a command used to start the process.
 func GetProcessCommand(pid string) (string, error) {
 	cmdLinePath := filepath.Join(ProcFS, pid, "cmdline")
+	ctx, cancel := context.WithTimeout(context.Background(), utils.KernelVirtualFSReadTimeout)
+	defer cancel()
 
-	cmdLineBytes, err := os.ReadFile(cmdLinePath)
+	cmdLineBytes, err := utils.ReadFileContext(ctx, cmdLinePath)
 	if err != nil {
 		return "", fmt.Errorf("error reading %s: %w", cmdLinePath, err)
 	}

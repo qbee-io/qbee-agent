@@ -18,14 +18,15 @@ package metrics
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"math"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"go.qbee.io/agent/app/inventory/linux"
+	"go.qbee.io/agent/app/utils"
 )
 
 // CPUValues contains CPU metrics.
@@ -49,18 +50,12 @@ type CPUValues struct {
 // CollectCPU returns CPU metrics.
 func CollectCPU() (*CPUValues, error) {
 	filePath := filepath.Join(linux.ProcFS, "stat")
+	ctx, cancel := context.WithTimeout(context.Background(), utils.KernelVirtualFSReadTimeout)
+	defer cancel()
 
-	file, err := os.Open(filePath)
+	buf, err := utils.ReadFileContext(ctx, filePath)
 	if err != nil {
 		return nil, fmt.Errorf("error reading %s: %w", filePath, err)
-	}
-
-	defer func() { _ = file.Close() }()
-
-	// we don't need to read the whole file, we only care about the first line
-	buf := make([]byte, 512)
-	if _, err = file.Read(buf); err != nil {
-		return nil, fmt.Errorf("error reading contents of %s: %w", filePath, err)
 	}
 
 	firstLine := string(buf[0:bytes.Index(buf, []byte("\n"))])
