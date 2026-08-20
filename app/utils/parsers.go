@@ -23,8 +23,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // ForLines runs fn for every line in the provided io.Reader.
@@ -47,8 +49,34 @@ func ForLines(reader io.Reader, fn func(string) error) error {
 	return nil
 }
 
-// ForLinesInFile runs fn for every line in the provided filePath.
 func ForLinesInFile(filePath string, fn func(string) error) error {
+	if blockingFilePathsRE.MatchString(filePath) {
+		return forLinesInFileContext(filePath, fn)
+
+	}
+	return forLinesInFile(filePath, fn)
+}
+
+var blockingFilePathsRE = regexp.MustCompile(`^/proc/|^/sys/|^/dev/`)
+
+func forLinesInFileContext(filePath string, fn func(string) error) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	file, err := OpenFileContext(ctx, filePath)
+	if err != nil {
+		return fmt.Errorf("error opening file %s: %w", filePath, err)
+	}
+	defer func() {
+		if closer, ok := file.(io.Closer); ok {
+			_ = closer.Close()
+		}
+	}()
+
+	return ForLines(file, fn)
+}
+
+// ForLinesInFile runs fn for every line in the provided filePath.
+func forLinesInFile(filePath string, fn func(string) error) error {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return fmt.Errorf("error opening file %s: %w", filePath, err)
