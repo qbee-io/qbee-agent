@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -64,8 +65,9 @@ func reserveGoroutineSlot() bool {
 // KernelVirtualFSReadTimeout limits reads/opens on virtual kernel filesystems.
 const KernelVirtualFSReadTimeout = 2 * time.Second
 
-func ReadFileContext(ctx context.Context, filePath string) ([]byte, error) {
-	reader, err := OpenFileContext(ctx, filePath)
+// ReadFileWithContext reads the contents of a file with context cancellation support.
+func ReadFileWithContext(ctx context.Context, filePath string) ([]byte, error) {
+	reader, err := OpenFileWithContext(ctx, filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -77,8 +79,8 @@ func ReadFileContext(ctx context.Context, filePath string) ([]byte, error) {
 	return io.ReadAll(reader)
 }
 
-// OpenFileContext opens a file with context cancellation support.
-func OpenFileContext(ctx context.Context, filePath string) (io.Reader, error) {
+// OpenFileWithContext opens a file with context cancellation support.
+func OpenFileWithContext(ctx context.Context, filePath string) (io.Reader, error) {
 	if !reserveGoroutineSlot() {
 		return nil, fmt.Errorf("goroutine budget exhausted")
 	}
@@ -148,4 +150,37 @@ func (cr *contextReader) Close() error {
 	err := cr.f.Close()
 	cr.markDone()
 	return err
+}
+
+func GlobWithContext(ctx context.Context, pattern string) ([]string, error) {
+	if !reserveGoroutineSlot() {
+		return nil, fmt.Errorf("goroutine budget exhausted")
+	}
+
+	ch := make(chan []string, 1)
+	errCh := make(chan error, 1)
+
+	go func() {
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			atomic.AddInt64(&goroutineCount, -1)
+			errCh <- err
+			return
+		}
+
+		select {
+		case <-ctx.Done():
+			atomic.AddInt64(&goroutineCount, -1)
+		case ch <- matches:
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case err := <-errCh:
+		return nil, err
+	case matches := <-ch:
+		return matches, nil
+	}
 }

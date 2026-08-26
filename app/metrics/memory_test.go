@@ -24,7 +24,7 @@ import (
 )
 
 func TestCollectMemory(t *testing.T) {
-	gotMetrics, err := CollectMemory()
+	gotMetrics, err := CollectMemory(t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

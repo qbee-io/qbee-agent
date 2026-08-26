@@ -24,7 +24,7 @@ import (
 )
 
 func TestCollectNetwork(t *testing.T) {
-	v1, err := CollectNetwork()
+	v1, err := CollectNetwork(t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -35,7 +35,7 @@ func TestCollectNetwork(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 
-	v2, err := CollectNetwork()
+	v2, err := CollectNetwork(t.Context())
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

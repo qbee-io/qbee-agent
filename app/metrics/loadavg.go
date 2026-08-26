@@ -49,12 +49,12 @@ type LoadAverageValues struct {
 }
 
 // CollectLoadAverage metrics.
-func CollectLoadAverage() ([]Metric, error) {
+func CollectLoadAverage(ctx context.Context) ([]Metric, error) {
 	path := filepath.Join(linux.ProcFS, "loadavg")
-	ctx, cancel := context.WithTimeout(context.Background(), utils.KernelVirtualFSReadTimeout)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, utils.KernelVirtualFSReadTimeout)
 	defer cancel()
 
-	data, err := utils.ReadFileContext(ctx, path)
+	data, err := utils.ReadFileWithContext(ctxWithTimeout, path)
 	if err != nil {
 		return nil, fmt.Errorf("error reading %s: %w", path, err)
 	}

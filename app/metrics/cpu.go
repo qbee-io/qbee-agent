@@ -48,12 +48,12 @@ type CPUValues struct {
 }
 
 // CollectCPU returns CPU metrics.
-func CollectCPU() (*CPUValues, error) {
+func CollectCPU(ctx context.Context) (*CPUValues, error) {
 	filePath := filepath.Join(linux.ProcFS, "stat")
-	ctx, cancel := context.WithTimeout(context.Background(), utils.KernelVirtualFSReadTimeout)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, utils.KernelVirtualFSReadTimeout)
 	defer cancel()
 
-	buf, err := utils.ReadFileContext(ctx, filePath)
+	buf, err := utils.ReadFileWithContext(ctxWithTimeout, filePath)
 	if err != nil {
 		return nil, fmt.Errorf("error reading %s: %w", filePath, err)
 	}
