@@ -37,6 +37,9 @@ const (
 	BundleRauc                 = "rauc"
 	BundleMetricsMonitor       = "metrics_monitor"
 	BundleDockerCompose        = "docker_compose"
+
+	// bundleAgentInternal is an internal bundle that is not exposed to the user.
+	bundleAgentInternal = "agent_internal"
 )
 
 // CommittedConfig contains the configuration that is committed.
