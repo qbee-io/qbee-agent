@@ -33,34 +33,12 @@ func TestExhaustGoRoutines(t *testing.T) {
 }
 
 func TestExhaustGoRoutinesPipeReads(t *testing.T) {
-	// Reset the goroutine count before the test
-	atomic.StoreInt64(&goroutineCount, 0)
-
-	// create a fifo
 
 	fifoPath := t.TempDir() + "/test_fifo"
-	// Ensure the FIFO does not already exist
-	if _, err := os.Stat(fifoPath); err == nil {
-		os.Remove(fifoPath)
+	err := exhaustGoRoutines(t.Context(), fifoPath)
+	if err != nil {
+		t.Fatalf("Failed to exhaust goroutines: %v", err)
 	}
-
-	// Create a named pipe (FIFO)
-	if err := syscall.Mkfifo(fifoPath, 0666); err != nil {
-		t.Fatalf("Failed to create FIFO: %v", err)
-	}
-
-	// ReadFileContext for max go routines + 1 and wait for them to timeout,
-	// then check that the goroutine count is still at maxGoroutines.
-	var wg sync.WaitGroup
-	for range maxGoroutines + 1 {
-		wg.Go(func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-			defer cancel()
-			_, _ = ReadFileContext(ctx, fifoPath)
-		})
-	}
-
-	wg.Wait()
 
 	if got := atomic.LoadInt64(&goroutineCount); got != int64(maxGoroutines) {
 		t.Fatalf("Expected goroutine count to stay at maxGoroutines (%d), got %d", maxGoroutines, got)
@@ -69,7 +47,7 @@ func TestExhaustGoRoutinesPipeReads(t *testing.T) {
 	// try to read once more, which should fail to reserve a slot
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
-	_, err := ReadFileContext(ctx, fifoPath)
+	_, err = ReadFileContext(ctx, fifoPath)
 
 	if err == nil {
 		t.Fatalf("Expected ReadFileContext to fail due to exhausted goroutines, but it succeeded")
@@ -78,4 +56,34 @@ func TestExhaustGoRoutinesPipeReads(t *testing.T) {
 	if got := atomic.LoadInt64(&goroutineCount); got != int64(maxGoroutines) {
 		t.Fatalf("Expected goroutine count to stay at maxGoroutines (%d) after additional read, got %d", maxGoroutines, got)
 	}
+}
+
+// ExhaustGoRoutines is a utility function to exhaust the goroutine slots for testing purposes.
+func exhaustGoRoutines(ctx context.Context, fifoPath string) error {
+	// Reset the goroutine count before the test
+	atomic.StoreInt64(&goroutineCount, 0)
+
+	// Ensure the FIFO does not already exist
+	if _, err := os.Stat(fifoPath); err == nil {
+		os.Remove(fifoPath)
+	}
+
+	// Create a named pipe (FIFO)
+	if err := syscall.Mkfifo(fifoPath, 0666); err != nil {
+		return err
+	}
+
+	// ReadFileContext for max go routines + 1 and wait for them to timeout,
+	// then check that the goroutine count is still at maxGoroutines.
+	var wg sync.WaitGroup
+	for range maxGoroutines + 1 {
+		wg.Go(func() {
+			readCtx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+			defer cancel()
+			_, _ = ReadFileContext(readCtx, fifoPath)
+		})
+	}
+
+	wg.Wait()
+	return nil
 }
