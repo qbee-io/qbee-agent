@@ -47,18 +47,18 @@ type cpuTemperatures struct {
 const hostTemperatureScale = 1000.0
 
 // CollectTemperature collects temperature metrics from from /sys/class/[hwmon|thermal]
-func CollectTemperature() ([]Metric, error) {
+func CollectTemperature(ctx context.Context) ([]Metric, error) {
 
 	cpuTemps := new(cpuTemperatures)
 	var errString string
 
 	// Attempt to collect temperature metrics from hwmon
-	if err := cpuTemps.hwMonTemperatureMetrics(); err != nil {
+	if err := cpuTemps.hwMonTemperatureMetrics(ctx); err != nil {
 		errString += err.Error()
 	}
 
 	// Attempt to collect temperature metrics from thermal zone
-	if err := cpuTemps.thermalZoneTemperatureMetrics(); err != nil {
+	if err := cpuTemps.thermalZoneTemperatureMetrics(ctx); err != nil {
 		errString += err.Error()
 	}
 
@@ -83,9 +83,9 @@ func CollectTemperature() ([]Metric, error) {
 }
 
 // hwMonTemperatureMetrics collects temperature metrics from /sys/class/hwmon/hwmon*/temp*_input
-func (c *cpuTemperatures) hwMonTemperatureMetrics() error {
+func (c *cpuTemperatures) hwMonTemperatureMetrics(ctx context.Context) error {
 
-	files, err := getHwMonFiles()
+	files, err := getHwMonFiles(ctx)
 	if err != nil {
 		return err
 	}
@@ -106,8 +106,8 @@ func (c *cpuTemperatures) hwMonTemperatureMetrics() error {
 		// Get the label of the temperature you are reading
 		label := ""
 
-		ctx, cancel := context.WithTimeout(context.Background(), utils.KernelVirtualFSReadTimeout)
-		raw, _ = utils.ReadFileContext(ctx, basepath+"_label")
+		ctxWithTimeout, cancel := context.WithTimeout(ctx, utils.KernelVirtualFSReadTimeout)
+		raw, _ = utils.ReadFileWithContext(ctxWithTimeout, basepath+"_label")
 		cancel()
 
 		if len(raw) != 0 {
@@ -117,7 +117,7 @@ func (c *cpuTemperatures) hwMonTemperatureMetrics() error {
 
 		// Some boards have a cpu_thermal zone
 		if strings.HasPrefix(label, "cpu_thermal") {
-			temperature, err = parseTemperatureFile(file)
+			temperature, err = parseTemperatureFile(ctx, file)
 			if err != nil {
 				continue
 			}
@@ -126,7 +126,7 @@ func (c *cpuTemperatures) hwMonTemperatureMetrics() error {
 
 		// Capture all core temperatures
 		if strings.HasPrefix(label, "core") {
-			temperature, err = parseTemperatureFile(file)
+			temperature, err = parseTemperatureFile(ctx, file)
 			if err != nil {
 				continue
 			}
@@ -135,7 +135,7 @@ func (c *cpuTemperatures) hwMonTemperatureMetrics() error {
 
 		// Capture all socket temperatures
 		if strings.Contains(label, "package") || strings.Contains(label, "physical") || label == "tccd1" {
-			temperature, err = parseTemperatureFile(file)
+			temperature, err = parseTemperatureFile(ctx, file)
 			if err != nil {
 				continue
 			}
@@ -156,9 +156,9 @@ func (c *cpuTemperatures) hwMonTemperatureMetrics() error {
 }
 
 // thermalZoneTemperatureMetrics collects temperature metrics from /sys/class/thermal/thermal_zone*/temp
-func (c *cpuTemperatures) thermalZoneTemperatureMetrics() error {
+func (c *cpuTemperatures) thermalZoneTemperatureMetrics(ctx context.Context) error {
 
-	files, err := getThermalZoneFiles()
+	files, err := getThermalZoneFiles(ctx)
 	if err != nil {
 		return err
 	}
@@ -169,8 +169,8 @@ func (c *cpuTemperatures) thermalZoneTemperatureMetrics() error {
 
 	for _, file := range files {
 		// Get the name of the temperature you are reading
-		ctx, cancel := context.WithTimeout(context.Background(), utils.KernelVirtualFSReadTimeout)
-		rawName, err := utils.ReadFileContext(ctx, filepath.Join(file, "type"))
+		ctxWithTimeout, cancel := context.WithTimeout(ctx, utils.KernelVirtualFSReadTimeout)
+		rawName, err := utils.ReadFileWithContext(ctxWithTimeout, filepath.Join(file, "type"))
 		cancel()
 		if err != nil {
 			continue
@@ -180,7 +180,7 @@ func (c *cpuTemperatures) thermalZoneTemperatureMetrics() error {
 
 		// Some boards have acpi_thermal zones
 		if strings.HasPrefix(name, "acpi") {
-			acpiTemp, err := parseTemperatureFile(filepath.Join(file, "temp"))
+			acpiTemp, err := parseTemperatureFile(ctx, filepath.Join(file, "temp"))
 			if err != nil {
 				continue
 			}
@@ -189,7 +189,7 @@ func (c *cpuTemperatures) thermalZoneTemperatureMetrics() error {
 
 		// Some boards have a pch_thermal zone
 		if strings.HasPrefix(name, "pch") {
-			chipsetTemp, err := parseTemperatureFile(filepath.Join(file, "temp"))
+			chipsetTemp, err := parseTemperatureFile(ctx, filepath.Join(file, "temp"))
 			if err != nil {
 				continue
 			}
@@ -197,7 +197,7 @@ func (c *cpuTemperatures) thermalZoneTemperatureMetrics() error {
 		}
 		// ARM based boards have cpu-thermal zones
 		if strings.HasPrefix(name, "cpu-thermal") {
-			cpuTemp, err := parseTemperatureFile(filepath.Join(file, "temp"))
+			cpuTemp, err := parseTemperatureFile(ctx, filepath.Join(file, "temp"))
 			if err != nil {
 				continue
 			}
@@ -208,11 +208,11 @@ func (c *cpuTemperatures) thermalZoneTemperatureMetrics() error {
 }
 
 // parseTemperatureFile reads a temperature file and returns the temperature in degrees Celsius
-func parseTemperatureFile(file string) (float64, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), utils.KernelVirtualFSReadTimeout)
+func parseTemperatureFile(ctx context.Context, file string) (float64, error) {
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, utils.KernelVirtualFSReadTimeout)
 	defer cancel()
 
-	raw, err := utils.ReadFileContext(ctx, file)
+	raw, err := utils.ReadFileWithContext(ctxWithTimeout, file)
 	if err != nil {
 		return 0, err
 	}
@@ -226,9 +226,13 @@ func parseTemperatureFile(file string) (float64, error) {
 }
 
 // getThermalZoneFiles returns a list of temperature files in /sys/class/thermal/thermal_zone*/temp
-func getThermalZoneFiles() ([]string, error) {
+func getThermalZoneFiles(ctx context.Context) ([]string, error) {
 	globPath := filepath.Join(linux.SysFS, "class", "thermal", "thermal_zone*")
-	files, err := filepath.Glob(globPath)
+
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, utils.KernelVirtualFSReadTimeout)
+	defer cancel()
+
+	files, err := utils.GlobWithContext(ctxWithTimeout, globPath)
 	if err != nil {
 		return nil, err
 	}
@@ -237,9 +241,13 @@ func getThermalZoneFiles() ([]string, error) {
 }
 
 // getHwMonFiles returns a list of temperature files in /sys/class/hwmon/hwmon*/temp*_input
-func getHwMonFiles() ([]string, error) {
+func getHwMonFiles(ctx context.Context) ([]string, error) {
 	globPath := filepath.Join(linux.SysFS, "class", "hwmon", "hwmon*", "temp*_input")
-	files, err := filepath.Glob(globPath)
+
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, utils.KernelVirtualFSReadTimeout)
+	defer cancel()
+
+	files, err := utils.GlobWithContext(ctxWithTimeout, globPath)
 	if err != nil {
 		return nil, err
 	}
@@ -247,8 +255,12 @@ func getHwMonFiles() ([]string, error) {
 	if len(files) == 0 {
 		// CentOS has an intermediate /device directory:
 		// https://github.com/giampaolo/psutil/issues/971
+
+		ctxWithTimeoutInner, cancelInner := context.WithTimeout(ctx, utils.KernelVirtualFSReadTimeout)
+		defer cancelInner()
+
 		globPath = filepath.Join(linux.SysFS, "class", "hwmon", "hwmon*", "device", "temp*_input")
-		if files, err = filepath.Glob(globPath); err != nil {
+		if files, err = utils.GlobWithContext(ctxWithTimeoutInner, globPath); err != nil {
 			return nil, err
 		}
 	}

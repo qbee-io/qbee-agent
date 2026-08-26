@@ -142,7 +142,7 @@ func getProcessStats(runningProcesses []string) (map[string]linux.ProcessStats, 
 	for _, pid := range runningProcesses {
 		statFilePath = filepath.Join(linux.ProcFS, pid, "stat")
 
-		data, readErr := utils.ReadFileContext(ctx, statFilePath)
+		data, readErr := utils.ReadFileWithContext(ctx, statFilePath)
 		if readErr != nil {
 			err = readErr
 			if errors.Is(err, fs.ErrNotExist) {
@@ -167,7 +167,7 @@ func getTotalJiffies() (uint64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), utils.KernelVirtualFSReadTimeout)
 	defer cancel()
 
-	buf, err := utils.ReadFileContext(ctx, filePath)
+	buf, err := utils.ReadFileWithContext(ctx, filePath)
 	if err != nil {
 		return 0, fmt.Errorf("error reading %s: %w", filePath, err)
 	}

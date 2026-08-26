@@ -17,6 +17,7 @@
 package metrics
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -42,8 +43,8 @@ type FilesystemValues struct {
 const fsBlockSize = 1024
 
 // CollectFilesystem returns filesystem metric for each filesystem mounted in read-write mode.
-func CollectFilesystem() ([]Metric, error) {
-	mounts, err := getFilesystemMounts()
+func CollectFilesystem(ctx context.Context) ([]Metric, error) {
+	mounts, err := getFilesystemMounts(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -83,17 +84,18 @@ func CollectFilesystem() ([]Metric, error) {
 }
 
 // getFilesystemMounts returns a list of block-device mount points.
-func getFilesystemMounts() ([]string, error) {
-	supportedFilesystems, err := getSupportedFilesystems()
+func getFilesystemMounts(ctx context.Context) ([]string, error) {
+	supportedFilesystems, err := getSupportedFilesystems(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	path := filepath.Join(linux.ProcFS, "mounts")
-
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, utils.KernelVirtualFSReadTimeout)
+	defer cancel()
 	mounts := make([]string, 0)
 
-	err = utils.ForLinesInFile(path, func(line string) error {
+	err = utils.ForLinesInFileWithContext(ctxWithTimeout, path, func(line string) error {
 		fields := strings.Fields(line)
 
 		if fields[3] != "rw" && !strings.HasPrefix(fields[3], "rw,") {
@@ -114,12 +116,16 @@ func getFilesystemMounts() ([]string, error) {
 }
 
 // getSupportedFilesystems returns a map of supported block-device filesystems.
-func getSupportedFilesystems() (map[string]bool, error) {
+func getSupportedFilesystems(ctx context.Context) (map[string]bool, error) {
+
 	path := filepath.Join(linux.ProcFS, "filesystems")
 
 	filesystems := make(map[string]bool)
 
-	err := utils.ForLinesInFile(path, func(line string) error {
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, utils.KernelVirtualFSReadTimeout)
+	defer cancel()
+
+	err := utils.ForLinesInFileWithContext(ctxWithTimeout, path, func(line string) error {
 		if strings.HasPrefix(line, "nodev") {
 			return nil
 		}

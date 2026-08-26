@@ -17,6 +17,7 @@
 package metrics
 
 import (
+	"context"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -47,12 +48,14 @@ type MemoryValues struct {
 }
 
 // CollectMemory metrics.
-func CollectMemory() ([]Metric, error) {
+func CollectMemory(ctx context.Context) ([]Metric, error) {
 	path := filepath.Join(linux.ProcFS, "meminfo")
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, utils.KernelVirtualFSReadTimeout)
+	defer cancel()
 
 	values := new(MemoryValues)
 
-	err := utils.ForLinesInFile(path, func(line string) error {
+	err := utils.ForLinesInFileWithContext(ctxWithTimeout, path, func(line string) error {
 		fields := strings.Fields(line)
 		if len(fields) != 3 {
 			return nil

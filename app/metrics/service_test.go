@@ -30,7 +30,7 @@ func TestCollectServiceCollectAll(t *testing.T) {
 
 	srv := New(apiClient)
 
-	gotMetrics := srv.Collect()
+	gotMetrics := srv.Collect(t.Context())
 
 	if len(gotMetrics) == 0 {
 		t.Fatalf("expected at least one metric, got 0")
@@ -46,7 +46,7 @@ func TestCollectServiceCollectAll(t *testing.T) {
 	// Sleep to get deltas
 	time.Sleep(1 * time.Second)
 
-	gotMetrics = srv.Collect()
+	gotMetrics = srv.Collect(t.Context())
 	metricBytes, err = json.MarshalIndent(gotMetrics, "", "  ")
 
 	if err != nil {

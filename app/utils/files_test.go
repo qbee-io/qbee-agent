@@ -47,7 +47,7 @@ func TestExhaustGoRoutinesPipeReads(t *testing.T) {
 	// try to read once more, which should fail to reserve a slot
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
-	_, err = ReadFileContext(ctx, fifoPath)
+	_, err = ReadFileWithContext(ctx, fifoPath)
 
 	if err == nil {
 		t.Fatalf("Expected ReadFileContext to fail due to exhausted goroutines, but it succeeded")
@@ -80,7 +80,7 @@ func exhaustGoRoutines(ctx context.Context, fifoPath string) error {
 		wg.Go(func() {
 			readCtx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
 			defer cancel()
-			_, _ = ReadFileContext(readCtx, fifoPath)
+			_, _ = ReadFileWithContext(readCtx, fifoPath)
 		})
 	}
 

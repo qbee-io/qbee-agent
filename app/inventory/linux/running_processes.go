@@ -75,7 +75,7 @@ func GetProcessCommand(pid string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), utils.KernelVirtualFSReadTimeout)
 	defer cancel()
 
-	cmdLineBytes, err := utils.ReadFileContext(ctx, cmdLinePath)
+	cmdLineBytes, err := utils.ReadFileWithContext(ctx, cmdLinePath)
 	if err != nil {
 		return "", fmt.Errorf("error reading %s: %w", cmdLinePath, err)
 	}
