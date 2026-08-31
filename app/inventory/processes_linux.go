@@ -133,14 +133,13 @@ func getProcessStats(ctx context.Context, runningProcesses []string) (map[string
 	processStats := make(map[string]linux.ProcessStats)
 
 	var err error
-	var statFilePath string
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, utils.KernelVirtualFSReadTimeout)
-	defer cancel()
 
 	for _, pid := range runningProcesses {
-		statFilePath = filepath.Join(linux.ProcFS, pid, "stat")
+		statFilePath := filepath.Join(linux.ProcFS, pid, "stat")
 
+		ctxWithTimeout, cancel := context.WithTimeout(ctx, utils.KernelVirtualFSReadTimeout)
 		data, readErr := utils.ReadFileWithContext(ctxWithTimeout, statFilePath)
+		cancel()
 		if readErr != nil {
 			err = readErr
 			if errors.Is(err, fs.ErrNotExist) {
