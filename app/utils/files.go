@@ -78,11 +78,32 @@ func ReadFileWithContext(ctx context.Context, filePath string) ([]byte, error) {
 		return nil, err
 	}
 
-	if closer, ok := reader.(io.Closer); ok {
-		defer func() { _ = closer.Close() }()
+	closer, hasCloser := reader.(io.Closer)
+
+	type result struct {
+		data []byte
+		err  error
 	}
 
-	return io.ReadAll(reader)
+	ch := make(chan result, 1)
+
+	go func() {
+		data, err := io.ReadAll(reader)
+		ch <- result{data, err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		if hasCloser {
+			_ = closer.Close()
+		}
+		return nil, ctx.Err()
+	case res := <-ch:
+		if hasCloser {
+			_ = closer.Close()
+		}
+		return res.data, res.err
+	}
 }
 
 // OpenFileWithContext opens a file with context cancellation support.
