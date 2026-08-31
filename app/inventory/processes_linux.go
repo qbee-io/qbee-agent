@@ -128,8 +128,6 @@ func CollectProcessesInventory(ctx context.Context) (*Processes, error) {
 	return processes, nil
 }
 
-const procStatBufferSize = 1024
-
 // getProcessStats returns a map of PID -> process stats for currently running processes.
 func getProcessStats(ctx context.Context, runningProcesses []string) (map[string]linux.ProcessStats, error) {
 	processStats := make(map[string]linux.ProcessStats)
