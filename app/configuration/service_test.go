@@ -236,39 +236,14 @@ func TestService_ReportExhaustedGoroutineBudget(t *testing.T) {
 	exhausted, _ := srv.ReportExhaustedGoroutineBudget(context.Background())
 
 	// Verify that it returns true (indicating budget was exhausted)
-	if !exhausted {
-		t.Fatalf("expected exhausted to be true, got false")
-	}
+	assert.True(t, exhausted)
 
 	// Read the buffered reports
 	reports, readErr := srv.readReportsBuffer()
-	if readErr != nil {
-		t.Fatalf("failed to read reports buffer: %v", readErr)
-	}
+	assert.NoError(t, readErr)
+	assert.NotEqual(t, len(reports), 0)
 
-	// Verify that at least one report was created
-	if len(reports) == 0 {
-		t.Fatalf("expected reports to be buffered, but got none")
-	}
-
-	// Verify the report contains the expected error message
-	found := false
-	for _, report := range reports {
-		if report.Text == "goroutine budget exhausted, skipping agent run" {
-			found = true
-			// Verify the bundle is set correctly
-			if report.Bundle != "agent_internal" {
-				t.Fatalf("expected bundle to be 'agent_internal', got %q", report.Bundle)
-			}
-			// Verify the severity is ERR
-			if report.Severity != "ERR" {
-				t.Fatalf("expected severity to be 'ERR', got %q", report.Severity)
-			}
-			break
-		}
-	}
-
-	if !found {
-		t.Fatalf("expected report with text 'goroutine budget exhausted, skipping agent run', but got reports: %v", reports)
-	}
+	assert.Equal(t, reports[0].Bundle, bundleAgentInternal)
+	assert.Equal(t, reports[0].Severity, severityError)
+	assert.Equal(t, reports[0].Text, "goroutine budget exhausted, skipping agent run")
 }
