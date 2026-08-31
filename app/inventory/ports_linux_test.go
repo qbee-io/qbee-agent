@@ -23,7 +23,7 @@ import (
 )
 
 func TestCollectPortsInventory(t *testing.T) {
-	ports, err := CollectPortsInventory()
+	ports, err := CollectPortsInventory(t.Context())
 	if err != nil {
 		t.Fatalf("error collecting ports: %v", err)
 	}

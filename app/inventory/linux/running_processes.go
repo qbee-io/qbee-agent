@@ -28,8 +28,12 @@ import (
 )
 
 // ListRunningProcesses returns a list of PIDs of currently running processes.
-func ListRunningProcesses() ([]string, error) {
-	dirNames, err := utils.ListDirectory(ProcFS)
+func ListRunningProcesses(ctx context.Context) ([]string, error) {
+
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, utils.KernelVirtualFSReadTimeout)
+	defer cancel()
+
+	dirNames, err := utils.ListDirectoryWithContext(ctxWithTimeout, ProcFS)
 	if err != nil {
 		return nil, err
 	}
@@ -48,8 +52,8 @@ func ListRunningProcesses() ([]string, error) {
 }
 
 // ListRunningProcessesNames returns a map of running process PID -> process command-line.
-func ListRunningProcessesNames() (map[string]string, error) {
-	runningProcesses, err := ListRunningProcesses()
+func ListRunningProcessesNames(ctx context.Context) (map[string]string, error) {
+	runningProcesses, err := ListRunningProcesses(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +63,7 @@ func ListRunningProcessesNames() (map[string]string, error) {
 	for _, pid := range runningProcesses {
 		var cmdLine string
 
-		if cmdLine, err = GetProcessCommand(pid); err != nil {
+		if cmdLine, err = GetProcessCommand(ctx, pid); err != nil {
 			return nil, err
 		}
 
@@ -70,12 +74,12 @@ func ListRunningProcessesNames() (map[string]string, error) {
 }
 
 // GetProcessCommand returns a command used to start the process.
-func GetProcessCommand(pid string) (string, error) {
+func GetProcessCommand(ctx context.Context, pid string) (string, error) {
 	cmdLinePath := filepath.Join(ProcFS, pid, "cmdline")
-	ctx, cancel := context.WithTimeout(context.Background(), utils.KernelVirtualFSReadTimeout)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, utils.KernelVirtualFSReadTimeout)
 	defer cancel()
 
-	cmdLineBytes, err := utils.ReadFileWithContext(ctx, cmdLinePath)
+	cmdLineBytes, err := utils.ReadFileWithContext(ctxWithTimeout, cmdLinePath)
 	if err != nil {
 		return "", fmt.Errorf("error reading %s: %w", cmdLinePath, err)
 	}

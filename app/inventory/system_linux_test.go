@@ -27,7 +27,7 @@ import (
 
 func TestCollectSystemInventory(t *testing.T) {
 
-	systemInfo, err := inventory.CollectSystemInventory(true)
+	systemInfo, err := inventory.CollectSystemInventory(t.Context(), true)
 	if err != nil {
 		t.Fatalf("error collecting system info: %v", err)
 	}
