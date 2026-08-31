@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"go.qbee.io/agent/app/api"
+	"go.qbee.io/agent/app/utils"
 	"go.qbee.io/agent/app/utils/assert"
 )
 
@@ -214,5 +215,60 @@ func Test_ConfigEndpointBooleanReset(t *testing.T) {
 	// config endpoint should now be reachable
 	if srv.IsConfigEndpointUnreachable() {
 		t.Fatalf("expected config endpoint to be reachable")
+	}
+}
+
+func TestService_ReportExhaustedGoroutineBudget(t *testing.T) {
+	tmpDir := t.TempDir()
+	srv := New(nil, tmpDir, "")
+	srv.currentCommitID = "test-commit-id"
+
+	// Create a mock API client that will fail to send reports
+	// so they get buffered to the reports file
+	mockClient := api.NewClient("localhost", "99999")
+	srv.api = mockClient
+
+	// Simulate exhausted goroutine budget
+	utils.SetGoroutineCountForTesting(500)     // maxGoroutines is 500
+	defer utils.SetGoroutineCountForTesting(0) // reset after test
+
+	// Call ReportExhaustedGoroutineBudget
+	exhausted, _ := srv.ReportExhaustedGoroutineBudget(context.Background())
+
+	// Verify that it returns true (indicating budget was exhausted)
+	if !exhausted {
+		t.Fatalf("expected exhausted to be true, got false")
+	}
+
+	// Read the buffered reports
+	reports, readErr := srv.readReportsBuffer()
+	if readErr != nil {
+		t.Fatalf("failed to read reports buffer: %v", readErr)
+	}
+
+	// Verify that at least one report was created
+	if len(reports) == 0 {
+		t.Fatalf("expected reports to be buffered, but got none")
+	}
+
+	// Verify the report contains the expected error message
+	found := false
+	for _, report := range reports {
+		if report.Text == "goroutine budget exhausted, skipping agent run" {
+			found = true
+			// Verify the bundle is set correctly
+			if report.Bundle != "agent_internal" {
+				t.Fatalf("expected bundle to be 'agent_internal', got %q", report.Bundle)
+			}
+			// Verify the severity is ERR
+			if report.Severity != "ERR" {
+				t.Fatalf("expected severity to be 'ERR', got %q", report.Severity)
+			}
+			break
+		}
+	}
+
+	if !found {
+		t.Fatalf("expected report with text 'goroutine budget exhausted, skipping agent run', but got reports: %v", reports)
 	}
 }

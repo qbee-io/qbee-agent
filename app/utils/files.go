@@ -48,6 +48,12 @@ func GoroutinesExhausted() bool {
 	return atomic.LoadInt64(&goroutineCount) >= maxGoroutines
 }
 
+// SetGoroutineCountForTesting sets the goroutine count for testing purposes.
+// This is only intended for use in tests.
+func SetGoroutineCountForTesting(count int64) {
+	atomic.StoreInt64(&goroutineCount, count)
+}
+
 // reserveGoroutineSlot attempts to reserve a slot for a new goroutine. It returns true if successful, false if the maximum number of goroutines has been reached.
 func reserveGoroutineSlot() bool {
 	for {
