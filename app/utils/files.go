@@ -91,7 +91,7 @@ func OpenFileWithContext(ctx context.Context, filePath string) (io.Reader, error
 		return nil, fmt.Errorf("goroutine budget exhausted")
 	}
 
-	ch := make(chan *os.File, 1)
+ch := make(chan *os.File)
 	errCh := make(chan error, 1)
 
 	go func() {
