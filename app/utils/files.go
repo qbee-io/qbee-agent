@@ -184,3 +184,48 @@ func GlobWithContext(ctx context.Context, pattern string) ([]string, error) {
 		return matches, nil
 	}
 }
+
+// ListDirectoryWithContext lists files and directories in a directory with context cancellation support.
+// This prevents blocking reads on virtual filesystems like procfs.
+func ListDirectoryWithContext(ctx context.Context, dirPath string) ([]string, error) {
+	if !reserveGoroutineSlot() {
+		return nil, fmt.Errorf("goroutine budget exhausted")
+	}
+
+	ch := make(chan []string, 1)
+	errCh := make(chan error, 1)
+
+	go func() {
+		dir, err := os.Open(dirPath)
+		if err != nil {
+			atomic.AddInt64(&goroutineCount, -1)
+			errCh <- fmt.Errorf("error opening %s: %w", dirPath, err)
+			return
+		}
+
+		defer func() { _ = dir.Close() }()
+
+		dirNames, err := dir.Readdirnames(-1)
+		if err != nil {
+			atomic.AddInt64(&goroutineCount, -1)
+			errCh <- fmt.Errorf("error listing contents of %s: %w", dirPath, err)
+			return
+		}
+
+		select {
+		case <-ctx.Done():
+			atomic.AddInt64(&goroutineCount, -1)
+		case ch <- dirNames:
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case err := <-errCh:
+		return nil, err
+	case names := <-ch:
+		atomic.AddInt64(&goroutineCount, -1)
+		return names, nil
+	}
+}

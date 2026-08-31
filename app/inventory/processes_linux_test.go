@@ -22,7 +22,7 @@ import (
 )
 
 func TestCollectProcessesInventory(t *testing.T) {
-	processes, err := CollectProcessesInventory()
+	processes, err := CollectProcessesInventory(t.Context())
 	if err != nil {
 		t.Fatalf("error collecting processes: %v", err)
 	}

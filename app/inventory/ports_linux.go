@@ -19,6 +19,7 @@
 package inventory
 
 import (
+	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -36,19 +37,19 @@ import (
 )
 
 // CollectPortsInventory returns populated Ports inventory based on current system status.
-func CollectPortsInventory() (*Ports, error) {
+func CollectPortsInventory(ctx context.Context) (*Ports, error) {
 	ports := new(Ports)
 
 	var protocols = []string{"tcp", "tcp6", "udp", "udp6"}
 
-	inodesMap, err := loadProcessFDInodes()
+	inodesMap, err := loadProcessFDInodes(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, protocol := range protocols {
 		var listeningPorts []Port
-		if listeningPorts, err = parseNetworkPorts(protocol, inodesMap); err != nil {
+		if listeningPorts, err = parseNetworkPorts(ctx, protocol, inodesMap); err != nil {
 			return nil, err
 		}
 
@@ -61,9 +62,9 @@ func CollectPortsInventory() (*Ports, error) {
 }
 
 // loadProcessFDInodes loads mapping of processes' open files inodes to file paths.
-func loadProcessFDInodes() (map[uint64]string, error) {
+func loadProcessFDInodes(ctx context.Context) (map[uint64]string, error) {
 	// scan all open files for all running processes
-	runningProcesses, err := linux.ListRunningProcesses()
+	runningProcesses, err := linux.ListRunningProcesses(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("cannot list currently running processes: %w", err)
 	}
@@ -79,7 +80,10 @@ func loadProcessFDInodes() (map[uint64]string, error) {
 		processProcPath := filepath.Join(linux.ProcFS, pid)
 		fdDirPath := filepath.Join(processProcPath, "fd")
 
-		fdPaths, err = utils.ListDirectory(fdDirPath)
+		ctxWithTimeout, cancel := context.WithTimeout(ctx, utils.KernelVirtualFSReadTimeout)
+		defer cancel()
+
+		fdPaths, err = utils.ListDirectoryWithContext(ctxWithTimeout, fdDirPath)
 		if err != nil {
 			log.Debugf("cannot list inodes for process %s: %v", pid, err)
 			continue
@@ -109,11 +113,14 @@ func loadProcessFDInodes() (map[uint64]string, error) {
 }
 
 // parseNetworkPorts parses /proc/net/<protocol> file format and returns a list of listening ports.
-func parseNetworkPorts(protocol string, inodesMap map[uint64]string) ([]Port, error) {
+func parseNetworkPorts(ctx context.Context, protocol string, inodesMap map[uint64]string) ([]Port, error) {
 	procFilePath := filepath.Join("/proc/net", protocol)
 	ports := make([]Port, 0)
 
-	err := utils.ForLinesInFile(procFilePath, func(line string) error {
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, utils.KernelVirtualFSReadTimeout)
+	defer cancel()
+
+	err := utils.ForLinesInFileWithContext(ctxWithTimeout, procFilePath, func(line string) error {
 		fields := strings.Fields(line)
 
 		// Skip non-listening sockets (that also skips the header).
@@ -139,7 +146,7 @@ func parseNetworkPorts(protocol string, inodesMap map[uint64]string) ([]Port, er
 		if fileDescriptorPath, found := inodesMap[uint64(inodeInt)]; found {
 			processID := strings.SplitN(fileDescriptorPath, "/", 4)[2]
 
-			if cmdLine, err = linux.GetProcessCommand(processID); err != nil {
+			if cmdLine, err = linux.GetProcessCommand(ctx, processID); err != nil {
 				return err
 			}
 		}
