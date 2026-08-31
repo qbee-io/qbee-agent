@@ -49,16 +49,12 @@ func ForLines(reader io.Reader, fn func(string) error) error {
 
 // ForLinesInFileWithContext runs fn for every line in the provided filePath with a context.
 func ForLinesInFileWithContext(ctx context.Context, filePath string, fn func(string) error) error {
-	reader, err := OpenFileWithContext(ctx, filePath)
+	data, err := ReadFileWithContext(ctx, filePath)
 	if err != nil {
-		return fmt.Errorf("error opening file %s: %w", filePath, err)
+		return fmt.Errorf("error reading file %s: %w", filePath, err)
 	}
 
-	if closer, ok := reader.(io.Closer); ok {
-		defer func() { _ = closer.Close() }()
-	}
-
-	if err = ForLines(reader, fn); err != nil {
+	if err = ForLines(bytes.NewReader(data), fn); err != nil {
 		return fmt.Errorf("error processing file %s: %w", filePath, err)
 	}
 

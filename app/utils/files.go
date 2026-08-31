@@ -112,7 +112,7 @@ func OpenFileWithContext(ctx context.Context, filePath string) (io.Reader, error
 		return nil, fmt.Errorf("goroutine budget exhausted")
 	}
 
-ch := make(chan *os.File)
+	ch := make(chan *os.File)
 	errCh := make(chan error, 1)
 
 	go func() {
@@ -187,7 +187,7 @@ func GlobWithContext(ctx context.Context, pattern string) ([]string, error) {
 	ch := make(chan []string, 1)
 	errCh := make(chan error, 1)
 
-go func() {
+	go func() {
 		defer atomic.AddInt64(&goroutineCount, -1)
 
 		matches, err := filepath.Glob(pattern)
