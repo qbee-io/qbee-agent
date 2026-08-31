@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"math"
 	"path/filepath"
 	"strconv"
@@ -53,9 +54,17 @@ func CollectCPU(ctx context.Context) (*CPUValues, error) {
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, utils.KernelVirtualFSReadTimeout)
 	defer cancel()
 
-	buf, err := utils.ReadFileWithContext(ctxWithTimeout, filePath)
+	file, err := utils.OpenFileWithContext(ctxWithTimeout, filePath)
 	if err != nil {
 		return nil, fmt.Errorf("error reading %s: %w", filePath, err)
+	}
+
+	defer func() { _ = file.(io.Closer).Close() }()
+
+	// we don't need to read the whole file, we only care about the first line
+	buf := make([]byte, 512)
+	if _, err = file.Read(buf); err != nil {
+		return nil, fmt.Errorf("error reading contents of %s: %w", filePath, err)
 	}
 
 	firstLine := string(buf[0:bytes.Index(buf, []byte("\n"))])

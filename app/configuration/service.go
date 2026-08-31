@@ -330,18 +330,34 @@ func (srv *Service) reportAPIError(ctx context.Context, err error) {
 }
 
 func (srv *Service) ReportExhaustedGoroutineBudget(ctx context.Context) (bool, error) {
-	if utils.GoroutinesExhausted() {
-		// since we don't have a reporter defined on this context, we need to create a new one
-		reporter := NewReporter(srv.currentCommitID, srv.reportToConsole, nil)
-		bundleCtx := reporter.BundleContext(ctx, bundleAgentInternal, "")
-
-		ReportError(bundleCtx, nil, "goroutine budget exhausted, skipping agent run")
-
-		// send reports immedately as there will be no further configurations executed, thus
-		// no further reports will be generated. If we fail to send the reports, we add them to the buffer.
-		return true, srv.flushReportsBuffer(ctx)
+	if !utils.GoroutinesExhausted() {
+		return false, nil
 	}
-	return false, nil
+
+	// since we don't have a reporter defined on this context, we need to create a new one
+	reporter := NewReporter(srv.currentCommitID, srv.reportToConsole, nil)
+	bundleCtx := reporter.BundleContext(ctx, bundleAgentInternal, "")
+
+	ReportError(bundleCtx, nil, "goroutine budget exhausted, skipping agent run")
+
+	// send reports immedately as there will be no further configurations executed, thus
+	// no further reports will be generated. If we fail to send the reports, we add them to the buffer.
+	if _, err := srv.sendReports(ctx, reporter.Reports()); err != nil {
+		log.Debugf("failed to send reports to the server: %v, adding to the buffer", err)
+
+		if bufferErr := srv.addReportsToBuffer(reporter.Reports()); bufferErr != nil {
+			log.Errorf("failed to add reports to buffer: %v", bufferErr)
+		}
+
+		return true, err
+	}
+
+	// also flush any existing buffered reports
+	if err := srv.flushReportsBuffer(ctx); err != nil {
+		log.Errorf("failed to flush reports buffer: %v", err)
+	}
+
+	return true, nil
 }
 
 // RunIntervalChangedNotifier returns a channel which will send a new agent interval duration when it changes.
