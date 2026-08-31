@@ -166,17 +166,17 @@ func GlobWithContext(ctx context.Context, pattern string) ([]string, error) {
 	ch := make(chan []string, 1)
 	errCh := make(chan error, 1)
 
-	go func() {
+go func() {
+		defer atomic.AddInt64(&goroutineCount, -1)
+
 		matches, err := filepath.Glob(pattern)
 		if err != nil {
-			atomic.AddInt64(&goroutineCount, -1)
 			errCh <- err
 			return
 		}
 
 		select {
 		case <-ctx.Done():
-			atomic.AddInt64(&goroutineCount, -1)
 		case ch <- matches:
 		}
 	}()
