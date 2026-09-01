@@ -60,7 +60,17 @@ func CollectProcessesInventory(ctx context.Context) (*Processes, error) {
 	// Because CPU utilization can be calculated only over time,
 	// we need to wait a bit and collect another set of stats.
 	// The wait time is adjusted by how long it took to process the first batch of jiffies.
-	time.Sleep(time.Second - time.Since(firstReadTime))
+	wait := time.Second - time.Since(firstReadTime)
+	if wait > 0 {
+		timer := time.NewTimer(wait)
+		defer timer.Stop()
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
 
 	// collect total CPU jiffies (again)
 	if totalJiffiesT1, err = getTotalJiffies(ctx); err != nil {
