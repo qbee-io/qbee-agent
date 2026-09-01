@@ -113,7 +113,12 @@ func OpenFileWithContext(ctx context.Context, filePath string) (io.Reader, error
 			errCh <- err
 			return
 		}
-		ch <- f
+
+		select {
+		case ch <- f:
+		case <-ctx.Done():
+			_ = f.Close()
+		}
 	}()
 
 	select {
