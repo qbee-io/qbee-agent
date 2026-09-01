@@ -41,6 +41,7 @@ func WriteFileSync(name string, data []byte, perm os.FileMode) error {
 // goroutineCount tracks the number of active goroutines
 var goroutineCount int64
 
+// maxGoroutines defines the maximum number of concurrent goroutines allowed for file IO operations.
 const maxGoroutines = 500
 
 // GoroutinesExhausted reports whether the context file IO goroutine budget is exhausted.
@@ -72,15 +73,8 @@ func reserveGoroutineSlot() bool {
 
 // releaseGoroutineSlot releases a previously reserved goroutine slot. It decrements the goroutine count if the error is nil
 // or not a context deadline exceeded error (context.DeadlineExceeded).
-func releaseGoroutineSlot(err error) {
-	if err == nil {
-		atomic.AddInt64(&goroutineCount, -1)
-		return
-	}
-	if !errors.Is(err, context.DeadlineExceeded) {
-		atomic.AddInt64(&goroutineCount, -1)
-		return
-	}
+func releaseGoroutineSlot() {
+	atomic.AddInt64(&goroutineCount, -1)
 }
 
 // KernelVirtualFSReadTimeout limits reads/opens on virtual kernel filesystems.
@@ -93,23 +87,27 @@ func ReadFileWithContext(ctx context.Context, filePath string) ([]byte, error) {
 		return nil, err
 	}
 
+	defer func() {
+		_ = reader.(*contextReader).Close()
+	}()
+
 	return reader.(*contextReader).ReadAll()
 }
 
 // OpenFileWithContext opens a file with context cancellation support.
-func OpenFileWithContext(ctx context.Context, filePath string) (openedFile io.Reader, openErr error) {
+func OpenFileWithContext(ctx context.Context, filePath string) (io.Reader, error) {
 	if !reserveGoroutineSlot() {
 		return nil, fmt.Errorf("goroutine budget exhausted")
 	}
-
-	defer func() {
-		releaseGoroutineSlot(openErr)
-	}()
 
 	ch := make(chan *os.File)
 	errCh := make(chan error, 1)
 
 	go func() {
+		defer func() {
+			releaseGoroutineSlot()
+		}()
+
 		f, err := os.Open(filePath)
 		if err != nil {
 			errCh <- err
@@ -120,16 +118,14 @@ func OpenFileWithContext(ctx context.Context, filePath string) (openedFile io.Re
 
 	select {
 	case <-ctx.Done():
-		openErr = ctx.Err()
-		return nil, openErr
-	case openErr = <-errCh:
-		return nil, openErr
+		return nil, ctx.Err()
+	case err := <-errCh:
+		return nil, err
 	case f := <-ch:
-		openedFile = &contextReader{
+		return &contextReader{
 			ctx: ctx,
 			f:   f,
-		}
-		return openedFile, nil
+		}, nil
 	}
 }
 
@@ -139,18 +135,18 @@ type contextReader struct {
 }
 
 // Read reads from the contextReader, respecting context cancellation. If the context is done, it closes the underlying file and returns an error.
-func (cr *contextReader) Read(p []byte) (readBytes int, readErr error) {
+func (cr *contextReader) Read(p []byte) (int, error) {
 	if !reserveGoroutineSlot() {
 		return 0, fmt.Errorf("goroutine budget exhausted")
 	}
 
-	defer func() {
-		releaseGoroutineSlot(readErr)
-	}()
-
 	errChan := make(chan error, 1)
 	ch := make(chan int, 1)
 	go func() {
+		defer func() {
+			releaseGoroutineSlot()
+		}()
+
 		n, err := cr.f.Read(p)
 		if err != nil {
 			errChan <- err
@@ -161,13 +157,11 @@ func (cr *contextReader) Read(p []byte) (readBytes int, readErr error) {
 
 	select {
 	case <-cr.ctx.Done():
-		_ = cr.Close()
-		readErr = cr.ctx.Err()
-		return 0, readErr
-	case readErr = <-errChan:
-		return 0, readErr
-	case readBytes = <-ch:
-		return readBytes, nil
+		return 0, cr.ctx.Err()
+	case err := <-errChan:
+		return 0, err
+	case n := <-ch:
+		return n, nil
 	}
 }
 
@@ -197,19 +191,19 @@ func (cr *contextReader) Close() error {
 // GlobWithContext performs a filepath.Glob operation with context cancellation support.
 // This function performs a filepath.Glob operation while respecting context cancellation
 // which prevents blocking on slow or unresponsive filesystems.
-func GlobWithContext(ctx context.Context, pattern string) (matches []string, err error) {
+func GlobWithContext(ctx context.Context, pattern string) ([]string, error) {
 	if !reserveGoroutineSlot() {
 		return nil, fmt.Errorf("goroutine budget exhausted")
 	}
-
-	defer func() {
-		releaseGoroutineSlot(err)
-	}()
 
 	ch := make(chan []string, 1)
 	errCh := make(chan error, 1)
 
 	go func() {
+		defer func() {
+			releaseGoroutineSlot()
+		}()
+
 		matches, err := filepath.Glob(pattern)
 		if err != nil {
 			errCh <- err
@@ -221,9 +215,8 @@ func GlobWithContext(ctx context.Context, pattern string) (matches []string, err
 
 	select {
 	case <-ctx.Done():
-		err = ctx.Err()
-		return nil, err
-	case err = <-errCh:
+		return nil, ctx.Err()
+	case err := <-errCh:
 		return nil, err
 	case matches := <-ch:
 		return matches, nil
@@ -233,22 +226,22 @@ func GlobWithContext(ctx context.Context, pattern string) (matches []string, err
 // ListDirectoryWithContext lists files and directories in a directory with context cancellation support.
 // This function lists the contents of a directory while respecting context cancellation, preventing
 // blocking on slow or unresponsive filesystems.
-func ListDirectoryWithContext(ctx context.Context, dirPath string) (names []string, listErr error) {
+func ListDirectoryWithContext(ctx context.Context, dirPath string) ([]string, error) {
 	if !reserveGoroutineSlot() {
 		return nil, fmt.Errorf("goroutine budget exhausted")
 	}
-
-	defer func() {
-		releaseGoroutineSlot(listErr)
-	}()
 
 	ch := make(chan []string, 1)
 	errCh := make(chan error, 1)
 
 	go func() {
+		defer func() {
+			releaseGoroutineSlot()
+		}()
+
 		dir, err := os.Open(dirPath)
 		if err != nil {
-			errCh <- fmt.Errorf("error opening %s: %w", dirPath, err)
+			errCh <- err
 			return
 		}
 
@@ -256,7 +249,7 @@ func ListDirectoryWithContext(ctx context.Context, dirPath string) (names []stri
 
 		dirNames, err := dir.Readdirnames(-1)
 		if err != nil {
-			errCh <- fmt.Errorf("error listing contents of %s: %w", dirPath, err)
+			errCh <- err
 			return
 		}
 		ch <- dirNames
@@ -264,10 +257,9 @@ func ListDirectoryWithContext(ctx context.Context, dirPath string) (names []stri
 
 	select {
 	case <-ctx.Done():
-		listErr = ctx.Err()
-		return nil, listErr
-	case listErr = <-errCh:
-		return nil, listErr
+		return nil, ctx.Err()
+	case err := <-errCh:
+		return nil, err
 	case names := <-ch:
 		return names, nil
 	}
