@@ -2,11 +2,11 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -54,7 +54,9 @@ func SetGoroutineCountForTesting(count int64) {
 	atomic.StoreInt64(&goroutineCount, count)
 }
 
-// reserveGoroutineSlot attempts to reserve a slot for a new goroutine. It returns true if successful, false if the maximum number of goroutines has been reached.
+// reserveGoroutineSlot attempts to reserve a slot for a new goroutine. It returns true if successful, false if the
+// maximum number of goroutines has been reached. This method is safe for Time-of-Check to Time-of-Use (TOCTOU) race
+// conditions. For loop ensures retries until the slot is successfully reserved or the maximum number of goroutines is reached.
 func reserveGoroutineSlot() bool {
 	for {
 		current := atomic.LoadInt64(&goroutineCount)
@@ -68,6 +70,19 @@ func reserveGoroutineSlot() bool {
 	}
 }
 
+// releaseGoroutineSlot releases a previously reserved goroutine slot. It decrements the goroutine count if the error is nil
+// or not a context deadline exceeded error (context.DeadlineExceeded).
+func releaseGoroutineSlot(err error) {
+	if err == nil {
+		atomic.AddInt64(&goroutineCount, -1)
+		return
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		atomic.AddInt64(&goroutineCount, -1)
+		return
+	}
+}
+
 // KernelVirtualFSReadTimeout limits reads/opens on virtual kernel filesystems.
 const KernelVirtualFSReadTimeout = 2 * time.Second
 
@@ -78,39 +93,18 @@ func ReadFileWithContext(ctx context.Context, filePath string) ([]byte, error) {
 		return nil, err
 	}
 
-	closer, hasCloser := reader.(io.Closer)
-
-	type result struct {
-		data []byte
-		err  error
-	}
-
-	ch := make(chan result, 1)
-
-	go func() {
-		data, err := io.ReadAll(reader)
-		ch <- result{data, err}
-	}()
-
-	select {
-	case <-ctx.Done():
-		if hasCloser {
-			_ = closer.Close()
-		}
-		return nil, ctx.Err()
-	case res := <-ch:
-		if hasCloser {
-			_ = closer.Close()
-		}
-		return res.data, res.err
-	}
+	return reader.(*contextReader).ReadAll()
 }
 
 // OpenFileWithContext opens a file with context cancellation support.
-func OpenFileWithContext(ctx context.Context, filePath string) (io.Reader, error) {
+func OpenFileWithContext(ctx context.Context, filePath string) (openedFile io.Reader, openErr error) {
 	if !reserveGoroutineSlot() {
 		return nil, fmt.Errorf("goroutine budget exhausted")
 	}
+
+	defer func() {
+		releaseGoroutineSlot(openErr)
+	}()
 
 	ch := make(chan *os.File)
 	errCh := make(chan error, 1)
@@ -118,94 +112,118 @@ func OpenFileWithContext(ctx context.Context, filePath string) (io.Reader, error
 	go func() {
 		f, err := os.Open(filePath)
 		if err != nil {
-			atomic.AddInt64(&goroutineCount, -1)
 			errCh <- err
 			return
 		}
-
-		select {
-		case <-ctx.Done():
-			_ = f.Close()
-			atomic.AddInt64(&goroutineCount, -1)
-		case ch <- f:
-		}
+		ch <- f
 	}()
 
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
-	case err := <-errCh:
-		return nil, err
+		openErr = ctx.Err()
+		return nil, openErr
+	case openErr = <-errCh:
+		return nil, openErr
 	case f := <-ch:
-		return &contextReader{
-			ctx:  ctx,
-			f:    f,
-			done: func() { atomic.AddInt64(&goroutineCount, -1) },
-		}, nil
+		openedFile = &contextReader{
+			ctx: ctx,
+			f:   f,
+		}
+		return openedFile, nil
 	}
 }
 
 type contextReader struct {
-	ctx  context.Context
-	f    *os.File
-	done func()
-	once sync.Once
+	ctx context.Context
+	f   *os.File
 }
 
-func (cr *contextReader) markDone() {
-	cr.once.Do(cr.done)
-}
+// Read reads from the contextReader, respecting context cancellation. If the context is done, it closes the underlying file and returns an error.
+func (cr *contextReader) Read(p []byte) (readBytes int, readErr error) {
+	if !reserveGoroutineSlot() {
+		return 0, fmt.Errorf("goroutine budget exhausted")
+	}
 
-func (cr *contextReader) Read(p []byte) (n int, err error) {
+	defer func() {
+		releaseGoroutineSlot(readErr)
+	}()
+
+	errChan := make(chan error, 1)
+	ch := make(chan int, 1)
+	go func() {
+		n, err := cr.f.Read(p)
+		if err != nil {
+			errChan <- err
+			return
+		}
+		ch <- n
+	}()
+
 	select {
 	case <-cr.ctx.Done():
-		_ = cr.f.Close()
-		cr.markDone()
-		return 0, cr.ctx.Err()
-	default:
+		_ = cr.Close()
+		readErr = cr.ctx.Err()
+		return 0, readErr
+	case readErr = <-errChan:
+		return 0, readErr
+	case readBytes = <-ch:
+		return readBytes, nil
 	}
-
-	n, err = cr.f.Read(p)
-	if err != nil {
-		cr.markDone()
-	}
-
-	return n, err
 }
 
+// ReadAll reads all data from the contextReader, respecting context cancellation. If the context is done, it closes the underlying file and returns an error.
+func (cr *contextReader) ReadAll() ([]byte, error) {
+	var result []byte
+	buf := make([]byte, 4096)
+	for {
+		n, err := cr.Read(buf)
+		if n > 0 {
+			result = append(result, buf[:n]...)
+		}
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return result, nil
+			}
+			return result, err
+		}
+	}
+}
+
+// Close closes the contextReader, releasing the underlying file and goroutine slot.
 func (cr *contextReader) Close() error {
-	err := cr.f.Close()
-	cr.markDone()
-	return err
+	return cr.f.Close()
 }
 
-func GlobWithContext(ctx context.Context, pattern string) ([]string, error) {
+// GlobWithContext performs a filepath.Glob operation with context cancellation support.
+// This function performs a filepath.Glob operation while respecting context cancellation
+// which prevents blocking on slow or unresponsive filesystems.
+func GlobWithContext(ctx context.Context, pattern string) (matches []string, err error) {
 	if !reserveGoroutineSlot() {
 		return nil, fmt.Errorf("goroutine budget exhausted")
 	}
+
+	defer func() {
+		releaseGoroutineSlot(err)
+	}()
 
 	ch := make(chan []string, 1)
 	errCh := make(chan error, 1)
 
 	go func() {
-		defer atomic.AddInt64(&goroutineCount, -1)
-
 		matches, err := filepath.Glob(pattern)
 		if err != nil {
 			errCh <- err
 			return
 		}
 
-		select {
-		case <-ctx.Done():
-		case ch <- matches:
-		}
+		ch <- matches
 	}()
 
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
-	case err := <-errCh:
+		err = ctx.Err()
+		return nil, err
+	case err = <-errCh:
 		return nil, err
 	case matches := <-ch:
 		return matches, nil
@@ -213,11 +231,16 @@ func GlobWithContext(ctx context.Context, pattern string) ([]string, error) {
 }
 
 // ListDirectoryWithContext lists files and directories in a directory with context cancellation support.
-// This prevents blocking reads on virtual filesystems like procfs.
-func ListDirectoryWithContext(ctx context.Context, dirPath string) ([]string, error) {
+// This function lists the contents of a directory while respecting context cancellation, preventing
+// blocking on slow or unresponsive filesystems.
+func ListDirectoryWithContext(ctx context.Context, dirPath string) (names []string, listErr error) {
 	if !reserveGoroutineSlot() {
 		return nil, fmt.Errorf("goroutine budget exhausted")
 	}
+
+	defer func() {
+		releaseGoroutineSlot(listErr)
+	}()
 
 	ch := make(chan []string, 1)
 	errCh := make(chan error, 1)
@@ -225,7 +248,6 @@ func ListDirectoryWithContext(ctx context.Context, dirPath string) ([]string, er
 	go func() {
 		dir, err := os.Open(dirPath)
 		if err != nil {
-			atomic.AddInt64(&goroutineCount, -1)
 			errCh <- fmt.Errorf("error opening %s: %w", dirPath, err)
 			return
 		}
@@ -234,25 +256,19 @@ func ListDirectoryWithContext(ctx context.Context, dirPath string) ([]string, er
 
 		dirNames, err := dir.Readdirnames(-1)
 		if err != nil {
-			atomic.AddInt64(&goroutineCount, -1)
 			errCh <- fmt.Errorf("error listing contents of %s: %w", dirPath, err)
 			return
 		}
-
-		select {
-		case <-ctx.Done():
-			atomic.AddInt64(&goroutineCount, -1)
-		case ch <- dirNames:
-		}
+		ch <- dirNames
 	}()
 
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
-	case err := <-errCh:
-		return nil, err
+		listErr = ctx.Err()
+		return nil, listErr
+	case listErr = <-errCh:
+		return nil, listErr
 	case names := <-ch:
-		atomic.AddInt64(&goroutineCount, -1)
 		return names, nil
 	}
 }
