@@ -2,6 +2,8 @@ package utils
 
 import (
 	"context"
+	"errors"
+	"os"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -27,6 +29,26 @@ func TestExhaustGoRoutines(t *testing.T) {
 
 	// Try to reserve one more slot, which should fail
 	assert.False(t, reserveGoroutineSlot())
+}
+
+func TestOpenFileWithContextClosesLateFile(t *testing.T) {
+	fifoPath := t.TempDir() + "/test_fifo"
+	atomic.StoreInt64(&goroutineCount, 0)
+	assert.NoError(t, syscall.Mkfifo(fifoPath, 0666))
+
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	defer cancel()
+
+	_, err := OpenFileWithContext(ctx, fifoPath)
+	assert.True(t, errors.Is(err, context.DeadlineExceeded))
+
+	writer, err := os.OpenFile(fifoPath, os.O_WRONLY, 0)
+	assert.NoError(t, err)
+	assert.NoError(t, writer.Close())
+
+	assert.EventuallyTrue(t, func() bool {
+		return atomic.LoadInt64(&goroutineCount) == 0
+	}, time.Second)
 }
 
 func TestExhaustGoRoutinesPipeReads(t *testing.T) {
