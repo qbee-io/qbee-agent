@@ -141,18 +141,25 @@ func (cr *contextReader) Read(p []byte) (int, error) {
 	}
 
 	errChan := make(chan error, 1)
-	ch := make(chan int, 1)
+	ch := make(chan struct {
+		n    int
+		data []byte
+	}, 1)
 	go func() {
 		defer func() {
 			releaseGoroutineSlot()
 		}()
 
-		n, err := cr.f.Read(p)
+		data := make([]byte, len(p))
+		n, err := cr.f.Read(data)
 		if err != nil {
 			errChan <- err
 			return
 		}
-		ch <- n
+		ch <- struct {
+			n    int
+			data []byte
+		}{n: n, data: data}
 	}()
 
 	select {
@@ -160,8 +167,9 @@ func (cr *contextReader) Read(p []byte) (int, error) {
 		return 0, cr.ctx.Err()
 	case err := <-errChan:
 		return 0, err
-	case n := <-ch:
-		return n, nil
+	case result := <-ch:
+		copy(p, result.data[:result.n])
+		return result.n, nil
 	}
 }
 

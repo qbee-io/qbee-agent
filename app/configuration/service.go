@@ -329,6 +329,8 @@ func (srv *Service) reportAPIError(ctx context.Context, err error) {
 	}
 }
 
+// ReportExhaustedGoroutineBudget reports when the goroutine budget is exhausted and returns whether the
+// budget was exhausted and any error encountered delivering the report.
 func (srv *Service) ReportExhaustedGoroutineBudget(ctx context.Context) (bool, error) {
 	if !utils.GoroutinesExhausted() {
 		return false, nil
