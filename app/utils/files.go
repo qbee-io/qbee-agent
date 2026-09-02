@@ -160,7 +160,6 @@ func (cr *contextReader) Read(p []byte) (int, error) {
 
 	select {
 	case <-cr.ctx.Done():
-		_ = cr.f.Close()
 		return 0, cr.ctx.Err()
 	case result := <-ch:
 		copy(p, result.data[:result.n])
