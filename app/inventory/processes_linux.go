@@ -146,7 +146,7 @@ func getProcessStats(ctx context.Context, runningProcesses []string) (map[string
 				continue
 			}
 
-			return nil, fmt.Errorf("error opening %s: %w", statFilePath, err)
+			return nil, fmt.Errorf("error reading %s: %w", statFilePath, err)
 		}
 
 		if processStats[pid], err = linux.NewProcessStats(string(data)); err != nil {

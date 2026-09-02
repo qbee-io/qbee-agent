@@ -81,6 +81,14 @@ func TestExhaustGoRoutinesPipeReads(t *testing.T) {
 	_, err := ReadFileWithContext(ctx, fifoPath)
 	assert.NotEmpty(t, err)
 	assert.Equal(t, atomic.LoadInt64(&goroutineCount), int64(maxGoroutines))
+
+	// Cleanup: unblock the background FIFO opens so goroutine slots are released.
+	writer, werr := os.OpenFile(fifoPath, os.O_WRONLY, 0)
+	assert.NoError(t, werr)
+	assert.NoError(t, writer.Close())
+	assert.EventuallyTrue(t, func() bool {
+		return atomic.LoadInt64(&goroutineCount) == 0
+	}, time.Second)
 }
 
 func Test_ContextReaderDoesNotModifyBufferAfterCancellation(t *testing.T) {
