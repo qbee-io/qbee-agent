@@ -81,9 +81,8 @@ func loadProcessFDInodes(ctx context.Context) (map[uint64]string, error) {
 		fdDirPath := filepath.Join(processProcPath, "fd")
 
 		ctxWithTimeout, cancel := context.WithTimeout(ctx, utils.KernelVirtualFSReadTimeout)
-		defer cancel()
-
 		fdPaths, err = utils.ListDirectoryWithContext(ctxWithTimeout, fdDirPath)
+		cancel()
 		if err != nil {
 			log.Debugf("cannot list inodes for process %s: %v", pid, err)
 			continue
@@ -92,8 +91,12 @@ func loadProcessFDInodes(ctx context.Context) (map[uint64]string, error) {
 		for _, relativeFDPath := range fdPaths {
 			fdPath := filepath.Join(fdDirPath, relativeFDPath)
 
+			statCtx, statCancel := context.WithTimeout(ctx, utils.KernelVirtualFSReadTimeout)
+			fileStat, err = utils.StatWithContext(statCtx, fdPath)
+			statCancel()
+
 			// get file info for each open file
-			if fileStat, err = utils.StatWithContext(ctxWithTimeout, fdPath); err != nil {
+			if err != nil {
 				// Silence debug messages for the agent PID, since it's always producing an error.
 				// The error is due to the agent closing the directory's file description (in utils.ListDirectory)
 				// before we get to read all the files' inodes.

@@ -58,7 +58,12 @@ func CollectCPU(ctx context.Context) (*CPUValues, error) {
 		return nil, fmt.Errorf("error reading %s: %w", filePath, err)
 	}
 
-	firstLine := string(data[0:bytes.Index(data, []byte("\n"))])
+	newlineIndex := bytes.Index(data, []byte("\n"))
+	if newlineIndex == -1 {
+		newlineIndex = len(data)
+	}
+
+	firstLine := string(data[0:newlineIndex])
 	lineFields := strings.Fields(firstLine)
 
 	fields := []string{"user", "nice", "system", "idle", "iowait", "irq"}

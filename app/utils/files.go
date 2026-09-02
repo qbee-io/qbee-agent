@@ -76,8 +76,7 @@ func reserveGoroutineSlot() bool {
 	}
 }
 
-// releaseGoroutineSlot releases a previously reserved goroutine slot. It decrements the goroutine count if the error is nil
-// or not a context deadline exceeded error (context.DeadlineExceeded).
+// releaseGoroutineSlot releases a previously reserved goroutine slot, decrementing the goroutine count unconditionally.
 func releaseGoroutineSlot() {
 	atomic.AddInt64(&goroutineCount, -1)
 }
@@ -140,10 +139,10 @@ func (cr *contextReader) Read(p []byte) (int, error) {
 		return 0, fmt.Errorf("goroutine budget exhausted")
 	}
 
-	errChan := make(chan error, 1)
 	ch := make(chan struct {
 		n    int
 		data []byte
+		err  error
 	}, 1)
 	go func() {
 		defer func() {
@@ -152,28 +151,24 @@ func (cr *contextReader) Read(p []byte) (int, error) {
 
 		data := make([]byte, len(p))
 		n, err := cr.f.Read(data)
-		if err != nil {
-			errChan <- err
-			return
-		}
 		ch <- struct {
 			n    int
 			data []byte
-		}{n: n, data: data}
+			err  error
+		}{n: n, data: data, err: err}
 	}()
 
 	select {
 	case <-cr.ctx.Done():
+		_ = cr.f.Close()
 		return 0, cr.ctx.Err()
-	case err := <-errChan:
-		return 0, err
 	case result := <-ch:
 		copy(p, result.data[:result.n])
-		return result.n, nil
+		return result.n, result.err
 	}
 }
 
-// Close closes the contextReader, releasing the underlying file and goroutine slot.
+// Close closes the contextReader, releasing the underlying file.
 func (cr *contextReader) Close() error {
 	return cr.f.Close()
 }

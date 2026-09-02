@@ -101,8 +101,10 @@ func Test_ContextReaderDoesNotModifyBufferAfterCancellation(t *testing.T) {
 	cancel()
 	assert.True(t, errors.Is(<-result, context.Canceled))
 
+	// The reader end of the pipe is closed by Read upon context cancellation,
+	// so writing to it afterwards should fail rather than modify the buffer.
 	_, err = writer.Write([]byte("changed"))
-	assert.NoError(t, err)
+	assert.True(t, err != nil)
 	assert.Equal(t, string(buffer), "unchanged")
 
 	assert.EventuallyTrue(t, func() bool {
