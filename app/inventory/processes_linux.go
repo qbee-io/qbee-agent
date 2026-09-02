@@ -179,14 +179,6 @@ func getTotalJiffies(ctx context.Context) (uint64, error) {
 		return 0, fmt.Errorf("error reading %s: %w", filePath, err)
 	}
 
-<<<<<<< Updated upstream
-	newlineIndex := bytes.Index(buf, []byte("\n"))
-	if newlineIndex == -1 {
-		newlineIndex = len(buf)
-	}
-
-	firstLine := string(buf[0:newlineIndex])
-=======
 	defer func() { _ = file.Close() }()
 
 	// we don't need to read the whole file, we only care about the first line
@@ -202,7 +194,6 @@ func getTotalJiffies(ctx context.Context) (uint64, error) {
 	}
 	firstLine := string(buf[:newline])
 
->>>>>>> Stashed changes
 	fields := strings.Fields(firstLine)
 
 	var total, value uint64
