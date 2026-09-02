@@ -174,17 +174,35 @@ func getTotalJiffies(ctx context.Context) (uint64, error) {
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, utils.KernelVirtualFSReadTimeout)
 	defer cancel()
 
-	buf, err := utils.ReadFileWithContext(ctxWithTimeout, filePath)
+	file, err := utils.OpenFileWithContext(ctxWithTimeout, filePath)
 	if err != nil {
 		return 0, fmt.Errorf("error reading %s: %w", filePath, err)
 	}
 
+<<<<<<< Updated upstream
 	newlineIndex := bytes.Index(buf, []byte("\n"))
 	if newlineIndex == -1 {
 		newlineIndex = len(buf)
 	}
 
 	firstLine := string(buf[0:newlineIndex])
+=======
+	defer func() { _ = file.Close() }()
+
+	// we don't need to read the whole file, we only care about the first line
+	buf := make([]byte, 512)
+	if _, err = file.Read(buf); err != nil {
+		return 0, fmt.Errorf("error reading contents of %s: %w", filePath, err)
+	}
+
+	// since we are reading limited number of bytes, we need to check that we have newline
+	newline := bytes.IndexByte(buf, '\n')
+	if newline == -1 {
+		newline = len(buf)
+	}
+	firstLine := string(buf[:newline])
+
+>>>>>>> Stashed changes
 	fields := strings.Fields(firstLine)
 
 	var total, value uint64

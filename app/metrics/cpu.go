@@ -53,19 +53,27 @@ func CollectCPU(ctx context.Context) (*CPUValues, error) {
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, utils.KernelVirtualFSReadTimeout)
 	defer cancel()
 
-	data, err := utils.ReadFileWithContext(ctxWithTimeout, filePath)
+	file, err := utils.OpenFileWithContext(ctxWithTimeout, filePath)
 	if err != nil {
 		return nil, fmt.Errorf("error reading %s: %w", filePath, err)
 	}
 
-	newlineIndex := bytes.Index(data, []byte("\n"))
-	if newlineIndex == -1 {
-		newlineIndex = len(data)
+	defer func() { _ = file.Close() }()
+
+	// we don't need to read the whole file, we only care about the first line
+	buf := make([]byte, 512)
+	if _, err = file.Read(buf); err != nil {
+		return nil, fmt.Errorf("error reading contents of %s: %w", filePath, err)
 	}
 
-	firstLine := string(data[0:newlineIndex])
-	lineFields := strings.Fields(firstLine)
+	// since we are reading limited number of bytes, we need to check that we have newline
+	newline := bytes.IndexByte(buf, '\n')
+	if newline == -1 {
+		newline = len(buf)
+	}
+	firstLine := string(buf[:newline])
 
+	lineFields := strings.Fields(firstLine)
 	fields := []string{"user", "nice", "system", "idle", "iowait", "irq"}
 	fieldValues := make(map[string]uint64)
 
