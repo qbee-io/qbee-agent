@@ -20,6 +20,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+
+	"go.qbee.io/agent/app/utils"
+	"go.qbee.io/agent/app/utils/assert"
 )
 
 func TestCollectPortsInventory(t *testing.T) {
@@ -31,4 +34,7 @@ func TestCollectPortsInventory(t *testing.T) {
 	data, _ := json.MarshalIndent(ports, " ", " ")
 
 	fmt.Println(string(data))
+
+	// make sure that the goroutine count is back to its original value before collection
+	assert.Equal(t, utils.GetGoroutineCount(), int64(0))
 }

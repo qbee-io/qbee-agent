@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"go.qbee.io/agent/app/inventory"
+	"go.qbee.io/agent/app/utils"
 	"go.qbee.io/agent/app/utils/assert"
 )
 
@@ -40,4 +41,7 @@ func TestCollectSystemInventory(t *testing.T) {
 	assert.NotEmpty(t, systemInfo.System.Host)
 	assert.NotEmpty(t, systemInfo.System.Architecture)
 	assert.NotEmpty(t, systemInfo.System.OSVersion)
+
+	// make sure that the goroutine count is back to its original value before collection
+	assert.Equal(t, utils.GetGoroutineCount(), int64(0))
 }

@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"go.qbee.io/agent/app/api"
+	"go.qbee.io/agent/app/utils"
+	"go.qbee.io/agent/app/utils/assert"
 )
 
 func TestCollectServiceCollectAll(t *testing.T) {
@@ -54,4 +56,11 @@ func TestCollectServiceCollectAll(t *testing.T) {
 	}
 
 	fmt.Printf("got metrics: %s", string(metricBytes))
+}
+
+func Test_GoroutineCountAfterAllMetrics(t *testing.T) {
+	apiClient, _ := api.NewMockedClient()
+	srv := New(apiClient)
+	srv.Collect(t.Context())
+	assert.Equal(t, utils.GetGoroutineCount(), int64(0))
 }
