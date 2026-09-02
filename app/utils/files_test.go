@@ -83,12 +83,12 @@ func TestExhaustGoRoutinesPipeReads(t *testing.T) {
 	assert.Equal(t, atomic.LoadInt64(&goroutineCount), int64(maxGoroutines))
 }
 
-func TestContextReaderDoesNotModifyBufferAfterCancellation(t *testing.T) {
+func Test_ContextReaderDoesNotModifyBufferAfterCancellation(t *testing.T) {
 	atomic.StoreInt64(&goroutineCount, 0)
 	reader, writer, err := os.Pipe()
 	assert.NoError(t, err)
-	defer reader.Close()
-	defer writer.Close()
+	defer func() { _ = reader.Close() }()
+	defer func() { _ = writer.Close() }()
 
 	ctx, cancel := context.WithCancel(t.Context())
 	buffer := []byte("unchanged")
@@ -110,16 +110,7 @@ func TestContextReaderDoesNotModifyBufferAfterCancellation(t *testing.T) {
 	}, time.Second)
 }
 
-type HangingDirReader struct {
-	// Unblock allows controlled cleanup so the test goroutine doesn't leak indefinitely
-	Unblock chan struct{}
-}
-
-func (m *HangingDirReader) Readdirnames(n int) ([]string, error) {
-	<-m.Unblock // Blocks indefinitely until the channel is closed
-	return nil, context.DeadlineExceeded
-}
-
+// Test timeouts for path-based file operations (ReadFile and ListDirectory) using named pipes (FIFOs)
 func Test_FileTimeouts(t *testing.T) {
 
 	tests := []struct {
