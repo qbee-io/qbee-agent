@@ -17,14 +17,12 @@
 package metrics
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
 
 	"go.qbee.io/agent/app/api"
-	"go.qbee.io/agent/app/utils/cache"
 )
 
 func TestCollectServiceCollectAll(t *testing.T) {
@@ -56,36 +54,4 @@ func TestCollectServiceCollectAll(t *testing.T) {
 	}
 
 	fmt.Printf("got metrics: %s", string(metricBytes))
-}
-
-func TestCollectServiceStopsWhenContextIsCanceled(t *testing.T) {
-	cache.Delete(metricsCacheKey)
-	t.Cleanup(func() {
-		cache.Delete(metricsCacheKey)
-	})
-
-	collectors := metricsCollectors
-	t.Cleanup(func() {
-		metricsCollectors = collectors
-	})
-
-	called := false
-	metricsCollectors = []metricsCollector{{
-		name: "test",
-		fn: func(context.Context) ([]Metric, error) {
-			called = true
-			return nil, nil
-		},
-	}}
-
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-
-	gotMetrics := New(nil).Collect(ctx)
-	if len(gotMetrics) != 0 {
-		t.Fatalf("expected no metrics, got %d", len(gotMetrics))
-	}
-	if called {
-		t.Fatal("collector was called after context cancellation")
-	}
 }

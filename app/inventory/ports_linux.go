@@ -93,7 +93,7 @@ func loadProcessFDInodes(ctx context.Context) (map[uint64]string, error) {
 			fdPath := filepath.Join(fdDirPath, relativeFDPath)
 
 			// get file info for each open file
-			if fileStat, err = os.Stat(fdPath); err != nil {
+			if fileStat, err = utils.StatWithContext(ctxWithTimeout, fdPath); err != nil {
 				// Silence debug messages for the agent PID, since it's always producing an error.
 				// The error is due to the agent closing the directory's file description (in utils.ListDirectory)
 				// before we get to read all the files' inodes.

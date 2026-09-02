@@ -2,7 +2,6 @@ package utils
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -88,50 +87,40 @@ func ReadFileWithContext(ctx context.Context, filePath string) ([]byte, error) {
 	}
 
 	defer func() {
-		_ = reader.(*contextReader).Close()
+		_ = reader.Close()
 	}()
 
-	return reader.(*contextReader).ReadAll()
+	// ReadAll calls reader.Read which will respect the context cancellation due to the contextReader implementation.
+	return io.ReadAll(reader)
 }
 
 // OpenFileWithContext opens a file with context cancellation support.
-func OpenFileWithContext(ctx context.Context, filePath string) (io.Reader, error) {
-	if !reserveGoroutineSlot() {
-		return nil, fmt.Errorf("goroutine budget exhausted")
-	}
+func OpenFileWithContext(ctx context.Context, filePath string) (io.ReadCloser, error) {
+	var f *os.File
 
-	ch := make(chan *os.File)
-	errCh := make(chan error, 1)
-
-	go func() {
-		defer func() {
-			releaseGoroutineSlot()
-		}()
-
-		f, err := os.Open(filePath)
+	outerErr := fileOperationWithContext(ctx, func() error {
+		var err error
+		f, err = os.Open(filePath)
 		if err != nil {
-			errCh <- err
-			return
+			return err
 		}
 
 		select {
-		case ch <- f:
 		case <-ctx.Done():
 			_ = f.Close()
+			return ctx.Err()
+		default:
 		}
-	}()
+		return nil
+	})
 
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case err := <-errCh:
-		return nil, err
-	case f := <-ch:
-		return &contextReader{
-			ctx: ctx,
-			f:   f,
-		}, nil
+	if outerErr != nil {
+		return nil, outerErr
 	}
+	return &contextReader{
+		ctx: ctx,
+		f:   f,
+	}, nil
 }
 
 type contextReader struct {
@@ -170,24 +159,6 @@ func (cr *contextReader) Read(p []byte) (int, error) {
 	}
 }
 
-// ReadAll reads all data from the contextReader, respecting context cancellation. If the context is done, it closes the underlying file and returns an error.
-func (cr *contextReader) ReadAll() ([]byte, error) {
-	var result []byte
-	buf := make([]byte, 4096)
-	for {
-		n, err := cr.Read(buf)
-		if n > 0 {
-			result = append(result, buf[:n]...)
-		}
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				return result, nil
-			}
-			return result, err
-		}
-	}
-}
-
 // Close closes the contextReader, releasing the underlying file and goroutine slot.
 func (cr *contextReader) Close() error {
 	return cr.f.Close()
@@ -197,46 +168,78 @@ func (cr *contextReader) Close() error {
 // This function performs a filepath.Glob operation while respecting context cancellation
 // which prevents blocking on slow or unresponsive filesystems.
 func GlobWithContext(ctx context.Context, pattern string) ([]string, error) {
-	if !reserveGoroutineSlot() {
-		return nil, fmt.Errorf("goroutine budget exhausted")
-	}
+	var result []string
 
-	ch := make(chan []string, 1)
-	errCh := make(chan error, 1)
-
-	go func() {
-		defer func() {
-			releaseGoroutineSlot()
-		}()
-
-		matches, err := filepath.Glob(pattern)
+	outerErr := fileOperationWithContext(ctx, func() error {
+		var err error
+		result, err = filepath.Glob(pattern)
 		if err != nil {
-			errCh <- err
-			return
+			return err
 		}
+		return nil
+	})
 
-		ch <- matches
-	}()
-
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case err := <-errCh:
-		return nil, err
-	case matches := <-ch:
-		return matches, nil
+	if outerErr != nil {
+		return nil, outerErr
 	}
+	return result, nil
 }
 
 // ListDirectoryWithContext lists files and directories in a directory with context cancellation support.
 // This function lists the contents of a directory while respecting context cancellation, preventing
 // blocking on slow or unresponsive filesystems.
 func ListDirectoryWithContext(ctx context.Context, dirPath string) ([]string, error) {
+	var result []string
+
+	outerErr := fileOperationWithContext(ctx, func() error {
+		dir, err := os.Open(dirPath)
+		if err != nil {
+			return err
+		}
+
+		defer func() { _ = dir.Close() }()
+
+		result, err = dir.Readdirnames(-1)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+
+	if outerErr != nil {
+		return nil, outerErr
+	}
+	return result, nil
+}
+
+// StatWithContext performs an os.Stat operation with context cancellation support.
+// This function retrieves the FileInfo of a file or directory while respecting context cancellation,
+// preventing blocking on slow or unresponsive filesystems.
+func StatWithContext(ctx context.Context, path string) (os.FileInfo, error) {
+	var result os.FileInfo
+
+	outerErr := fileOperationWithContext(ctx, func() error {
+		var err error
+		result, err = os.Stat(path)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+
+	if outerErr != nil {
+		return nil, outerErr
+	}
+	return result, nil
+}
+
+// fileOperationWithContext executes a file operation in a separate goroutine while respecting context cancellation.
+// It ensures that the operation does not block the main goroutine and releases the goroutine slot after completion.
+func fileOperationWithContext(ctx context.Context, operation func() error) error {
 	if !reserveGoroutineSlot() {
-		return nil, fmt.Errorf("goroutine budget exhausted")
+		return fmt.Errorf("goroutine budget exhausted")
 	}
 
-	ch := make(chan []string, 1)
 	errCh := make(chan error, 1)
 
 	go func() {
@@ -244,28 +247,13 @@ func ListDirectoryWithContext(ctx context.Context, dirPath string) ([]string, er
 			releaseGoroutineSlot()
 		}()
 
-		dir, err := os.Open(dirPath)
-		if err != nil {
-			errCh <- err
-			return
-		}
-
-		defer func() { _ = dir.Close() }()
-
-		dirNames, err := dir.Readdirnames(-1)
-		if err != nil {
-			errCh <- err
-			return
-		}
-		ch <- dirNames
+		errCh <- operation()
 	}()
 
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return ctx.Err()
 	case err := <-errCh:
-		return nil, err
-	case names := <-ch:
-		return names, nil
+		return err
 	}
 }
