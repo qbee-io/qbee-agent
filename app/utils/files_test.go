@@ -83,6 +83,33 @@ func TestExhaustGoRoutinesPipeReads(t *testing.T) {
 	assert.Equal(t, atomic.LoadInt64(&goroutineCount), int64(maxGoroutines))
 }
 
+func TestContextReaderDoesNotModifyBufferAfterCancellation(t *testing.T) {
+	atomic.StoreInt64(&goroutineCount, 0)
+	reader, writer, err := os.Pipe()
+	assert.NoError(t, err)
+	defer reader.Close()
+	defer writer.Close()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	buffer := []byte("unchanged")
+	result := make(chan error, 1)
+	go func() {
+		_, err := (&contextReader{ctx: ctx, f: reader}).Read(buffer)
+		result <- err
+	}()
+
+	cancel()
+	assert.True(t, errors.Is(<-result, context.Canceled))
+
+	_, err = writer.Write([]byte("changed"))
+	assert.NoError(t, err)
+	assert.Equal(t, string(buffer), "unchanged")
+
+	assert.EventuallyTrue(t, func() bool {
+		return atomic.LoadInt64(&goroutineCount) == 0
+	}, time.Second)
+}
+
 type HangingDirReader struct {
 	// Unblock allows controlled cleanup so the test goroutine doesn't leak indefinitely
 	Unblock chan struct{}
