@@ -82,3 +82,53 @@ func TestExhaustGoRoutinesPipeReads(t *testing.T) {
 	assert.NotEmpty(t, err)
 	assert.Equal(t, atomic.LoadInt64(&goroutineCount), int64(maxGoroutines))
 }
+
+type HangingDirReader struct {
+	// Unblock allows controlled cleanup so the test goroutine doesn't leak indefinitely
+	Unblock chan struct{}
+}
+
+func (m *HangingDirReader) Readdirnames(n int) ([]string, error) {
+	<-m.Unblock // Blocks indefinitely until the channel is closed
+	return nil, context.DeadlineExceeded
+}
+
+func Test_FileTimeouts(t *testing.T) {
+
+	tests := []struct {
+		name string
+		fn   func(ctx context.Context, path string) error
+	}{
+		{
+			name: "ReadFileTimeout",
+			fn: func(ctx context.Context, path string) error {
+				_, err := ReadFileWithContext(ctx, path)
+				return err
+			}},
+		{
+			name: "ListDirectoryTimeout",
+			fn: func(ctx context.Context, path string) error {
+				_, err := ListDirectoryWithContext(ctx, path)
+				return err
+			}},
+	}
+
+	fifoPath := t.TempDir() + "/test_fifo"
+
+	assert.NoError(t, syscall.Mkfifo(fifoPath, 0666))
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			atomic.StoreInt64(&goroutineCount, 0)
+
+			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
+			defer cancel()
+
+			err := tt.fn(ctx, fifoPath)
+			assert.True(t, errors.Is(err, context.DeadlineExceeded))
+
+			// Check that the goroutine count is 1 after the timeout occurred
+			assert.True(t, atomic.LoadInt64(&goroutineCount) == 1)
+		})
+	}
+}

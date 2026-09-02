@@ -84,18 +84,10 @@ func (s *Service) Collect(ctx context.Context) []Metric {
 
 	// collect metrics which don't depend on state
 	for _, collector := range metricsCollectors {
-		if err := ctx.Err(); err != nil {
-			return allMetrics
-		}
-
 		if metrics, err := collector.fn(ctx); err != nil {
 			log.Errorf("%s metrics error: %v", collector.name, err)
 		} else {
 			allMetrics = append(allMetrics, metrics...)
-		}
-
-		if err := ctx.Err(); err != nil {
-			return allMetrics
 		}
 	}
 
@@ -104,10 +96,6 @@ func (s *Service) Collect(ctx context.Context) []Metric {
 		log.Errorf("cpu metrics error: %v", err)
 	} else if cpuMetric != nil {
 		allMetrics = append(allMetrics, *cpuMetric)
-	}
-
-	if err := ctx.Err(); err != nil {
-		return allMetrics
 	}
 
 	if networkMetrics, err := s.doCollectNetwork(ctx); err != nil {
