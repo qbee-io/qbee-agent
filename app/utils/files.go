@@ -54,6 +54,12 @@ func SetGoroutineCountForTesting(count int64) {
 	atomic.StoreInt64(&goroutineCount, count)
 }
 
+// GetGoroutineCount returns the current goroutine count for testing purposes.
+// This is only intended for use in tests.
+func GetGoroutineCount() int64 {
+	return atomic.LoadInt64(&goroutineCount)
+}
+
 // reserveGoroutineSlot attempts to reserve a slot for a new goroutine. It returns true if successful, false if the
 // maximum number of goroutines has been reached. This method is safe for Time-of-Check to Time-of-Use (TOCTOU) race
 // conditions. For loop ensures retries until the slot is successfully reserved or the maximum number of goroutines is reached.

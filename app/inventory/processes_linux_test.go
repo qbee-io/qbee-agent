@@ -18,6 +18,7 @@ package inventory
 import (
 	"testing"
 
+	"go.qbee.io/agent/app/utils"
 	"go.qbee.io/agent/app/utils/assert"
 )
 
@@ -36,4 +37,7 @@ func TestCollectProcessesInventory(t *testing.T) {
 		assert.NotEmpty(t, process.User)
 		assert.NotEmpty(t, process.Command)
 	}
+
+	// make sure that the goroutine count is back to its original value before collection
+	assert.Equal(t, utils.GetGoroutineCount(), int64(0))
 }
