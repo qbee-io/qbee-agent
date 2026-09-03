@@ -832,48 +832,50 @@ func legacyPartialDownloadFilePath(path string) string {
 	return filepath.Join(filepath.Dir(path), "."+filepath.Base(path)+partialDownloadSuffix)
 }
 
-// verifyNoSymlinkAncestors ensures that dirPath and every one of its ancestor components is not a
-// symlink, so that operations following this check (e.g. os.ReadDir, os.Remove) cannot be redirected
-// to a location outside of dirPath by a symlinked path component.
-func verifyNoSymlinkAncestors(dirPath string) error {
-	parent := filepath.Dir(dirPath)
-
-	if parent != dirPath {
-		if err := verifyNoSymlinkAncestors(parent); err != nil {
-			return err
-		}
+func openDirectoryAnchored(dirPath string) (*os.File, error) {
+	dirPath = filepath.Clean(dirPath)
+	root := "."
+	if filepath.IsAbs(dirPath) {
+		root = "/"
 	}
-
-	info, err := os.Lstat(dirPath)
+	fd, err := syscall.Open(root, os.O_RDONLY|syscall.O_DIRECTORY|syscall.O_CLOEXEC, 0)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil
+		return nil, err
+	}
+
+	components := strings.Split(strings.TrimPrefix(dirPath, string(filepath.Separator)), string(filepath.Separator))
+	for _, component := range components {
+		if component == "" || component == "." {
+			continue
 		}
 
-		return fmt.Errorf("error checking path %s: %w", dirPath, err)
+		next, openErr := syscall.Openat(fd, component, os.O_RDONLY|syscall.O_DIRECTORY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
+		_ = syscall.Close(fd)
+		if openErr != nil {
+			return nil, openErr
+		}
+		fd = next
 	}
 
-	if info.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("refusing to traverse symlinked path component %s", dirPath)
-	}
-
-	return nil
+	return os.NewFile(uintptr(fd), dirPath), nil
 }
 
 // removeStalePartialDownloads removes partial downloads of dst which don't match the keep path.
 func removeStalePartialDownloads(dst, keep string) error {
 	dirPath := filepath.Dir(dst)
 
-	if err := verifyNoSymlinkAncestors(dirPath); err != nil {
-		return err
-	}
-
-	entries, err := os.ReadDir(dirPath)
+	dir, err := openDirectoryAnchored(dirPath)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil
 		}
 
+		return fmt.Errorf("error opening directory %s: %w", dirPath, err)
+	}
+	defer dir.Close()
+
+	entries, err := dir.ReadDir(-1)
+	if err != nil {
 		return fmt.Errorf("error listing directory %s: %w", dirPath, err)
 	}
 
@@ -892,7 +894,7 @@ func removeStalePartialDownloads(dst, keep string) error {
 			continue
 		}
 
-		if err = os.Remove(filepath.Join(dirPath, name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		if err = syscall.Unlinkat(int(dir.Fd()), name); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("error removing stale partial download %s: %w", name, err)
 		}
 	}
