@@ -93,6 +93,15 @@ func (md *FileMetadata) SHA256() string {
 	return md.Tags[fileDigestSHA256Tag]
 }
 
+// Digest returns the digest identifying the expected contents of the file.
+func (md *FileMetadata) Digest() string {
+	if digest := md.SHA256(); digest != "" {
+		return digest
+	}
+
+	return md.MD5
+}
+
 // downloadFile and return true when file was created. In case the right file already existed, return false.
 func (srv *Service) downloadFile(ctx context.Context, label, src, dst string, file File) (bool, error) {
 	var err error
@@ -138,8 +147,13 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 		return false, err
 	}
 
-	// partial download path
-	tmpDst := GetPartialDownloadFilePath(dst)
+	// partial download path, kept in the destination directory so the final move is atomic
+	tmpDst := GetPartialDownloadFilePath(dst, fileMetadata.Digest())
+
+	// drop partial downloads for the same destination made for a different digest
+	if err = removeStalePartialDownloads(dst, tmpDst); err != nil {
+		return false, err
+	}
 
 	// find size of the already downloaded part if it exists
 	var offset int64
@@ -156,6 +170,11 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 			return false, fmt.Errorf("error removing invalid partial download %s: %w", tmpDst, err)
 		}
 		offset = 0
+	}
+
+	// the partial download already holds the full file, so requesting more bytes would fail with HTTP 416
+	if fileMetadata.Size > 0 && offset == fileMetadata.Size {
+		return finalizePartialDownload(ctx, label, src, dst, tmpDst, fileMetadata)
 	}
 
 	// check local file create data
@@ -196,16 +215,28 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 		return false, fmt.Errorf("error writing file %s: %w", tmpDst, err)
 	}
 
-	// check if the download to temporary file was successful
-	if fileReady, err = isFileReady(tmpDst, fileMetadata); err != nil {
+	if err = dstFile.Close(); err != nil {
+		return false, fmt.Errorf("error writing file %s: %w", tmpDst, err)
+	}
+
+	return finalizePartialDownload(ctx, label, src, dst, tmpDst, fileMetadata)
+}
+
+// finalizePartialDownload verifies a fully downloaded partial file and moves it to its destination.
+func finalizePartialDownload(
+	ctx context.Context,
+	label, src, dst, tmpDst string,
+	fileMetadata *FileMetadata,
+) (bool, error) {
+	fileReady, err := isFileReady(tmpDst, fileMetadata)
+	if err != nil {
 		return false, err
 	}
 
 	if !fileReady {
-		err = fmt.Errorf("downloaded file %s is incomplete or has invalid contents", src)
 		// in case of error, remove the partial file
 		_ = os.Remove(tmpDst)
-		return false, err
+		return false, fmt.Errorf("downloaded file %s is incomplete or has invalid contents", src)
 	}
 
 	if err = os.Rename(tmpDst, dst); err != nil {
@@ -707,7 +738,68 @@ func resolveDestinationPath(source, destination string) (string, error) {
 	return destination, nil
 }
 
-// GetPartialDownloadFilePath returns the file path for a partial download.
-func GetPartialDownloadFilePath(path string) string {
-	return filepath.Join(filepath.Dir(path), fmt.Sprintf(".%s.part", filepath.Base(path)))
+const (
+	partialDownloadSuffix = ".part"
+
+	// leaves room for the leading dot, the separator dot, a sha256 hex digest and the suffix within NAME_MAX
+	partialDownloadMaxBaseLength = 255 - 2 - 2*sha256.Size - len(partialDownloadSuffix)
+)
+
+// partialDownloadNamePrefix returns the file name prefix shared by all partial downloads of path.
+func partialDownloadNamePrefix(path string) string {
+	base := filepath.Base(path)
+
+	if len(base) > partialDownloadMaxBaseLength {
+		base = base[:partialDownloadMaxBaseLength]
+	}
+
+	return fmt.Sprintf(".%s.", base)
+}
+
+// GetPartialDownloadFilePath returns the file path for a partial download of a file with expected digest.
+// The partial file is placed in the destination directory, so the final move is atomic.
+func GetPartialDownloadFilePath(path, digest string) string {
+	if digest == "" {
+		digest = "unknown"
+	}
+
+	// produces a path like .<basename>.digest.part
+	name := partialDownloadNamePrefix(path) + digest + partialDownloadSuffix
+
+	return filepath.Join(filepath.Dir(path), name)
+}
+
+// removeStalePartialDownloads removes partial downloads of dst which don't match the keep path.
+func removeStalePartialDownloads(dst, keep string) error {
+	dirPath := filepath.Dir(dst)
+
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+
+		return fmt.Errorf("error listing directory %s: %w", dirPath, err)
+	}
+
+	prefix := partialDownloadNamePrefix(dst)
+	keepName := filepath.Base(keep)
+
+	for _, entry := range entries {
+		name := entry.Name()
+
+		if name == keepName || entry.IsDir() {
+			continue
+		}
+
+		if !strings.HasPrefix(name, prefix) || !strings.HasSuffix(name, partialDownloadSuffix) {
+			continue
+		}
+
+		if err = os.Remove(filepath.Join(dirPath, name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("error removing stale partial download %s: %w", name, err)
+		}
+	}
+
+	return nil
 }

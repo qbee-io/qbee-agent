@@ -433,7 +433,10 @@ func Test_ResumeDownload(t *testing.T) {
 
 	originalHash := strings.Fields(string(r.MustExec("sha256sum", sourcePath)))[0]
 
-	partialFilePath := configuration.GetPartialDownloadFilePath(destinationPath)
+	partialFilePath := configuration.GetPartialDownloadFilePath(destinationPath, originalHash)
+
+	// a leftover partial download of the same destination, but of different contents
+	stalePartialFilePath := configuration.GetPartialDownloadFilePath(destinationPath, strings.Repeat("a", 64))
 
 	localFileRef := "file://" + sourcePath
 	agentConfig := configuration.CommittedConfig{
@@ -464,19 +467,26 @@ func Test_ResumeDownload(t *testing.T) {
 			// Remove any file from previous tests
 			r.MustExec("rm", "-f", destinationPath)
 			r.MustExec("rm", "-f", partialFilePath)
+			r.MustExec("rm", "-f", stalePartialFilePath)
 
 			// write partial file to cache, all users should be able to delete/read it
 			r.CreateFile(partialFilePath, []byte(tt.existingContents))
+			r.CreateFile(stalePartialFilePath, []byte("leftover from another revision"))
 
 			// make sure the unprivileged user can read the file if needed
 			if r.GetUnprivileged() {
 				r.MustExec("chown", runner.UnprivilegedUser+":"+runner.UnprivilegedUser, partialFilePath)
+				r.MustExec("chown", runner.UnprivilegedUser+":"+runner.UnprivilegedUser, stalePartialFilePath)
 			}
 
 			output := r.MustExec("cat", partialFilePath)
 			assert.Equal(t, string(output), tt.existingContents)
 
 			reports, _ := configuration.ExecuteTestConfigInDocker(r, agentConfig)
+
+			// partial downloads for other digests must always be cleaned up
+			_, err := r.Exec("test", "-e", stalePartialFilePath)
+			assert.NotEqual(t, err, nil)
 
 			if tt.expectSuccess {
 				output := r.MustExec("sha256sum", destinationPath)
