@@ -872,7 +872,9 @@ func removeStalePartialDownloads(dst, keep string) error {
 
 		return fmt.Errorf("error opening directory %s: %w", dirPath, err)
 	}
-	defer dir.Close()
+	defer func() {
+		_ = dir.Close()
+	}()
 
 	entries, err := dir.ReadDir(-1)
 	if err != nil {
