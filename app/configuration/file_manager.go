@@ -155,6 +155,12 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 		return false, err
 	}
 
+	// check local file create data
+	fileCreateData, err := determineFileCreateData(dst)
+	if err != nil {
+		return false, fmt.Errorf("error determining local fs data: %w", err)
+	}
+
 	// find size of the already downloaded part if it exists
 	var offset int64
 	if fileInfo, err := os.Stat(tmpDst); err == nil {
@@ -174,13 +180,7 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 
 	// the partial download already holds the full file, so requesting more bytes would fail with HTTP 416
 	if fileMetadata.Size > 0 && offset == fileMetadata.Size {
-		return finalizePartialDownload(ctx, label, src, dst, tmpDst, fileMetadata)
-	}
-
-	// check local file create data
-	fileCreateData, err := determineFileCreateData(dst)
-	if err != nil {
-		return false, fmt.Errorf("error determining local fs data: %w", err)
+		return finalizePartialDownload(ctx, label, src, dst, tmpDst, fileMetadata, fileCreateData)
 	}
 
 	// check if there is enough disk space, do not check if size is zero (unknown)
@@ -219,7 +219,7 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 		return false, fmt.Errorf("error writing file %s: %w", tmpDst, err)
 	}
 
-	return finalizePartialDownload(ctx, label, src, dst, tmpDst, fileMetadata)
+	return finalizePartialDownload(ctx, label, src, dst, tmpDst, fileMetadata, fileCreateData)
 }
 
 // finalizePartialDownload verifies a fully downloaded partial file and moves it to its destination.
@@ -231,11 +231,12 @@ func finalizePartialDownload(
 	ctx context.Context,
 	label, src, dst, tmpDst string,
 	fileMetadata *FileMetadata,
+	fileCreateData *fileCreateData,
 ) (bool, error) {
 	fd, err := os.OpenFile(tmpDst, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return false, nil
+			return false, fmt.Errorf("partial download %s disappeared before finalization", tmpDst)
 		}
 
 		return false, fmt.Errorf("error opening partial download %s: %w", tmpDst, err)
@@ -261,6 +262,13 @@ func finalizePartialDownload(
 		// in case of error, remove the partial file
 		_ = os.Remove(tmpDst)
 		return false, fmt.Errorf("downloaded file %s is incomplete or has invalid contents", src)
+	}
+
+	if err = fd.Chown(fileCreateData.uid, fileCreateData.gid); err != nil {
+		return false, fmt.Errorf("error setting owner on %s: %w", tmpDst, err)
+	}
+	if err = fd.Chmod(fileManagerDefaultFilePermission); err != nil {
+		return false, fmt.Errorf("error setting permissions on %s: %w", tmpDst, err)
 	}
 
 	if err = os.Rename(tmpDst, dst); err != nil {
@@ -820,6 +828,10 @@ func GetPartialDownloadFilePath(path, digest string) string {
 	return filepath.Join(filepath.Dir(path), name)
 }
 
+func legacyPartialDownloadFilePath(path string) string {
+	return filepath.Join(filepath.Dir(path), "."+filepath.Base(path)+partialDownloadSuffix)
+}
+
 // verifyNoSymlinkAncestors ensures that dirPath and every one of its ancestor components is not a
 // symlink, so that operations following this check (e.g. os.ReadDir, os.Remove) cannot be redirected
 // to a location outside of dirPath by a symlinked path component.
@@ -867,6 +879,7 @@ func removeStalePartialDownloads(dst, keep string) error {
 
 	prefix := "." + partialDownloadNameID(dst) + "."
 	keepName := filepath.Base(keep)
+	legacyName := filepath.Base(legacyPartialDownloadFilePath(dst))
 
 	for _, entry := range entries {
 		name := entry.Name()
@@ -875,7 +888,7 @@ func removeStalePartialDownloads(dst, keep string) error {
 			continue
 		}
 
-		if !strings.HasPrefix(name, prefix) || !strings.HasSuffix(name, partialDownloadSuffix) {
+		if name != legacyName && (!strings.HasPrefix(name, prefix) || !strings.HasSuffix(name, partialDownloadSuffix)) {
 			continue
 		}
 
