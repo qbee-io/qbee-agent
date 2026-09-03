@@ -343,20 +343,37 @@ func Test_createFile_doesNotFollowSymlinks(t *testing.T) {
 }
 
 func Test_GetPartialDownloadFilePath(t *testing.T) {
+	validDigestA := strings.Repeat("a", sha256.Size*2)
+	validDigestB := strings.Repeat("b", sha256.Size*2)
+
 	t.Run("includes the digest and stays in the destination directory", func(t *testing.T) {
-		got := GetPartialDownloadFilePath("/var/lib/test.txt", "abc123")
-		assert.Equal(t, got, "/var/lib/.test.txt.abc123.part")
+		got := GetPartialDownloadFilePath("/var/lib/test.txt", validDigestA)
+		assert.Equal(t, filepath.Dir(got), "/var/lib")
+		assert.True(t, strings.HasSuffix(got, "."+validDigestA+".part"))
 	})
 
 	t.Run("different digests produce different paths", func(t *testing.T) {
-		a := GetPartialDownloadFilePath("/var/lib/test.txt", "abc123")
-		b := GetPartialDownloadFilePath("/var/lib/test.txt", "def456")
+		a := GetPartialDownloadFilePath("/var/lib/test.txt", validDigestA)
+		b := GetPartialDownloadFilePath("/var/lib/test.txt", validDigestB)
 		assert.NotEqual(t, a, b)
+	})
+
+	t.Run("different destinations produce paths where neither basename is a prefix of the other", func(t *testing.T) {
+		a := filepath.Base(GetPartialDownloadFilePath("/var/lib/test.txt", validDigestA))
+		b := filepath.Base(GetPartialDownloadFilePath("/var/lib/test.txt.other", validDigestA))
+		assert.NotEqual(t, a, b)
+		assert.False(t, strings.HasPrefix(a, b) || strings.HasPrefix(b, a))
+	})
+
+	t.Run("malformed digests are hashed into a safe fixed-width identifier", func(t *testing.T) {
+		got := GetPartialDownloadFilePath("/var/lib/test.txt", "../../../etc/passwd")
+		assert.Equal(t, filepath.Dir(got), "/var/lib")
+		assert.False(t, strings.Contains(filepath.Base(got), "/"))
 	})
 
 	t.Run("file name stays within NAME_MAX", func(t *testing.T) {
 		longName := strings.Repeat("a", 300)
-		got := filepath.Base(GetPartialDownloadFilePath("/var/lib/"+longName, strings.Repeat("f", 64)))
+		got := filepath.Base(GetPartialDownloadFilePath("/var/lib/"+longName, validDigestA))
 		assert.False(t, len(got) > 255)
 	})
 }

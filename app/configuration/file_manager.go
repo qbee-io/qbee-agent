@@ -223,12 +223,36 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 }
 
 // finalizePartialDownload verifies a fully downloaded partial file and moves it to its destination.
+//
+// tmpDst is opened with O_NOFOLLOW so a symlink placed at the predictable partial download path
+// cannot be verified through its target and then have that symlink (rather than a regular file)
+// installed at dst by os.Rename (CWE-59).
 func finalizePartialDownload(
 	ctx context.Context,
 	label, src, dst, tmpDst string,
 	fileMetadata *FileMetadata,
 ) (bool, error) {
-	fileReady, err := isFileReady(tmpDst, fileMetadata)
+	fd, err := os.OpenFile(tmpDst, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		}
+
+		return false, fmt.Errorf("error opening partial download %s: %w", tmpDst, err)
+	}
+
+	defer func() { _ = fd.Close() }()
+
+	fileInfo, err := fd.Stat()
+	if err != nil {
+		return false, fmt.Errorf("error checking partial download %s: %w", tmpDst, err)
+	}
+
+	if !fileInfo.Mode().IsRegular() {
+		return false, fmt.Errorf("refusing to finalize non-regular partial download %s", tmpDst)
+	}
+
+	fileReady, err := isFileReadyFd(fd, fileMetadata)
 	if err != nil {
 		return false, err
 	}
@@ -565,6 +589,11 @@ func isFileReady(path string, fileMetadata *FileMetadata) (bool, error) {
 
 	defer func() { _ = fd.Close() }()
 
+	return isFileReadyFd(fd, fileMetadata)
+}
+
+// isFileReadyFd returns true if the contents read from fd match fileMetadata's expected digest.
+func isFileReadyFd(fd *os.File, fileMetadata *FileMetadata) (bool, error) {
 	var expectedHexDigest string
 	var digest hash.Hash
 
@@ -576,7 +605,7 @@ func isFileReady(path string, fileMetadata *FileMetadata) (bool, error) {
 		digest = md5.New()
 	}
 
-	if _, err = io.Copy(digest, fd); err != nil {
+	if _, err := io.Copy(digest, fd); err != nil {
 		return false, fmt.Errorf("calculating local file checksum failed: %w", err)
 	}
 
@@ -738,22 +767,42 @@ func resolveDestinationPath(source, destination string) (string, error) {
 	return destination, nil
 }
 
-const (
-	partialDownloadSuffix = ".part"
+const partialDownloadSuffix = ".part"
 
-	// leaves room for the leading dot, the separator dot, a sha256 hex digest and the suffix within NAME_MAX
-	partialDownloadMaxBaseLength = 255 - 2 - 2*sha256.Size - len(partialDownloadSuffix)
-)
-
-// partialDownloadNamePrefix returns the file name prefix shared by all partial downloads of path.
-func partialDownloadNamePrefix(path string) string {
-	base := filepath.Base(path)
-
-	if len(base) > partialDownloadMaxBaseLength {
-		base = base[:partialDownloadMaxBaseLength]
+// isValidHexDigest reports whether digest is a well-formed hex-encoded SHA-256 or MD5 digest.
+func isValidHexDigest(digest string) bool {
+	switch len(digest) {
+	case sha256.Size * 2, md5.Size * 2:
+	default:
+		return false
 	}
 
-	return fmt.Sprintf(".%s.", base)
+	_, err := hex.DecodeString(digest)
+
+	return err == nil
+}
+
+// safeDigestComponent returns a validated, path-safe representation of digest for use in a file name.
+// Digests which don't match the expected hex-encoded SHA-256/MD5 format are hashed into a fixed-width,
+// path-safe identifier instead, so arbitrary (e.g. attacker supplied) digest values can never introduce
+// path separators or traversal sequences into the resulting file name.
+func safeDigestComponent(digest string) string {
+	if isValidHexDigest(digest) {
+		return digest
+	}
+
+	sum := sha256.Sum256([]byte(digest))
+
+	return hex.EncodeToString(sum[:])
+}
+
+// partialDownloadNameID returns a fixed-width, path-safe identifier derived from the full destination
+// basename. Being a full-length hash (rather than an ambiguous, possibly truncated, textual prefix) it
+// cannot be confused with the identifier of another, differently named, destination.
+func partialDownloadNameID(path string) string {
+	sum := sha256.Sum256([]byte(filepath.Base(path)))
+
+	return hex.EncodeToString(sum[:])
 }
 
 // GetPartialDownloadFilePath returns the file path for a partial download of a file with expected digest.
@@ -761,17 +810,51 @@ func partialDownloadNamePrefix(path string) string {
 func GetPartialDownloadFilePath(path, digest string) string {
 	if digest == "" {
 		digest = "unknown"
+	} else {
+		digest = safeDigestComponent(digest)
 	}
 
-	// produces a path like .<basename>.digest.part
-	name := partialDownloadNamePrefix(path) + digest + partialDownloadSuffix
+	// produces a path like .<destination-id>.<digest>.part
+	name := "." + partialDownloadNameID(path) + "." + digest + partialDownloadSuffix
 
 	return filepath.Join(filepath.Dir(path), name)
+}
+
+// verifyNoSymlinkAncestors ensures that dirPath and every one of its ancestor components is not a
+// symlink, so that operations following this check (e.g. os.ReadDir, os.Remove) cannot be redirected
+// to a location outside of dirPath by a symlinked path component.
+func verifyNoSymlinkAncestors(dirPath string) error {
+	parent := filepath.Dir(dirPath)
+
+	if parent != dirPath {
+		if err := verifyNoSymlinkAncestors(parent); err != nil {
+			return err
+		}
+	}
+
+	info, err := os.Lstat(dirPath)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+
+		return fmt.Errorf("error checking path %s: %w", dirPath, err)
+	}
+
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("refusing to traverse symlinked path component %s", dirPath)
+	}
+
+	return nil
 }
 
 // removeStalePartialDownloads removes partial downloads of dst which don't match the keep path.
 func removeStalePartialDownloads(dst, keep string) error {
 	dirPath := filepath.Dir(dst)
+
+	if err := verifyNoSymlinkAncestors(dirPath); err != nil {
+		return err
+	}
 
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
@@ -782,7 +865,7 @@ func removeStalePartialDownloads(dst, keep string) error {
 		return fmt.Errorf("error listing directory %s: %w", dirPath, err)
 	}
 
-	prefix := partialDownloadNamePrefix(dst)
+	prefix := "." + partialDownloadNameID(dst) + "."
 	keepName := filepath.Base(keep)
 
 	for _, entry := range entries {
