@@ -22,14 +22,14 @@ import (
 )
 
 func TestCollectCPU(t *testing.T) {
-	v, err := CollectCPU()
+	v, err := CollectCPU(t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error = %v", err)
 	}
 
 	time.Sleep(1 * time.Second)
 
-	v2, err := CollectCPU()
+	v2, err := CollectCPU(t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error = %v", err)
 	}

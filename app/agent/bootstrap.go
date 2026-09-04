@@ -58,7 +58,7 @@ func Bootstrap(ctx context.Context, cfg *Config) error {
 	}
 
 	var bootstrapRequest *BootstrapRequest
-	bootstrapRequest, err = agent.newBootstrapRequest()
+	bootstrapRequest, err = agent.newBootstrapRequest(ctx)
 	if err != nil {
 		return err
 	}
@@ -142,10 +142,10 @@ func (agent *Agent) getRawPublicKey() ([]string, error) {
 }
 
 // newBootstrapRequest returns a new BootstrapRequest for the agent.
-func (agent *Agent) newBootstrapRequest() (*BootstrapRequest, error) {
+func (agent *Agent) newBootstrapRequest(ctx context.Context) (*BootstrapRequest, error) {
 	log.Infof("Gathering system information")
 
-	systemInventory, err := inventory.CollectSystemInventory(agent.IsTPMEnabled())
+	systemInventory, err := inventory.CollectSystemInventory(ctx, agent.IsTPMEnabled())
 	if err != nil {
 		return nil, fmt.Errorf("error collecting system info: %w", err)
 	}

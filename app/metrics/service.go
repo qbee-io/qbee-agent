@@ -17,6 +17,7 @@
 package metrics
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -43,7 +44,7 @@ func New(apiClient *api.Client) *Service {
 
 type metricsCollector struct {
 	name string
-	fn   func() ([]Metric, error)
+	fn   func(ctx context.Context) ([]Metric, error)
 }
 
 var metricsCollectors = []metricsCollector{
@@ -71,7 +72,7 @@ var metricsCacheTTL = 60 * time.Second
 
 // Collect system metrics.
 // If any errors are encountered, they'll be logged, but won't interrupt the process.
-func (s *Service) Collect() []Metric {
+func (s *Service) Collect(ctx context.Context) []Metric {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -83,7 +84,7 @@ func (s *Service) Collect() []Metric {
 
 	// collect metrics which don't depend on state
 	for _, collector := range metricsCollectors {
-		if metrics, err := collector.fn(); err != nil {
+		if metrics, err := collector.fn(ctx); err != nil {
 			log.Errorf("%s metrics error: %v", collector.name, err)
 		} else {
 			allMetrics = append(allMetrics, metrics...)
@@ -91,13 +92,13 @@ func (s *Service) Collect() []Metric {
 	}
 
 	// collect metrics which require previous state to produce delta-metrics
-	if cpuMetric, err := s.doCollectCPU(); err != nil {
+	if cpuMetric, err := s.doCollectCPU(ctx); err != nil {
 		log.Errorf("cpu metrics error: %v", err)
 	} else if cpuMetric != nil {
 		allMetrics = append(allMetrics, *cpuMetric)
 	}
 
-	if networkMetrics, err := s.doCollectNetwork(); err != nil {
+	if networkMetrics, err := s.doCollectNetwork(ctx); err != nil {
 		log.Errorf("network metrics error: %v", err)
 	} else if networkMetrics != nil {
 		allMetrics = append(allMetrics, networkMetrics...)
@@ -108,9 +109,9 @@ func (s *Service) Collect() []Metric {
 	return allMetrics
 }
 
-func (s *Service) doCollectCPU() (*Metric, error) {
+func (s *Service) doCollectCPU(ctx context.Context) (*Metric, error) {
 
-	cpuValues, err := CollectCPU()
+	cpuValues, err := CollectCPU(ctx)
 
 	if err != nil {
 		return nil, err
@@ -139,9 +140,9 @@ func (s *Service) doCollectCPU() (*Metric, error) {
 	}, nil
 }
 
-func (s *Service) doCollectNetwork() ([]Metric, error) {
+func (s *Service) doCollectNetwork(ctx context.Context) ([]Metric, error) {
 
-	networkValues, err := CollectNetwork()
+	networkValues, err := CollectNetwork(ctx)
 
 	if err != nil {
 		return nil, err

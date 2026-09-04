@@ -31,6 +31,7 @@ import (
 
 	"go.qbee.io/agent/app/api"
 	"go.qbee.io/agent/app/utils/assert"
+	"go.qbee.io/agent/app/utils/files"
 )
 
 func TestService_reportsBuffer(t *testing.T) {
@@ -215,4 +216,34 @@ func Test_ConfigEndpointBooleanReset(t *testing.T) {
 	if srv.IsConfigEndpointUnreachable() {
 		t.Fatalf("expected config endpoint to be reachable")
 	}
+}
+
+func TestService_ReportExhaustedGoroutineBudget(t *testing.T) {
+	tmpDir := t.TempDir()
+	srv := New(nil, tmpDir, "")
+	srv.currentCommitID = "test-commit-id"
+
+	// Create a mock API client that will fail to send reports
+	// so they get buffered to the reports file
+	mockClient := api.NewClient("localhost", "99999")
+	srv.api = mockClient
+
+	// Simulate exhausted goroutine budget
+	files.SetGoroutineCountForTesting(500)     // maxGoroutines is 500
+	defer files.SetGoroutineCountForTesting(0) // reset after test
+
+	// Call ReportExhaustedGoroutineBudget
+	exhausted, _ := srv.ReportExhaustedGoroutineBudget(context.Background())
+
+	// Verify that it returns true (indicating budget was exhausted)
+	assert.True(t, exhausted)
+
+	// Read the buffered reports
+	reports, readErr := srv.readReportsBuffer()
+	assert.NoError(t, readErr)
+	assert.NotEqual(t, len(reports), 0)
+
+	assert.Equal(t, reports[0].Bundle, bundleAgentInternal)
+	assert.Equal(t, reports[0].Severity, severityError)
+	assert.Equal(t, reports[0].Text, "goroutine budget exhausted, skipping agent run")
 }

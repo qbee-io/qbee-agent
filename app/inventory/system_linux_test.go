@@ -23,11 +23,12 @@ import (
 
 	"go.qbee.io/agent/app/inventory"
 	"go.qbee.io/agent/app/utils/assert"
+	"go.qbee.io/agent/app/utils/files"
 )
 
 func TestCollectSystemInventory(t *testing.T) {
 
-	systemInfo, err := inventory.CollectSystemInventory(true)
+	systemInfo, err := inventory.CollectSystemInventory(t.Context(), true)
 	if err != nil {
 		t.Fatalf("error collecting system info: %v", err)
 	}
@@ -40,4 +41,7 @@ func TestCollectSystemInventory(t *testing.T) {
 	assert.NotEmpty(t, systemInfo.System.Host)
 	assert.NotEmpty(t, systemInfo.System.Architecture)
 	assert.NotEmpty(t, systemInfo.System.OSVersion)
+
+	// make sure that the goroutine count is back to its original value before collection
+	assert.Equal(t, files.GetGoroutineCount(), int64(0))
 }

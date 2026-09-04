@@ -17,13 +17,14 @@
 package metrics
 
 import (
+	"context"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"go.qbee.io/agent/app/inventory/linux"
-	"go.qbee.io/agent/app/utils"
+	"go.qbee.io/agent/app/utils/files"
 )
 
 // NetworkValues contains network metrics for an interface.
@@ -49,12 +50,12 @@ type NetworkValues struct {
 // CollectNetwork metrics.
 // Note: collected are total values. The agent must report delta,
 // so we need to keep state from the last report and subtract it before delivery.
-func CollectNetwork() ([]Metric, error) {
+func CollectNetwork(ctx context.Context) ([]Metric, error) {
 	path := filepath.Join(linux.ProcFS, "net", "dev")
 
 	metrics := make([]Metric, 0)
 
-	err := utils.ForLinesInFile(path, func(line string) error {
+	err := files.ForLinesInFile(ctx, files.KernelVirtualFSReadTimeout, path, func(line string) error {
 		fields := strings.Fields(line)
 
 		if !strings.HasSuffix(fields[0], ":") {

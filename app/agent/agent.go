@@ -173,6 +173,15 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 	agent.Configuration.UpdateSettings(configData)
 	agent.Configuration.UpdateMetricsMonitorState(configData)
 
+	// Check if we have enough goroutine budget to run the agent, if not, skip the run.
+	// Do this after we have updated the configuration, so that the device is online.
+	if exhausted, err := agent.Configuration.ReportExhaustedGoroutineBudget(ctx); exhausted {
+		if err != nil {
+			log.Errorf("failed to report goroutine budget: %v", err)
+		}
+		return
+	}
+
 	if mode == FullRun {
 		agent.do(ctx, "check-in", agent.checkIn)
 		agent.do(ctx, "remote-access", agent.doRemoteAccess(configData))
@@ -201,7 +210,7 @@ func (agent *Agent) doMetrics(ctx context.Context) error {
 		return nil
 	}
 
-	if err := agent.Metrics.Send(ctx, agent.Metrics.Collect()); err != nil {
+	if err := agent.Metrics.Send(ctx, agent.Metrics.Collect(ctx)); err != nil {
 		return fmt.Errorf("failed to send metrics: %w", err)
 	}
 

@@ -30,6 +30,7 @@ import (
 	"go.qbee.io/agent/app/api"
 	"go.qbee.io/agent/app/log"
 	"go.qbee.io/agent/app/metrics"
+	"go.qbee.io/agent/app/utils/files"
 )
 
 const defaultAgentInterval = 5 // minutes
@@ -326,6 +327,39 @@ func (srv *Service) reportAPIError(ctx context.Context, err error) {
 			log.Errorf("failed to add reports to buffer: %v", err)
 		}
 	}
+}
+
+// ReportExhaustedGoroutineBudget reports when the goroutine budget is exhausted and returns whether the
+// budget was exhausted and any error encountered delivering the report.
+func (srv *Service) ReportExhaustedGoroutineBudget(ctx context.Context) (bool, error) {
+	if !files.GoroutinesExhausted() {
+		return false, nil
+	}
+
+	// since we don't have a reporter defined on this context, we need to create a new one
+	reporter := NewReporter(srv.currentCommitID, srv.reportToConsole, nil)
+	bundleCtx := reporter.BundleContext(ctx, bundleAgentInternal, "")
+
+	ReportError(bundleCtx, nil, "goroutine budget exhausted, skipping agent run")
+
+	// send reports immediately as there will be no further configurations executed, thus
+	// no further reports will be generated. If we fail to send the reports, we add them to the buffer.
+	if _, err := srv.sendReports(ctx, reporter.Reports()); err != nil {
+		log.Debugf("failed to send reports to the server: %v, adding to the buffer", err)
+
+		if bufferErr := srv.addReportsToBuffer(reporter.Reports()); bufferErr != nil {
+			log.Errorf("failed to add reports to buffer: %v", bufferErr)
+		}
+
+		return true, err
+	}
+
+	// also flush any existing buffered reports
+	if err := srv.flushReportsBuffer(ctx); err != nil {
+		log.Errorf("failed to flush reports buffer: %v", err)
+	}
+
+	return true, nil
 }
 
 // RunIntervalChangedNotifier returns a channel which will send a new agent interval duration when it changes.
