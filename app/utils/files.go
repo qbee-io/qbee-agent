@@ -101,31 +101,48 @@ func ReadFileWithContext(ctx context.Context, filePath string) ([]byte, error) {
 
 // OpenFileWithContext opens a file with context cancellation support.
 func OpenFileWithContext(ctx context.Context, filePath string) (io.ReadCloser, error) {
-	var f *os.File
+	if !reserveGoroutineSlot() {
+		return nil, fmt.Errorf("goroutine budget exhausted")
+	}
 
-	outerErr := fileOperationWithContext(ctx, func() error {
-		var err error
-		f, err = os.Open(filePath)
-		if err != nil {
-			return err
-		}
+	type openResult struct {
+		f   *os.File
+		err error
+	}
+
+	// The channel is intentionally unbuffered, so ownership of a successfully opened file is only
+	// transferred to the caller when the result is actually received. If the caller gives up due to
+	// context cancellation, the file is closed here instead of being leaked.
+	resultCh := make(chan openResult)
+
+	go func() {
+		defer func() {
+			releaseGoroutineSlot()
+		}()
+
+		f, err := os.Open(filePath)
 
 		select {
+		case resultCh <- openResult{f: f, err: err}:
 		case <-ctx.Done():
-			_ = f.Close()
-			return ctx.Err()
-		default:
+			if err == nil {
+				_ = f.Close()
+			}
 		}
-		return nil
-	})
+	}()
 
-	if outerErr != nil {
-		return nil, outerErr
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case result := <-resultCh:
+		if result.err != nil {
+			return nil, result.err
+		}
+		return &contextReader{
+			ctx: ctx,
+			f:   result.f,
+		}, nil
 	}
-	return &contextReader{
-		ctx: ctx,
-		f:   f,
-	}, nil
 }
 
 type contextReader struct {
