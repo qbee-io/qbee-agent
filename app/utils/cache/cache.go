@@ -64,3 +64,11 @@ func Delete(key string) {
 
 	delete(items, key)
 }
+
+// Clear clears the cache
+func Clear() {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	items = make(map[string]item)
+}

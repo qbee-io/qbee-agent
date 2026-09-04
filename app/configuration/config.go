@@ -37,6 +37,9 @@ const (
 	BundleRauc                 = "rauc"
 	BundleMetricsMonitor       = "metrics_monitor"
 	BundleDockerCompose        = "docker_compose"
+
+	// used to send an agent report to the DeviceHub on internal events (eg. goroutine budget exhaustion)
+	bundleAgentInternal = "agent_internal"
 )
 
 // CommittedConfig contains the configuration that is committed.

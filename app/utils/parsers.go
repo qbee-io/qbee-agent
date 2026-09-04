@@ -33,15 +33,14 @@ func ForLines(reader io.Reader, fn func(string) error) error {
 
 	var lineNumber uint64
 	for scanner.Scan() {
-		if err := scanner.Err(); err != nil {
-			return fmt.Errorf("error reading line: %w", err)
-		}
-
 		lineNumber++
 
 		if err := fn(scanner.Text()); err != nil {
 			return fmt.Errorf("error processing line %d: %w", lineNumber, err)
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("error reading line: %w", err)
 	}
 
 	return nil

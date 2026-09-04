@@ -23,14 +23,18 @@ import (
 	"time"
 
 	"go.qbee.io/agent/app/api"
+	"go.qbee.io/agent/app/utils/assert"
+	"go.qbee.io/agent/app/utils/cache"
+	"go.qbee.io/agent/app/utils/files"
 )
 
 func TestCollectServiceCollectAll(t *testing.T) {
 	apiClient, _ := api.NewMockedClient()
 
+	cache.Clear()
 	srv := New(apiClient)
 
-	gotMetrics := srv.Collect()
+	gotMetrics := srv.Collect(t.Context())
 
 	if len(gotMetrics) == 0 {
 		t.Fatalf("expected at least one metric, got 0")
@@ -46,7 +50,7 @@ func TestCollectServiceCollectAll(t *testing.T) {
 	// Sleep to get deltas
 	time.Sleep(1 * time.Second)
 
-	gotMetrics = srv.Collect()
+	gotMetrics = srv.Collect(t.Context())
 	metricBytes, err = json.MarshalIndent(gotMetrics, "", "  ")
 
 	if err != nil {
@@ -54,4 +58,12 @@ func TestCollectServiceCollectAll(t *testing.T) {
 	}
 
 	fmt.Printf("got metrics: %s", string(metricBytes))
+}
+
+func Test_GoroutineCountAfterAllMetrics(t *testing.T) {
+	cache.Clear()
+	apiClient, _ := api.NewMockedClient()
+	srv := New(apiClient)
+	srv.Collect(t.Context())
+	assert.Equal(t, files.GetGoroutineCount(), int64(0))
 }

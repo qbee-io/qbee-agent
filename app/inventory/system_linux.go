@@ -19,6 +19,7 @@
 package inventory
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"path/filepath"
@@ -34,6 +35,7 @@ import (
 	"go.qbee.io/agent/app/log"
 	"go.qbee.io/agent/app/utils"
 	"go.qbee.io/agent/app/utils/cache"
+	"go.qbee.io/agent/app/utils/files"
 )
 
 const (
@@ -42,7 +44,7 @@ const (
 )
 
 // CollectSystemInventory returns populated System inventory based on current system status.
-func CollectSystemInventory(tpmEnabled bool) (*System, error) {
+func CollectSystemInventory(ctx context.Context, tpmEnabled bool) (*System, error) {
 
 	if cachedItem, ok := cache.Get(systemInventoryCacheKey); ok {
 		return cachedItem.(*System), nil
@@ -60,7 +62,7 @@ func CollectSystemInventory(tpmEnabled bool) (*System, error) {
 		return nil, err
 	}
 
-	if err := systemInfo.parseCPUInfo(); err != nil {
+	if err := systemInfo.parseCPUInfo(ctx); err != nil {
 		return nil, err
 	}
 
@@ -72,7 +74,7 @@ func CollectSystemInventory(tpmEnabled bool) (*System, error) {
 		return nil, err
 	}
 
-	if err := systemInfo.gatherNetworkInfo(); err != nil {
+	if err := systemInfo.gatherNetworkInfo(ctx); err != nil {
 		return nil, err
 	}
 
@@ -93,12 +95,12 @@ func CollectSystemInventory(tpmEnabled bool) (*System, error) {
 }
 
 // getDefaultNetworkInterface returns a default network interface name.
-func (systemInfo *SystemInfo) getDefaultNetworkInterface() (string, error) {
+func (systemInfo *SystemInfo) getDefaultNetworkInterface(ctx context.Context) (string, error) {
 	routeFilePath := filepath.Join(linux.ProcFS, "net", "route")
 
 	defaultInterface := ""
 
-	err := utils.ForLinesInFile(routeFilePath, func(line string) error {
+	err := files.ForLinesInFile(ctx, files.KernelVirtualFSReadTimeout, routeFilePath, func(line string) error {
 		fields := strings.Fields(line)
 		if fields[1] == "Destination" {
 			return nil
@@ -122,8 +124,8 @@ func (systemInfo *SystemInfo) getDefaultNetworkInterface() (string, error) {
 }
 
 // gatherNetworkInfo gathers system's networking configuration.
-func (systemInfo *SystemInfo) gatherNetworkInfo() error {
-	defaultNetworkInterface, err := systemInfo.getDefaultNetworkInterface()
+func (systemInfo *SystemInfo) gatherNetworkInfo(ctx context.Context) error {
+	defaultNetworkInterface, err := systemInfo.getDefaultNetworkInterface(ctx)
 	if err != nil {
 		return err
 	}
@@ -234,12 +236,12 @@ func (systemInfo *SystemInfo) parseOSRelease() error {
 }
 
 // parseCPUInfo parses /proc/cpuinfo for extra details re. CPU.
-func (systemInfo *SystemInfo) parseCPUInfo() error {
+func (systemInfo *SystemInfo) parseCPUInfo(ctx context.Context) error {
 	filePath := filepath.Join(linux.ProcFS, "cpuinfo")
 
 	const expectedLineSubstrings = 2
 
-	return utils.ForLinesInFile(filePath, func(line string) error {
+	return files.ForLinesInFile(ctx, files.KernelVirtualFSReadTimeout, filePath, func(line string) error {
 		line = strings.TrimSpace(line)
 
 		substrings := strings.SplitN(line, ":", expectedLineSubstrings)

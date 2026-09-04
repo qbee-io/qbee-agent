@@ -25,7 +25,7 @@ import (
 )
 
 func TestCollectFilesystem(t *testing.T) {
-	gotMetrics, err := CollectFilesystem()
+	gotMetrics, err := CollectFilesystem(t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error = %v", err)
 	}
