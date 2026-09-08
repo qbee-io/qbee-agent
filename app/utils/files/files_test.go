@@ -126,8 +126,14 @@ func Test_FileTimeouts(t *testing.T) {
 			err := tt.fn(ctx, fifoPath)
 			assert.True(t, errors.Is(err, context.DeadlineExceeded))
 
-			// Check that the goroutine count is 1 after the timeout occurred
-			assert.True(t, atomic.LoadInt64(&goroutineCount) == 1)
+			// The timed-out operation is still blocked in os.Open; unblock it and wait for cleanup.
+			assert.Equal(t, atomic.LoadInt64(&goroutineCount), int64(1))
+			writer, writerErr := os.OpenFile(fifoPath, os.O_WRONLY, 0)
+			assert.NoError(t, writerErr)
+			assert.NoError(t, writer.Close())
+			assert.EventuallyTrue(t, func() bool {
+				return atomic.LoadInt64(&goroutineCount) == 0
+			}, time.Second)
 		})
 	}
 }

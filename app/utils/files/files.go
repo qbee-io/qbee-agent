@@ -86,7 +86,7 @@ func Read(ctx context.Context, timeout time.Duration, maxBytes int64, filePath s
 	return result, nil
 }
 
-// ReadAll reads the entire contents of a file with context cancellation support, up to a maximum number of bytes.
+// ReadAll reads the entire contents of a file with context cancellation support.
 func ReadAll(ctx context.Context, timeout time.Duration, filePath string) ([]byte, error) {
 	return Read(ctx, timeout, -1, filePath)
 }
