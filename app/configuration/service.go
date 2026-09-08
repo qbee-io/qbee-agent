@@ -340,7 +340,7 @@ func (srv *Service) ReportExhaustedGoroutineBudget(ctx context.Context) (bool, e
 	reporter := NewReporter(srv.currentCommitID, srv.reportToConsole, nil)
 	bundleCtx := reporter.BundleContext(ctx, bundleAgentInternal, "")
 
-	ReportError(bundleCtx, nil, "goroutine budget exhausted, skipping agent run")
+	ReportCritical(bundleCtx, nil, "goroutine budget exhausted, skipping agent run")
 
 	// send reports immediately as there will be no further configurations executed, thus
 	// no further reports will be generated. If we fail to send the reports, we add them to the buffer.

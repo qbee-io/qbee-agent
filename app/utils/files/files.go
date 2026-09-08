@@ -173,10 +173,7 @@ func fileOperationWithContext(ctx context.Context, operation func() error) error
 	errCh := make(chan error, 1)
 
 	go func() {
-		defer func() {
-			releaseGoroutineSlot()
-		}()
-
+		defer releaseGoroutineSlot()
 		errCh <- operation()
 	}()
 
