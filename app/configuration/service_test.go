@@ -244,6 +244,6 @@ func TestService_ReportExhaustedGoroutineBudget(t *testing.T) {
 	assert.NotEqual(t, len(reports), 0)
 
 	assert.Equal(t, reports[0].Bundle, bundleAgentInternal)
-	assert.Equal(t, reports[0].Severity, severityError)
+	assert.Equal(t, reports[0].Severity, severityCritical)
 	assert.Equal(t, reports[0].Text, "goroutine budget exhausted, skipping agent run")
 }
