@@ -75,6 +75,16 @@ func GetTarExtension(tarPath string) string {
 
 // unpackTar unpacks a tar archive to a destination directory.
 func unpackTar(reader io.Reader, destPath string) error {
+	if err := os.MkdirAll(destPath, 0755); err != nil {
+		return err
+	}
+
+	root, err := os.OpenRoot(destPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+
 	tarReader := tar.NewReader(reader)
 
 	for {
@@ -86,29 +96,33 @@ func unpackTar(reader io.Reader, destPath string) error {
 			return err
 		}
 
-		targetPath := filepath.Clean(filepath.Join(destPath, header.Name))
-		destdirClean := filepath.Clean(destPath)
-
-		if !strings.HasPrefix(targetPath, destdirClean) {
-			return fmt.Errorf("tar entry %s is outside of destination directory %s", targetPath, destdirClean)
-		}
+		targetPath := filepath.Clean(header.Name)
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(targetPath, 0755); err != nil {
+			if err := root.MkdirAll(targetPath, 0755); err != nil {
 				return err
 			}
 		case tar.TypeReg:
-			targetFile, err := os.Create(targetPath)
-			if err != nil {
-				return err
-			}
-			defer func() { _ = targetFile.Close() }()
-
-			if _, err := io.Copy(targetFile, tarReader); err != nil {
+			if err := unpackTarFile(root, targetPath, tarReader); err != nil {
 				return err
 			}
 		}
 	}
+	return nil
+}
+
+// unpackTarFile writes a single regular file entry into the root.
+func unpackTarFile(root *os.Root, targetPath string, tarReader io.Reader) error {
+	targetFile, err := root.Create(targetPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = targetFile.Close() }()
+
+	if _, err := io.Copy(targetFile, tarReader); err != nil {
+		return err
+	}
+
 	return nil
 }

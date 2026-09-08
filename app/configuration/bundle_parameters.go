@@ -19,12 +19,12 @@ package configuration
 import (
 	"context"
 	"fmt"
-	"os"
 	"path"
 	"strings"
 
 	"go.qbee.io/agent/app/inventory"
 	"go.qbee.io/agent/app/software"
+	"go.qbee.io/agent/app/utils"
 )
 
 // Parameter defines a parameters as key/value pair.
@@ -79,7 +79,7 @@ const (
 
 var systemParameters = map[string]func(ctx context.Context) (string, error){
 	"sys.host": func(ctx context.Context) (string, error) {
-		return os.Hostname()
+		return utils.Hostname()
 	},
 	"sys.pkg_arch": func(ctx context.Context) (string, error) {
 		if software.DefaultPackageManager == nil {
@@ -94,49 +94,49 @@ var systemParameters = map[string]func(ctx context.Context) (string, error){
 		return string(software.DefaultPackageManager.Type()), nil
 	},
 	"sys.os": func(ctx context.Context) (string, error) {
-		systemInventory, err := inventory.CollectSystemInventory(false)
+		systemInventory, err := inventory.CollectSystemInventory(ctx, false)
 		if err != nil {
 			return "", err
 		}
 		return systemInventory.System.OS, nil
 	},
 	"sys.arch": func(ctx context.Context) (string, error) {
-		systemInventory, err := inventory.CollectSystemInventory(false)
+		systemInventory, err := inventory.CollectSystemInventory(ctx, false)
 		if err != nil {
 			return "", err
 		}
 		return systemInventory.System.Architecture, nil
 	},
 	"sys.os_type": func(ctx context.Context) (string, error) {
-		systemInventory, err := inventory.CollectSystemInventory(false)
+		systemInventory, err := inventory.CollectSystemInventory(ctx, false)
 		if err != nil {
 			return "", err
 		}
 		return systemInventory.System.OSType, nil
 	},
 	"sys.flavor": func(ctx context.Context) (string, error) {
-		systemInventory, err := inventory.CollectSystemInventory(false)
+		systemInventory, err := inventory.CollectSystemInventory(ctx, false)
 		if err != nil {
 			return "", err
 		}
 		return systemInventory.System.Flavor, nil
 	},
 	"sys.agent_version": func(ctx context.Context) (string, error) {
-		systemInventory, err := inventory.CollectSystemInventory(false)
+		systemInventory, err := inventory.CollectSystemInventory(ctx, false)
 		if err != nil {
 			return "", err
 		}
 		return systemInventory.System.AgentVersion, nil
 	},
 	"sys.long_arch": func(ctx context.Context) (string, error) {
-		systemInventory, err := inventory.CollectSystemInventory(false)
+		systemInventory, err := inventory.CollectSystemInventory(ctx, false)
 		if err != nil {
 			return "", err
 		}
 		return systemInventory.System.LongArchitecture, nil
 	},
 	"sys.boot_time": func(ctx context.Context) (string, error) {
-		systemInventory, err := inventory.CollectSystemInventory(false)
+		systemInventory, err := inventory.CollectSystemInventory(ctx, false)
 		if err != nil {
 			return "", err
 		}

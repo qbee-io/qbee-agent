@@ -61,7 +61,7 @@ func (agent *Agent) doInventories(ctx context.Context) error {
 
 // doSystemInventory collects system inventory and delivers it to the device hub API.
 func (agent *Agent) doSystemInventory(ctx context.Context) error {
-	systemInventory, err := inventory.CollectSystemInventory(agent.IsTPMEnabled())
+	systemInventory, err := inventory.CollectSystemInventory(ctx, agent.IsTPMEnabled())
 	if err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ func (agent *Agent) doUsersInventory(ctx context.Context) error {
 
 // doPortsInventory collects ports inventory and delivers it to the device hub API.
 func (agent *Agent) doPortsInventory(ctx context.Context) error {
-	portsInventory, err := inventory.CollectPortsInventory()
+	portsInventory, err := inventory.CollectPortsInventory(ctx)
 	if err != nil {
 		return err
 	}
@@ -196,7 +196,7 @@ func (agent *Agent) doProcessInventory(ctx context.Context) error {
 		return nil
 	}
 
-	processesInventory, err := inventory.CollectProcessesInventory()
+	processesInventory, err := inventory.CollectProcessesInventory(ctx)
 	if err != nil {
 		return err
 	}

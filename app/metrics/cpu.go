@@ -18,14 +18,15 @@ package metrics
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"math"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"go.qbee.io/agent/app/inventory/linux"
+	"go.qbee.io/agent/app/utils/files"
 )
 
 // CPUValues contains CPU metrics.
@@ -47,25 +48,22 @@ type CPUValues struct {
 }
 
 // CollectCPU returns CPU metrics.
-func CollectCPU() (*CPUValues, error) {
+func CollectCPU(ctx context.Context) (*CPUValues, error) {
 	filePath := filepath.Join(linux.ProcFS, "stat")
 
-	file, err := os.Open(filePath)
+	buf, err := files.Read(ctx, files.KernelVirtualFSReadTimeout, 512, filePath)
 	if err != nil {
 		return nil, fmt.Errorf("error reading %s: %w", filePath, err)
 	}
 
-	defer func() { _ = file.Close() }()
-
-	// we don't need to read the whole file, we only care about the first line
-	buf := make([]byte, 512)
-	if _, err = file.Read(buf); err != nil {
-		return nil, fmt.Errorf("error reading contents of %s: %w", filePath, err)
+	// since we are reading limited number of bytes, we need to check that we have newline
+	newline := bytes.IndexByte(buf, '\n')
+	if newline == -1 {
+		newline = len(buf)
 	}
+	firstLine := string(buf[:newline])
 
-	firstLine := string(buf[0:bytes.Index(buf, []byte("\n"))])
 	lineFields := strings.Fields(firstLine)
-
 	fields := []string{"user", "nice", "system", "idle", "iowait", "irq"}
 	fieldValues := make(map[string]uint64)
 

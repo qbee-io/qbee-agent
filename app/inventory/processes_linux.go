@@ -20,10 +20,10 @@ package inventory
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -31,12 +31,13 @@ import (
 	"time"
 
 	"go.qbee.io/agent/app/inventory/linux"
+	"go.qbee.io/agent/app/utils/files"
 )
 
 // CollectProcessesInventory returns populated Processes inventory based on current system status.
 // Based on https://www.kernel.org/doc/html/latest/filesystems/proc.html#id10
-func CollectProcessesInventory() (*Processes, error) {
-	runningProcesses, err := linux.ListRunningProcesses()
+func CollectProcessesInventory(ctx context.Context) (*Processes, error) {
+	runningProcesses, err := linux.ListRunningProcesses(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error listing running processes: %w", err)
 	}
@@ -47,12 +48,12 @@ func CollectProcessesInventory() (*Processes, error) {
 	firstReadTime := time.Now()
 
 	// collect total CPU jiffies
-	if totalJiffiesT0, err = getTotalJiffies(); err != nil {
+	if totalJiffiesT0, err = getTotalJiffies(ctx); err != nil {
 		return nil, err
 	}
 
 	// collect CPU stats for each process
-	if processJiffiesT0, err = getProcessStats(runningProcesses); err != nil {
+	if processJiffiesT0, err = getProcessStats(ctx, runningProcesses); err != nil {
 		return nil, err
 	}
 
@@ -62,18 +63,18 @@ func CollectProcessesInventory() (*Processes, error) {
 	time.Sleep(time.Second - time.Since(firstReadTime))
 
 	// collect total CPU jiffies (again)
-	if totalJiffiesT1, err = getTotalJiffies(); err != nil {
+	if totalJiffiesT1, err = getTotalJiffies(ctx); err != nil {
 		return nil, err
 	}
 
 	// collect CPU stats for each process (again)
-	if processJiffiesT1, err = getProcessStats(runningProcesses); err != nil {
+	if processJiffiesT1, err = getProcessStats(ctx, runningProcesses); err != nil {
 		return nil, err
 	}
 
 	// get system memory information
 	var memInfo *linux.MemInfo
-	if memInfo, err = linux.GetMemInfo(); err != nil {
+	if memInfo, err = linux.GetMemInfo(ctx); err != nil {
 		return nil, err
 	}
 
@@ -104,7 +105,7 @@ func CollectProcessesInventory() (*Processes, error) {
 		jiffiesDelta := jiffiesT1 - jiffiesT0
 
 		// get process status
-		if processStatus, err = linux.GetProcessStatus(pid); err != nil {
+		if processStatus, err = linux.GetProcessStatus(ctx, pid); err != nil {
 			// if process is gone, skip it
 			if errors.Is(err, fs.ErrNotExist) {
 				continue
@@ -130,39 +131,25 @@ func CollectProcessesInventory() (*Processes, error) {
 const procStatBufferSize = 1024
 
 // getProcessStats returns a map of PID -> process stats for currently running processes.
-func getProcessStats(runningProcesses []string) (map[string]linux.ProcessStats, error) {
+func getProcessStats(ctx context.Context, runningProcesses []string) (map[string]linux.ProcessStats, error) {
 	processStats := make(map[string]linux.ProcessStats)
 
-	var n int
 	var err error
-	var procStatFile *os.File
-	var statFilePath string
-
-	buf := make([]byte, procStatBufferSize)
 
 	for _, pid := range runningProcesses {
-		statFilePath = filepath.Join(linux.ProcFS, pid, "stat")
+		statFilePath := filepath.Join(linux.ProcFS, pid, "stat")
 
-		if procStatFile, err = os.Open(statFilePath); err != nil {
+		data, readErr := files.Read(ctx, files.KernelVirtualFSReadTimeout, procStatBufferSize, statFilePath)
+		if readErr != nil {
+			err = readErr
 			if errors.Is(err, fs.ErrNotExist) {
 				continue
 			}
 
-			return nil, fmt.Errorf("error opening %s: %w", statFilePath, err)
-		}
-
-		// read file contents to a buffer
-		n, err = procStatFile.Read(buf)
-
-		// close the file
-		_ = procStatFile.Close()
-
-		// check for errors
-		if err != nil {
 			return nil, fmt.Errorf("error reading %s: %w", statFilePath, err)
 		}
 
-		if processStats[pid], err = linux.NewProcessStats(string(buf[0:n])); err != nil {
+		if processStats[pid], err = linux.NewProcessStats(string(data)); err != nil {
 			return nil, err
 		}
 	}
@@ -172,23 +159,20 @@ func getProcessStats(runningProcesses []string) (map[string]linux.ProcessStats, 
 
 // getTotalJiffies returns a sum of all jiffies from /proc/stat
 // We could use C.sysconf(C._SC_CLK_TCK), but that would require CGO and that's not helping with portability.
-func getTotalJiffies() (uint64, error) {
+func getTotalJiffies(ctx context.Context) (uint64, error) {
 	filePath := filepath.Join(linux.ProcFS, "stat")
 
-	file, err := os.Open(filePath)
+	buf, err := files.Read(ctx, files.KernelVirtualFSReadTimeout, 512, filePath)
 	if err != nil {
 		return 0, fmt.Errorf("error reading %s: %w", filePath, err)
 	}
 
-	defer func() { _ = file.Close() }()
-
-	// we don't need to read the whole file, we only care about the first line
-	buf := make([]byte, 512)
-	if _, err = file.Read(buf); err != nil {
-		return 0, fmt.Errorf("error reading contents of %s: %w", filePath, err)
+	// since we are reading limited number of bytes, we need to check that we have newline
+	newline := bytes.IndexByte(buf, '\n')
+	if newline == -1 {
+		newline = len(buf)
 	}
-
-	firstLine := string(buf[0:bytes.Index(buf, []byte("\n"))])
+	firstLine := string(buf[:newline])
 	fields := strings.Fields(firstLine)
 
 	var total, value uint64

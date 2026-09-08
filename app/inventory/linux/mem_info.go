@@ -19,12 +19,13 @@
 package linux
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strconv"
 	"strings"
 
-	"go.qbee.io/agent/app/utils"
+	"go.qbee.io/agent/app/utils/files"
 )
 
 // MemInfo provides basic information about system memory.
@@ -38,12 +39,12 @@ type MemInfo struct {
 }
 
 // GetMemInfo returns basic memory information from the system.
-func GetMemInfo() (*MemInfo, error) {
+func GetMemInfo(ctx context.Context) (*MemInfo, error) {
 	filePath := filepath.Join(ProcFS, "meminfo")
 
 	memInfo := new(MemInfo)
 
-	err := utils.ForLinesInFile(filePath, func(line string) error {
+	err := files.ForLinesInFile(ctx, files.KernelVirtualFSReadTimeout, filePath, func(line string) error {
 		var err error
 
 		fields := strings.Fields(line)

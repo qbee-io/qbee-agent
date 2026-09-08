@@ -19,13 +19,14 @@
 package linux
 
 import (
+	"context"
 	"fmt"
 	"os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
 
-	"go.qbee.io/agent/app/utils"
+	"go.qbee.io/agent/app/utils/files"
 )
 
 // ProcessStatus contains information about a process.
@@ -36,11 +37,11 @@ type ProcessStatus struct {
 
 // GetProcessStatus returns ProcessStatus based on /proc/*/status.
 // See `man proc` -> `/proc/[pid]/status section for details on the file format.
-func GetProcessStatus(pid string) (*ProcessStatus, error) {
+func GetProcessStatus(ctx context.Context, pid string) (*ProcessStatus, error) {
 	statusFilePath := filepath.Join(ProcFS, pid, "status")
 	processStatus := new(ProcessStatus)
 
-	err := utils.ForLinesInFile(statusFilePath, func(line string) error {
+	err := files.ForLinesInFile(ctx, files.KernelVirtualFSReadTimeout, statusFilePath, func(line string) error {
 		fields := strings.Fields(line)
 
 		switch fields[0] {
