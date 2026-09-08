@@ -33,6 +33,8 @@ import (
 	"strings"
 	"syscall"
 
+	"golang.org/x/sys/unix"
+
 	"go.qbee.io/agent/app/utils"
 )
 
@@ -226,9 +228,9 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 
 // finalizePartialDownload verifies a fully downloaded partial file and moves it to its destination.
 //
-// tmpDst is opened with O_NOFOLLOW so a symlink placed at the predictable partial download path
-// cannot be verified through its target and then have that symlink (rather than a regular file)
-// installed at dst by os.Rename (CWE-59).
+// tmpDst is opened with O_NOFOLLOW to verify the file without following symlinks. To prevent a
+// TOCTOU race where tmpDst is replaced after verification, the verified inode is linked to a
+// staging path (or copied via a private staging directory) and atomically renamed to dst.
 func finalizePartialDownload(
 	ctx context.Context,
 	label, src, dst, tmpDst string,
@@ -273,13 +275,68 @@ func finalizePartialDownload(
 		return false, fmt.Errorf("error setting permissions on %s: %w", tmpDst, err)
 	}
 
-	if err = os.Rename(tmpDst, dst); err != nil {
-		return false, fmt.Errorf("error renaming file %s to %s: %w", tmpDst, dst, err)
+	if err = publishVerifiedFd(fd, dst); err != nil {
+		return false, fmt.Errorf("error publishing verified file to %s: %w", dst, err)
 	}
+
+	_ = os.Remove(tmpDst)
 
 	ReportInfo(ctx, nil, msgWithLabel(label, "Successfully downloaded file %s to %s"), src, dst)
 
 	return true, nil
+}
+
+// publishVerifiedFd publishes the verified inode bound to fd to dst atomically.
+// It uses unix.Linkat to hard-link fd's inode to a staging path in dst's directory
+// and then renames it to dst. If linkat is unsupported, it falls back to copying from fd
+// via a private staging directory before renaming.
+func publishVerifiedFd(fd *os.File, dst string) error {
+	dstDir := filepath.Dir(dst)
+	stagingDst := filepath.Join(dstDir, fmt.Sprintf(".%s.verified.%d", partialDownloadNameID(dst), os.Getpid()))
+
+	_ = os.Remove(stagingDst)
+	defer func() { _ = os.Remove(stagingDst) }()
+
+	linkErr := unix.Linkat(int(fd.Fd()), "", unix.AT_FDCWD, stagingDst, unix.AT_EMPTY_PATH)
+	if linkErr == nil {
+		return os.Rename(stagingDst, dst)
+	}
+
+	// Fallback for filesystems that do not support hard links
+	stagingDir, err := os.MkdirTemp(dstDir, ".qbee-staging-*")
+	if err != nil {
+		return fmt.Errorf("failed to create staging directory: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(stagingDir) }()
+
+	stagingFile := filepath.Join(stagingDir, "file")
+	out, err := os.OpenFile(stagingFile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, fileManagerDefaultFilePermission)
+	if err != nil {
+		return fmt.Errorf("failed to create file in staging directory: %w", err)
+	}
+
+	if _, err = fd.Seek(0, io.SeekStart); err != nil {
+		_ = out.Close()
+		return fmt.Errorf("failed to seek in verified file: %w", err)
+	}
+
+	if _, err = io.Copy(out, fd); err != nil {
+		_ = out.Close()
+		return fmt.Errorf("failed to copy verified file content: %w", err)
+	}
+
+	stat, err := fd.Stat()
+	if err == nil {
+		if fileStat, ok := stat.Sys().(*syscall.Stat_t); ok {
+			_ = out.Chown(int(fileStat.Uid), int(fileStat.Gid))
+		}
+	}
+
+	if err = out.Close(); err != nil {
+		return fmt.Errorf("failed to close staging file: %w", err)
+	}
+
+	return os.Rename(stagingFile, dst)
 }
 
 const localFileSchema = "file://"

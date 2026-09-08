@@ -518,3 +518,26 @@ func Test_removeStalePartialDownloads_RemovesLegacyName(t *testing.T) {
 	_, err := os.Stat(legacy)
 	assert.True(t, errors.Is(err, fs.ErrNotExist))
 }
+
+func Test_publishVerifiedFd(t *testing.T) {
+	tempDir := t.TempDir()
+	tmpDst := filepath.Join(tempDir, "partial.part")
+	verifiedContent := []byte("verified file content")
+	assert.NoError(t, os.WriteFile(tmpDst, verifiedContent, 0600))
+
+	fd, err := os.OpenFile(tmpDst, os.O_RDONLY|os.O_EXCL, 0)
+	assert.NoError(t, err)
+	defer fd.Close()
+
+	// Simulate an attacker removing/replacing tmpDst after fd was opened and verified
+	assert.NoError(t, os.Remove(tmpDst))
+	assert.NoError(t, os.WriteFile(tmpDst, []byte("malicious content"), 0600))
+
+	dst := filepath.Join(tempDir, "file.txt")
+	assert.NoError(t, publishVerifiedFd(fd, dst))
+
+	got, err := os.ReadFile(dst)
+	assert.NoError(t, err)
+	assert.Equal(t, verifiedContent, got)
+}
+
