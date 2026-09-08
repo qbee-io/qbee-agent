@@ -19,6 +19,8 @@ package utils
 import (
 	"archive/tar"
 	"bytes"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"go.qbee.io/agent/app/utils/assert"
@@ -125,4 +127,58 @@ func Test_TarZipSlip(t *testing.T) {
 		})
 	}
 
+}
+
+// Test_TarZipSlipSiblingPrefixBypass covers traversal into a sibling directory whose cleaned path
+// still shares the destination directory as a string prefix (e.g. "context" -> "context-outside").
+func Test_TarZipSlipSiblingPrefixBypass(t *testing.T) {
+	baseDir := t.TempDir()
+	destPath := filepath.Join(baseDir, "context")
+	if err := os.MkdirAll(destPath, 0755); err != nil {
+		t.Fatalf("failed to create destination directory: %v", err)
+	}
+
+	const payload = "zip-slip-sibling-prefix"
+
+	var tarBuffer bytes.Buffer
+	tw := tar.NewWriter(&tarBuffer)
+
+	dirHeader := &tar.Header{
+		Name:     "../context-outside",
+		Mode:     0755,
+		Typeflag: tar.TypeDir,
+	}
+	if err := tw.WriteHeader(dirHeader); err != nil {
+		t.Fatalf("failed to write dir header: %v", err)
+	}
+
+	fileHeader := &tar.Header{
+		Name:     "../context-outside/payload.txt",
+		Mode:     0644,
+		Size:     int64(len(payload)),
+		Typeflag: tar.TypeReg,
+	}
+	if err := tw.WriteHeader(fileHeader); err != nil {
+		t.Fatalf("failed to write file header: %v", err)
+	}
+	if _, err := tw.Write([]byte(payload)); err != nil {
+		t.Fatalf("failed to write file content: %v", err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatalf("failed to close tar writer: %v", err)
+	}
+
+	err := unpackTar(&tarBuffer, destPath)
+
+	escapedDir := filepath.Join(baseDir, "context-outside")
+	if _, statErr := os.Stat(escapedDir); statErr == nil {
+		t.Fatalf("path traversal: directory was created outside destPath at %s", escapedDir)
+	}
+
+	escapedPath := filepath.Join(escapedDir, "payload.txt")
+	if contents, readErr := os.ReadFile(escapedPath); readErr == nil {
+		t.Fatalf("path traversal: payload was written outside destPath at %s; got %q", escapedPath, contents)
+	}
+
+	assert.NotEqual(t, err, nil)
 }
