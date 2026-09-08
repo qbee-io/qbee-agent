@@ -170,7 +170,12 @@ func Test_TarZipSlipSiblingPrefixBypass(t *testing.T) {
 
 	err := unpackTar(&tarBuffer, destPath)
 
-	escapedPath := filepath.Join(baseDir, "context-outside", "payload.txt")
+	escapedDir := filepath.Join(baseDir, "context-outside")
+	if _, statErr := os.Stat(escapedDir); statErr == nil {
+		t.Fatalf("path traversal: directory was created outside destPath at %s", escapedDir)
+	}
+
+	escapedPath := filepath.Join(escapedDir, "payload.txt")
 	if contents, readErr := os.ReadFile(escapedPath); readErr == nil {
 		t.Fatalf("path traversal: payload was written outside destPath at %s; got %q", escapedPath, contents)
 	}
