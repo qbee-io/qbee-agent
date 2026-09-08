@@ -35,3 +35,10 @@ test-src:
 
 lint:
 	docker run --rm -v $(shell pwd):/app -w /app golangci/golangci-lint:v1.55.2 golangci-lint run
+
+THIRDPARTY-LICENSES.md: thirdparty-licenses.md.template go.sum
+	rm -rf ./licenses/
+	docker run --rm -v $(shell pwd):/app -w /app golang:1.26 \
+		go run github.com/google/go-licenses/v2@latest report ./... \
+		--ignore go.qbee.io/agent \
+		--template thirdparty-licenses.md.template > THIRDPARTY-LICENSES.md
