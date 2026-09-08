@@ -19,12 +19,12 @@ package configuration
 import (
 	"context"
 	"fmt"
-	"os"
 	"path"
 	"strings"
 
 	"go.qbee.io/agent/app/inventory"
 	"go.qbee.io/agent/app/software"
+	"go.qbee.io/agent/app/utils"
 )
 
 // Parameter defines a parameters as key/value pair.
@@ -79,7 +79,7 @@ const (
 
 var systemParameters = map[string]func(ctx context.Context) (string, error){
 	"sys.host": func(ctx context.Context) (string, error) {
-		return os.Hostname()
+		return utils.Hostname()
 	},
 	"sys.pkg_arch": func(ctx context.Context) (string, error) {
 		if software.DefaultPackageManager == nil {
