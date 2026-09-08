@@ -19,11 +19,11 @@ package configuration
 import (
 	"context"
 	"net/url"
-	"os"
 	"testing"
 
 	"go.qbee.io/agent/app/inventory"
 	"go.qbee.io/agent/app/software"
+	"go.qbee.io/agent/app/utils"
 	"go.qbee.io/agent/app/utils/assert"
 	"go.qbee.io/agent/app/utils/runner"
 )
@@ -46,7 +46,7 @@ func (m *mockURLSigner) SignURL(src string) (string, error) {
 }
 
 func Test_resolveParameters(t *testing.T) {
-	hostname, err := os.Hostname()
+	hostname, err := utils.Hostname()
 	assert.NoError(t, err)
 
 	pkgArch, err := software.DefaultPackageManager.PackageArchitecture(t.Context())
@@ -209,34 +209,4 @@ func Test_UsersWithParameters(t *testing.T) {
 		"[INFO] Successfully added user '********'",
 	}
 	assert.Equal(t, reports, expectedReports)
-}
-
-func Test_sanitizeHostname(t *testing.T) {
-	tests := []struct {
-		name     string
-		hostname string
-		want     string
-	}{
-		{
-			name:     "valid hostname",
-			hostname: "valid-hostname",
-			want:     "valid-hostname",
-		},
-		{
-			name:     "hostname with invalid characters",
-			hostname: "invalid!hostname@",
-			want:     "invalidhostname",
-		},
-		{
-			name:     "hostname with spaces",
-			hostname: "host name with spaces",
-			want:     "hostnamewithspaces",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := sanitizeHostname(tt.hostname)
-			assert.Equal(t, tt.want, got)
-		})
-	}
 }

@@ -19,13 +19,12 @@ package configuration
 import (
 	"context"
 	"fmt"
-	"os"
 	"path"
-	"regexp"
 	"strings"
 
 	"go.qbee.io/agent/app/inventory"
 	"go.qbee.io/agent/app/software"
+	"go.qbee.io/agent/app/utils"
 )
 
 // Parameter defines a parameters as key/value pair.
@@ -78,22 +77,9 @@ const (
 	parameterKeyFilePrefix = "file://"
 )
 
-var hostnameRe = regexp.MustCompile("[^a-zA-Z0-9-]")
-
-// sanitizeHostname removes all characters from the hostname that are not letters, numbers, or hyphens.
-// Sanitization rules: https://man7.org/linux/man-pages/man5/hostname.5.html
-func sanitizeHostname(hostname string) string {
-	return hostnameRe.ReplaceAllString(hostname, "")
-}
-
 var systemParameters = map[string]func(ctx context.Context) (string, error){
 	"sys.host": func(ctx context.Context) (string, error) {
-		hostname, err := os.Hostname()
-		if err != nil {
-			return "", err
-		}
-
-		return sanitizeHostname(hostname), nil
+		return utils.Hostname()
 	},
 	"sys.pkg_arch": func(ctx context.Context) (string, error) {
 		if software.DefaultPackageManager == nil {

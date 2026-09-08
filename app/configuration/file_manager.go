@@ -32,6 +32,8 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"go.qbee.io/agent/app/utils"
 )
 
 const (
@@ -668,12 +670,10 @@ func resolveSourcePath(path string) (string, error) {
 		return path, nil
 	}
 
-	hostname, err := os.Hostname()
+	hostname, err := utils.Hostname()
 	if err != nil {
 		return "", fmt.Errorf("error getting hostname: %w", err)
 	}
-
-	hostname = sanitizeHostname(hostname)
 
 	path = strings.ReplaceAll(path, templateHostTag, hostname)
 
