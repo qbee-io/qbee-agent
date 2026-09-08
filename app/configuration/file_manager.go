@@ -673,6 +673,8 @@ func resolveSourcePath(path string) (string, error) {
 		return "", fmt.Errorf("error getting hostname: %w", err)
 	}
 
+	hostname = sanitizeHostname(hostname)
+
 	path = strings.ReplaceAll(path, templateHostTag, hostname)
 
 	return path, nil

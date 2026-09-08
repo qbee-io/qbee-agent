@@ -210,3 +210,33 @@ func Test_UsersWithParameters(t *testing.T) {
 	}
 	assert.Equal(t, reports, expectedReports)
 }
+
+func Test_sanitizeHostname(t *testing.T) {
+	tests := []struct {
+		name     string
+		hostname string
+		want     string
+	}{
+		{
+			name:     "valid hostname",
+			hostname: "valid-hostname",
+			want:     "valid-hostname",
+		},
+		{
+			name:     "hostname with invalid characters",
+			hostname: "invalid!hostname@",
+			want:     "invalidhostname",
+		},
+		{
+			name:     "hostname with spaces",
+			hostname: "host name with spaces",
+			want:     "hostnamewithspaces",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := sanitizeHostname(tt.hostname)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
