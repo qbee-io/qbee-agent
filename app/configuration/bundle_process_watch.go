@@ -51,7 +51,7 @@ type ProcessWatchBundle struct {
 
 // Execute ensures that watched processes are in a correct state.
 func (p ProcessWatchBundle) Execute(ctx context.Context, _ *Service) error {
-	runningProcesses, err := linux.ListRunningProcessesNames()
+	runningProcesses, err := linux.ListRunningProcessesNames(ctx)
 	if err != nil {
 		return fmt.Errorf("cannot list running processes: %w", err)
 	}

@@ -19,10 +19,11 @@ import (
 	"testing"
 
 	"go.qbee.io/agent/app/utils/assert"
+	"go.qbee.io/agent/app/utils/files"
 )
 
 func TestCollectProcessesInventory(t *testing.T) {
-	processes, err := CollectProcessesInventory()
+	processes, err := CollectProcessesInventory(t.Context())
 	if err != nil {
 		t.Fatalf("error collecting processes: %v", err)
 	}
@@ -36,4 +37,7 @@ func TestCollectProcessesInventory(t *testing.T) {
 		assert.NotEmpty(t, process.User)
 		assert.NotEmpty(t, process.Command)
 	}
+
+	// make sure that the goroutine count is back to its original value before collection
+	assert.Equal(t, files.GetGoroutineCount(), int64(0))
 }

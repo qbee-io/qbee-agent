@@ -17,14 +17,15 @@
 package metrics
 
 import (
+	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"go.qbee.io/agent/app/inventory/linux"
+	"go.qbee.io/agent/app/utils/files"
 )
 
 // LoadAverageValues contains load average metrics.
@@ -48,10 +49,10 @@ type LoadAverageValues struct {
 }
 
 // CollectLoadAverage metrics.
-func CollectLoadAverage() ([]Metric, error) {
+func CollectLoadAverage(ctx context.Context) ([]Metric, error) {
 	path := filepath.Join(linux.ProcFS, "loadavg")
 
-	data, err := os.ReadFile(path)
+	data, err := files.ReadAll(ctx, files.KernelVirtualFSReadTimeout, path)
 	if err != nil {
 		return nil, fmt.Errorf("error reading %s: %w", path, err)
 	}

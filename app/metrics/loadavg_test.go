@@ -24,7 +24,7 @@ import (
 )
 
 func TestCollectLoadAverage(t *testing.T) {
-	gotMetrics, err := CollectLoadAverage()
+	gotMetrics, err := CollectLoadAverage(t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

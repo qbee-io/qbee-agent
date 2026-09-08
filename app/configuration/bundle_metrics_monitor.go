@@ -90,7 +90,7 @@ func init() {
 // Execute the metrics monitor bundle.
 func (m *MetricsMonitorBundle) Execute(ctx context.Context, service *Service) error {
 
-	collectedMetrics := service.metrics.Collect()
+	collectedMetrics := service.metrics.Collect(ctx)
 
 	reports, err := m.EvaluateMonitors(collectedMetrics)
 	if err != nil {

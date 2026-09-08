@@ -74,7 +74,7 @@ func Test_Monitor_State_Set(t *testing.T) {
 	}
 
 	metricsService := metrics.New(nil)
-	collectedMetrics := metricsService.Collect()
+	collectedMetrics := metricsService.Collect(t.Context())
 	reports, err := metricsMonitorBundle.EvaluateMonitors(collectedMetrics)
 
 	if err != nil {
@@ -83,7 +83,7 @@ func Test_Monitor_State_Set(t *testing.T) {
 
 	assert.Equal(t, len(reports), 1)
 
-	collectedMetrics = metricsService.Collect()
+	collectedMetrics = metricsService.Collect(t.Context())
 	reports, err = metricsMonitorBundle.EvaluateMonitors(collectedMetrics)
 
 	if err != nil {
@@ -106,7 +106,7 @@ func Test_Monitor_State_Reset(t *testing.T) {
 	}
 
 	metricsService := metrics.New(nil)
-	collectedMetrics := metricsService.Collect()
+	collectedMetrics := metricsService.Collect(t.Context())
 	reports, err := metricsMonitorBundle.EvaluateMonitors(collectedMetrics)
 
 	if err != nil {
@@ -124,7 +124,7 @@ func Test_Monitor_State_Reset(t *testing.T) {
 		},
 	}
 
-	collectedMetrics = metricsService.Collect()
+	collectedMetrics = metricsService.Collect(t.Context())
 	reports, err = metricsMonitorBundle.EvaluateMonitors(collectedMetrics)
 
 	if err != nil {
@@ -133,13 +133,6 @@ func Test_Monitor_State_Reset(t *testing.T) {
 
 	// Monitor has changed value, we should get a new report
 	assert.Equal(t, len(reports), 1)
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	assert.Equal(t, len(reports), 1)
-
 }
 
 func Test_Monitor_State_Delete(t *testing.T) {
@@ -154,7 +147,7 @@ func Test_Monitor_State_Delete(t *testing.T) {
 	}
 
 	metricsService := metrics.New(nil)
-	collectedMetrics := metricsService.Collect()
+	collectedMetrics := metricsService.Collect(t.Context())
 	reports, err := metricsMonitorBundle.EvaluateMonitors(collectedMetrics)
 
 	if err != nil {

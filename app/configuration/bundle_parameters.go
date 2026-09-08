@@ -94,49 +94,49 @@ var systemParameters = map[string]func(ctx context.Context) (string, error){
 		return string(software.DefaultPackageManager.Type()), nil
 	},
 	"sys.os": func(ctx context.Context) (string, error) {
-		systemInventory, err := inventory.CollectSystemInventory(false)
+		systemInventory, err := inventory.CollectSystemInventory(ctx, false)
 		if err != nil {
 			return "", err
 		}
 		return systemInventory.System.OS, nil
 	},
 	"sys.arch": func(ctx context.Context) (string, error) {
-		systemInventory, err := inventory.CollectSystemInventory(false)
+		systemInventory, err := inventory.CollectSystemInventory(ctx, false)
 		if err != nil {
 			return "", err
 		}
 		return systemInventory.System.Architecture, nil
 	},
 	"sys.os_type": func(ctx context.Context) (string, error) {
-		systemInventory, err := inventory.CollectSystemInventory(false)
+		systemInventory, err := inventory.CollectSystemInventory(ctx, false)
 		if err != nil {
 			return "", err
 		}
 		return systemInventory.System.OSType, nil
 	},
 	"sys.flavor": func(ctx context.Context) (string, error) {
-		systemInventory, err := inventory.CollectSystemInventory(false)
+		systemInventory, err := inventory.CollectSystemInventory(ctx, false)
 		if err != nil {
 			return "", err
 		}
 		return systemInventory.System.Flavor, nil
 	},
 	"sys.agent_version": func(ctx context.Context) (string, error) {
-		systemInventory, err := inventory.CollectSystemInventory(false)
+		systemInventory, err := inventory.CollectSystemInventory(ctx, false)
 		if err != nil {
 			return "", err
 		}
 		return systemInventory.System.AgentVersion, nil
 	},
 	"sys.long_arch": func(ctx context.Context) (string, error) {
-		systemInventory, err := inventory.CollectSystemInventory(false)
+		systemInventory, err := inventory.CollectSystemInventory(ctx, false)
 		if err != nil {
 			return "", err
 		}
 		return systemInventory.System.LongArchitecture, nil
 	},
 	"sys.boot_time": func(ctx context.Context) (string, error) {
-		systemInventory, err := inventory.CollectSystemInventory(false)
+		systemInventory, err := inventory.CollectSystemInventory(ctx, false)
 		if err != nil {
 			return "", err
 		}

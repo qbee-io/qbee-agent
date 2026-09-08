@@ -24,7 +24,7 @@ import (
 )
 
 func TestCollectMemory(t *testing.T) {
-	gotMetrics, err := CollectMemory()
+	gotMetrics, err := CollectMemory(t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -39,6 +39,4 @@ func TestCollectMemory(t *testing.T) {
 	if time.Since(time.Unix(metric.Timestamp, 0)) > time.Second {
 		t.Fatalf("invalid timestamp, got: %v", metric.Timestamp)
 	}
-
-	//fmt.Printf("%#v\n", metric.Values.MemoryValues)
 }
