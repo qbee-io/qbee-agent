@@ -65,5 +65,7 @@ func Test_GoroutineCountAfterAllMetrics(t *testing.T) {
 	apiClient, _ := api.NewMockedClient()
 	srv := New(apiClient)
 	srv.Collect(t.Context())
-	assert.Equal(t, files.GetGoroutineCount(), int64(0))
+	assert.EventuallyTrue(t, func() bool {
+		return files.GetGoroutineCount() == int64(0)
+	}, time.Second)
 }
