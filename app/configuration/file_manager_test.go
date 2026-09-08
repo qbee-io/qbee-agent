@@ -442,6 +442,30 @@ func Test_downloadMetadataCompare_CompletePartialIsNotDownloadedAgain(t *testing
 	assert.True(t, errors.Is(err, fs.ErrNotExist))
 }
 
+func Test_downloadMetadataCompare_RejectsSymlinkedCompletePartial(t *testing.T) {
+	tempDir := t.TempDir()
+	dst := filepath.Join(tempDir, "file.txt")
+	target := filepath.Join(tempDir, "target.txt")
+	contents := []byte("this is the contents of the file")
+	assert.NoError(t, os.WriteFile(target, contents, 0600))
+
+	fileMetadata := &FileMetadata{
+		Tags: map[string]string{fileDigestSHA256Tag: sha256Hex(contents)},
+		Size: int64(len(contents)),
+	}
+	tmpDst := GetPartialDownloadFilePath(dst, fileMetadata.Digest())
+	assert.NoError(t, os.Symlink(target, tmpDst))
+
+	_, err := new(Service).downloadMetadataCompare(
+		context.Background(), "", "file://"+target, dst, fileMetadata)
+	if err == nil {
+		t.Fatal("expected symlinked partial download to be rejected")
+	}
+
+	_, err = os.Lstat(dst)
+	assert.True(t, errors.Is(err, fs.ErrNotExist))
+}
+
 func Test_downloadMetadataCompare_RemovesPartialDownloadsWithOtherDigest(t *testing.T) {
 	tempDir := t.TempDir()
 
@@ -480,4 +504,17 @@ func Test_downloadMetadataCompare_RemovesPartialDownloadsWithOtherDigest(t *test
 	got, err := os.ReadFile(dst)
 	assert.NoError(t, err)
 	assert.Equal(t, contents, got)
+}
+
+func Test_removeStalePartialDownloads_RemovesLegacyName(t *testing.T) {
+	tempDir := t.TempDir()
+	dst := filepath.Join(tempDir, "file.txt")
+	legacy := legacyPartialDownloadFilePath(dst)
+	assert.NoError(t, os.WriteFile(legacy, []byte("old partial"), 0600))
+
+	keep := GetPartialDownloadFilePath(dst, strings.Repeat("a", sha256.Size*2))
+	assert.NoError(t, removeStalePartialDownloads(dst, keep))
+
+	_, err := os.Stat(legacy)
+	assert.True(t, errors.Is(err, fs.ErrNotExist))
 }
