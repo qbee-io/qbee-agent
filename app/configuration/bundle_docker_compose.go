@@ -178,12 +178,12 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 }
 
 // SecretsList returns a list of all secrets.
-func (d DockerComposeBundle) SecretsList() []string {
+func (d DockerComposeBundle) SecretsList(ctx context.Context) []string {
 	var secrets []string
 
 	for _, registry := range d.RegistryAuths {
 		if registry.Password != "" {
-			secrets = append(secrets, registry.Password)
+			secrets = append(secrets, resolveParameters(ctx, registry.Password))
 		}
 	}
 

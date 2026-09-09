@@ -211,7 +211,7 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 		srv.connectivityWatchdogThreshold = 0
 	}
 
-	reporter := NewReporter(configData.CommitID, srv.reportToConsole, configData.SecretsList())
+	reporter := NewReporter(configData.CommitID, srv.reportToConsole, configData.SecretsList(ctxWithParameters))
 
 	for _, bundleName := range configData.Bundles {
 		log.Debugf("starting processing of bundle %s", bundleName)

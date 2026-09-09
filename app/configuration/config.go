@@ -16,7 +16,10 @@
 
 package configuration
 
-import "slices"
+import (
+	"context"
+	"slices"
+)
 
 // Supported configuration bundles.
 const (
@@ -58,7 +61,7 @@ type CommittedConfig struct {
 }
 
 // SecretsList returns a list of all secret values present in the CommittedConfig.
-func (cc *CommittedConfig) SecretsList() []string {
+func (cc *CommittedConfig) SecretsList(ctx context.Context) []string {
 	var secrets []string
 
 	if cc.BundleData.Parameters != nil {
@@ -66,16 +69,23 @@ func (cc *CommittedConfig) SecretsList() []string {
 	}
 
 	if cc.BundleData.DockerCompose != nil {
-		secrets = append(secrets, cc.BundleData.DockerCompose.SecretsList()...)
+		secrets = append(secrets, cc.BundleData.DockerCompose.SecretsList(ctx)...)
 	}
 
 	if cc.BundleData.DockerContainers != nil {
-		secrets = append(secrets, cc.BundleData.DockerContainers.SecretsList()...)
+		secrets = append(secrets, cc.BundleData.DockerContainers.SecretsList(ctx)...)
 	}
 
 	if cc.BundleData.PodmanContainers != nil {
-		secrets = append(secrets, cc.BundleData.PodmanContainers.SecretsList()...)
+		secrets = append(secrets, cc.BundleData.PodmanContainers.SecretsList(ctx)...)
 	}
+
+	// Sort secrets by length in descending order to avoid false-prefix-matching, e.g.:
+	// If secret is "password123", but retrned (unsorted) list is []string{"password", password123"},
+	// the secret would be then redacted as "********123" instead of "************".
+	slices.SortFunc(secrets, func(a, b string) int {
+		return len(b) - len(a)
+	})
 
 	return secrets
 }

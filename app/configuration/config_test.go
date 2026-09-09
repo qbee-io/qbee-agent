@@ -17,6 +17,7 @@
 package configuration
 
 import (
+	"context"
 	"testing"
 
 	"go.qbee.io/agent/app/utils/assert"
@@ -24,7 +25,12 @@ import (
 
 func TestCommittedConfig_SecretsList(t *testing.T) {
 	tests := []struct {
-		name     string
+		name string
+
+		// storeSecrets are placed in the resolution context, so registry passwords
+		// referencing them via $(key) can be resolved.
+		storeSecrets []Parameter
+
 		config   CommittedConfig
 		expected []string
 	}{
@@ -39,86 +45,120 @@ func TestCommittedConfig_SecretsList(t *testing.T) {
 				BundleData: BundleData{
 					Parameters: &ParametersBundle{
 						Secrets: []Parameter{
-							{Key: "db_password", Value: "param-secret-1"},
-							{Key: "api_token", Value: "param-secret-2"},
+							{Key: "db_password", Value: "param-secret-longest"},
+							{Key: "api_token", Value: "param-secret-mid"},
 						},
 					},
 				},
 			},
-			expected: []string{"param-secret-1", "param-secret-2"},
+			expected: []string{"param-secret-longest", "param-secret-mid"},
 		},
 		{
-			name: "docker compose registry secrets",
+			name: "docker compose registry secret resolved from parameter",
+			storeSecrets: []Parameter{
+				{Key: "compose_registry_password", Value: "resolved-compose-secret"},
+			},
 			config: CommittedConfig{
 				BundleData: BundleData{
 					DockerCompose: &DockerComposeBundle{
 						RegistryAuths: []RegistryAuth{
-							{Server: "gcr.io", Username: "user", Password: "compose-secret"},
+							{Server: "gcr.io", Username: "user", Password: "$(compose_registry_password)"},
 						},
 					},
 				},
 			},
-			expected: []string{"compose-secret"},
+			expected: []string{"resolved-compose-secret"},
 		},
 		{
-			name: "docker containers registry secrets",
+			name: "docker containers registry secret resolved from parameter",
+			storeSecrets: []Parameter{
+				{Key: "docker_registry_password", Value: "resolved-docker-secret"},
+			},
 			config: CommittedConfig{
 				BundleData: BundleData{
 					DockerContainers: &DockerContainersBundle{
 						RegistryAuths: []RegistryAuth{
-							{Server: "gcr.io", Username: "user", Password: "docker-secret"},
+							{Server: "gcr.io", Username: "user", Password: "$(docker_registry_password)"},
 						},
 					},
 				},
 			},
-			expected: []string{"docker-secret"},
+			expected: []string{"resolved-docker-secret"},
 		},
 		{
-			name: "podman containers registry secrets",
+			name: "podman containers registry secret resolved from parameter",
+			storeSecrets: []Parameter{
+				{Key: "podman_registry_password", Value: "resolved-podman-secret"},
+			},
 			config: CommittedConfig{
 				BundleData: BundleData{
 					PodmanContainers: &PodmanContainerBundle{
 						RegistryAuths: []RegistryAuth{
-							{Server: "gcr.io", Username: "user", Password: "podman-secret"},
+							{Server: "gcr.io", Username: "user", Password: "$(podman_registry_password)"},
 						},
 					},
 				},
 			},
-			expected: []string{"podman-secret"},
+			expected: []string{"resolved-podman-secret"},
 		},
 		{
-			name: "secrets from all bundles",
+			name: "secrets from all bundles sorted by length descending",
+			storeSecrets: []Parameter{
+				{Key: "docker_registry_password", Value: "docker-secret"},
+			},
 			config: CommittedConfig{
 				BundleData: BundleData{
 					Parameters: &ParametersBundle{
 						Secrets: []Parameter{
-							{Key: "db_password", Value: "param-secret"},
+							{Key: "db_password", Value: "parameters-registry-secret"},
 						},
 					},
 					DockerCompose: &DockerComposeBundle{
 						RegistryAuths: []RegistryAuth{
-							{Server: "gcr.io", Username: "user", Password: "compose-secret"},
+							{Server: "gcr.io", Username: "user", Password: "docker-compose-secret"},
 						},
 					},
 					DockerContainers: &DockerContainersBundle{
 						RegistryAuths: []RegistryAuth{
-							{Server: "gcr.io", Username: "user", Password: "docker-secret"},
+							{Server: "gcr.io", Username: "user", Password: "$(docker_registry_password)"},
 						},
 					},
 					PodmanContainers: &PodmanContainerBundle{
 						RegistryAuths: []RegistryAuth{
-							{Server: "gcr.io", Username: "user", Password: "podman-secret"},
+							{Server: "gcr.io", Username: "user", Password: "podman"},
 						},
 					},
 				},
 			},
-			expected: []string{"param-secret", "compose-secret", "docker-secret", "podman-secret"},
+			expected: []string{
+				"parameters-registry-secret",
+				"docker-compose-secret",
+				"docker-secret",
+				"podman",
+			},
+		},
+		{
+			name: "sorted by length descending to avoid false-prefix-matching",
+			config: CommittedConfig{
+				BundleData: BundleData{
+					Parameters: &ParametersBundle{
+						Secrets: []Parameter{
+							{Key: "short", Value: "password"},
+							{Key: "long", Value: "password123"},
+						},
+					},
+				},
+			},
+			expected: []string{"password123", "password"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.config.SecretsList(), tt.expected)
+			paramsBundle := &ParametersBundle{Secrets: tt.storeSecrets}
+			ctx := paramsBundle.Context(context.Background(), new(mockURLSigner))
+
+			assert.Equal(t, tt.config.SecretsList(ctx), tt.expected)
 		})
 	}
 }

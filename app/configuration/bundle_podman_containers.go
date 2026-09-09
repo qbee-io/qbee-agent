@@ -98,12 +98,12 @@ func (p PodmanContainerBundle) Execute(ctx context.Context, service *Service) er
 }
 
 // SecretsList returns a list of all secrets.
-func (p PodmanContainerBundle) SecretsList() []string {
+func (p PodmanContainerBundle) SecretsList(ctx context.Context) []string {
 	var secrets []string
 
 	for _, registry := range p.RegistryAuths {
 		if registry.Password != "" {
-			secrets = append(secrets, registry.Password)
+			secrets = append(secrets, resolveParameters(ctx, registry.Password))
 		}
 	}
 
