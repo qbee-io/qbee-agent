@@ -378,10 +378,12 @@ func Test_GetPartialDownloadFilePath(t *testing.T) {
 	})
 }
 
-func Test_ensurePrivatePartialDownloadDirectory(t *testing.T) {
+func Test_openPrivatePartialDownloadDirectory(t *testing.T) {
 	t.Run("creates private directory", func(t *testing.T) {
 		tmpDst := GetPartialDownloadFilePath(filepath.Join(t.TempDir(), "file.txt"), strings.Repeat("a", 64))
-		assert.NoError(t, ensurePrivatePartialDownloadDirectory(tmpDst))
+		dir, err := openPrivatePartialDownloadDirectory(tmpDst)
+		assert.NoError(t, err)
+		defer func() { _ = dir.Close() }()
 
 		info, err := os.Stat(filepath.Dir(tmpDst))
 		assert.NoError(t, err)
@@ -394,7 +396,7 @@ func Test_ensurePrivatePartialDownloadDirectory(t *testing.T) {
 		target := filepath.Join(tempDir, "attacker-directory")
 		assert.NoError(t, os.Mkdir(target, 0700))
 		assert.NoError(t, os.Symlink(target, filepath.Dir(tmpDst)))
-		if err := ensurePrivatePartialDownloadDirectory(tmpDst); err == nil {
+		if _, err := openPrivatePartialDownloadDirectory(tmpDst); err == nil {
 			t.Fatal("expected symlinked partial download directory to be rejected")
 		}
 	})
@@ -531,17 +533,4 @@ func Test_downloadMetadataCompare_RemovesPartialDownloadsWithOtherDigest(t *test
 	got, err := os.ReadFile(dst)
 	assert.NoError(t, err)
 	assert.Equal(t, contents, got)
-}
-
-func Test_removeStalePartialDownloads_RemovesLegacyName(t *testing.T) {
-	tempDir := t.TempDir()
-	dst := filepath.Join(tempDir, "file.txt")
-	legacy := legacyPartialDownloadFilePath(dst)
-	assert.NoError(t, os.WriteFile(legacy, []byte("old partial"), 0600))
-
-	keep := GetPartialDownloadFilePath(dst, strings.Repeat("a", sha256.Size*2))
-	assert.NoError(t, removeStalePartialDownloads(dst, keep))
-
-	_, err := os.Stat(legacy)
-	assert.True(t, errors.Is(err, fs.ErrNotExist))
 }
