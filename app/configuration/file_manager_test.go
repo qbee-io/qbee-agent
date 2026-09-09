@@ -348,8 +348,8 @@ func Test_GetPartialDownloadFilePath(t *testing.T) {
 
 	t.Run("includes the digest and stays in the destination directory", func(t *testing.T) {
 		got := GetPartialDownloadFilePath("/var/lib/test.txt", validDigestA)
-		assert.Equal(t, filepath.Dir(got), "/var/lib")
-		assert.True(t, strings.HasSuffix(got, "."+validDigestA+".part"))
+		assert.Equal(t, filepath.Dir(filepath.Dir(got)), "/var/lib")
+		assert.Equal(t, filepath.Base(got), validDigestA+".part")
 	})
 
 	t.Run("different digests produce different paths", func(t *testing.T) {
@@ -359,15 +359,15 @@ func Test_GetPartialDownloadFilePath(t *testing.T) {
 	})
 
 	t.Run("different destinations produce paths where neither basename is a prefix of the other", func(t *testing.T) {
-		a := filepath.Base(GetPartialDownloadFilePath("/var/lib/test.txt", validDigestA))
-		b := filepath.Base(GetPartialDownloadFilePath("/var/lib/test.txt.other", validDigestA))
+		a := filepath.Base(filepath.Dir(GetPartialDownloadFilePath("/var/lib/test.txt", validDigestA)))
+		b := filepath.Base(filepath.Dir(GetPartialDownloadFilePath("/var/lib/test.txt.other", validDigestA)))
 		assert.NotEqual(t, a, b)
 		assert.False(t, strings.HasPrefix(a, b) || strings.HasPrefix(b, a))
 	})
 
 	t.Run("malformed digests are hashed into a safe fixed-width identifier", func(t *testing.T) {
 		got := GetPartialDownloadFilePath("/var/lib/test.txt", "../../../etc/passwd")
-		assert.Equal(t, filepath.Dir(got), "/var/lib")
+		assert.Equal(t, filepath.Dir(filepath.Dir(got)), "/var/lib")
 		assert.False(t, strings.Contains(filepath.Base(got), "/"))
 	})
 
@@ -375,6 +375,28 @@ func Test_GetPartialDownloadFilePath(t *testing.T) {
 		longName := strings.Repeat("a", 300)
 		got := filepath.Base(GetPartialDownloadFilePath("/var/lib/"+longName, validDigestA))
 		assert.False(t, len(got) > 255)
+	})
+}
+
+func Test_ensurePrivatePartialDownloadDirectory(t *testing.T) {
+	t.Run("creates private directory", func(t *testing.T) {
+		tmpDst := GetPartialDownloadFilePath(filepath.Join(t.TempDir(), "file.txt"), strings.Repeat("a", 64))
+		assert.NoError(t, ensurePrivatePartialDownloadDirectory(tmpDst))
+
+		info, err := os.Stat(filepath.Dir(tmpDst))
+		assert.NoError(t, err)
+		assert.Equal(t, info.Mode().Perm(), os.FileMode(0700))
+	})
+
+	t.Run("rejects symlink", func(t *testing.T) {
+		tempDir := t.TempDir()
+		tmpDst := GetPartialDownloadFilePath(filepath.Join(tempDir, "file.txt"), strings.Repeat("a", 64))
+		target := filepath.Join(tempDir, "attacker-directory")
+		assert.NoError(t, os.Mkdir(target, 0700))
+		assert.NoError(t, os.Symlink(target, filepath.Dir(tmpDst)))
+		if err := ensurePrivatePartialDownloadDirectory(tmpDst); err == nil {
+			t.Fatal("expected symlinked partial download directory to be rejected")
+		}
 	})
 }
 
@@ -423,6 +445,7 @@ func Test_downloadMetadataCompare_CompletePartialIsNotDownloadedAgain(t *testing
 	}
 
 	tmpDst := GetPartialDownloadFilePath(dst, fileMetadata.Digest())
+	assert.NoError(t, os.Mkdir(filepath.Dir(tmpDst), 0700))
 	assert.NoError(t, os.WriteFile(tmpDst, contents, 0600))
 
 	// a source which cannot be read at all - the fully downloaded partial file must be
@@ -440,6 +463,8 @@ func Test_downloadMetadataCompare_CompletePartialIsNotDownloadedAgain(t *testing
 
 	_, err = os.Stat(tmpDst)
 	assert.True(t, errors.Is(err, fs.ErrNotExist))
+	_, err = os.Stat(filepath.Dir(tmpDst))
+	assert.True(t, errors.Is(err, fs.ErrNotExist))
 }
 
 func Test_downloadMetadataCompare_RejectsSymlinkedCompletePartial(t *testing.T) {
@@ -454,6 +479,7 @@ func Test_downloadMetadataCompare_RejectsSymlinkedCompletePartial(t *testing.T) 
 		Size: int64(len(contents)),
 	}
 	tmpDst := GetPartialDownloadFilePath(dst, fileMetadata.Digest())
+	assert.NoError(t, os.Mkdir(filepath.Dir(tmpDst), 0700))
 	assert.NoError(t, os.Symlink(target, tmpDst))
 
 	_, err := new(Service).downloadMetadataCompare(
@@ -482,6 +508,7 @@ func Test_downloadMetadataCompare_RemovesPartialDownloadsWithOtherDigest(t *test
 
 	// a leftover partial download of the same destination, but of previous contents
 	stalePartial := GetPartialDownloadFilePath(dst, sha256Hex([]byte("previous contents")))
+	assert.NoError(t, os.Mkdir(filepath.Dir(stalePartial), 0700))
 	assert.NoError(t, os.WriteFile(stalePartial, []byte("previous"), 0600))
 
 	// an unrelated file in the same directory which must be left alone

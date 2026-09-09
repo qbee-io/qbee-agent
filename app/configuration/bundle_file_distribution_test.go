@@ -437,6 +437,7 @@ func Test_ResumeDownload(t *testing.T) {
 
 	// a leftover partial download of the same destination, but of different contents
 	stalePartialFilePath := configuration.GetPartialDownloadFilePath(destinationPath, strings.Repeat("a", 64))
+	partialDirectoryPath := filepath.Dir(partialFilePath)
 
 	localFileRef := "file://" + sourcePath
 	agentConfig := configuration.CommittedConfig{
@@ -468,6 +469,8 @@ func Test_ResumeDownload(t *testing.T) {
 			r.MustExec("rm", "-f", destinationPath)
 			r.MustExec("rm", "-f", partialFilePath)
 			r.MustExec("rm", "-f", stalePartialFilePath)
+			r.MustExec("mkdir", "-p", partialDirectoryPath)
+			r.MustExec("chmod", "0700", partialDirectoryPath)
 
 			// write partial file to cache, all users should be able to delete/read it
 			r.CreateFile(partialFilePath, []byte(tt.existingContents))
@@ -475,6 +478,7 @@ func Test_ResumeDownload(t *testing.T) {
 
 			// make sure the unprivileged user can read the file if needed
 			if r.GetUnprivileged() {
+				r.MustExec("chown", runner.UnprivilegedUser+":"+runner.UnprivilegedUser, partialDirectoryPath)
 				r.MustExec("chown", runner.UnprivilegedUser+":"+runner.UnprivilegedUser, partialFilePath)
 				r.MustExec("chown", runner.UnprivilegedUser+":"+runner.UnprivilegedUser, stalePartialFilePath)
 			}
@@ -486,6 +490,8 @@ func Test_ResumeDownload(t *testing.T) {
 
 			// partial downloads for other digests must always be cleaned up
 			_, err := r.Exec("test", "-e", stalePartialFilePath)
+			assert.NotEqual(t, err, nil)
+			_, err = r.Exec("test", "-e", partialDirectoryPath)
 			assert.NotEqual(t, err, nil)
 
 			if tt.expectSuccess {

@@ -149,18 +149,27 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 		return false, err
 	}
 
-	// partial download path, kept in the destination directory so the final move is atomic
+	// partial download path, kept in a private directory on the destination filesystem
+	// so the final move is atomic and unprivileged users cannot replace the partial file
 	tmpDst := GetPartialDownloadFilePath(dst, fileMetadata.Digest())
-
-	// drop partial downloads for the same destination made for a different digest
-	if err = removeStalePartialDownloads(dst, tmpDst); err != nil {
-		return false, err
-	}
 
 	// check local file create data
 	fileCreateData, err := determineFileCreateData(dst)
 	if err != nil {
 		return false, fmt.Errorf("error determining local fs data: %w", err)
+	}
+
+	if err = makeDirectories(dst, fileManagerDefaultDirectoryPermission, fileCreateData.uid, fileCreateData.gid); err != nil {
+		return false, err
+	}
+
+	if err = ensurePrivatePartialDownloadDirectory(tmpDst); err != nil {
+		return false, err
+	}
+
+	// drop partial downloads for the same destination made for a different digest
+	if err = removeStalePartialDownloads(dst, tmpDst); err != nil {
+		return false, err
 	}
 
 	// find size of the already downloaded part if it exists
@@ -263,6 +272,7 @@ func finalizePartialDownload(
 	if !fileReady {
 		// in case of error, remove the partial file
 		_ = os.Remove(tmpDst)
+		_ = removePartialDownloadDirectory(tmpDst)
 		return false, fmt.Errorf("downloaded file %s is incomplete or has invalid contents", src)
 	}
 
@@ -275,6 +285,9 @@ func finalizePartialDownload(
 
 	if err = os.Rename(tmpDst, dst); err != nil {
 		return false, fmt.Errorf("error renaming file %s to %s: %w", tmpDst, dst, err)
+	}
+	if err = removePartialDownloadDirectory(tmpDst); err != nil {
+		return false, err
 	}
 
 	ReportInfo(ctx, nil, msgWithLabel(label, "Successfully downloaded file %s to %s"), src, dst)
@@ -778,6 +791,7 @@ func resolveDestinationPath(source, destination string) (string, error) {
 }
 
 const partialDownloadSuffix = ".part"
+const partialDownloadDirectorySuffix = ".qbee-partials"
 
 // isValidHexDigest reports whether digest is a well-formed hex-encoded SHA-256 or MD5 digest.
 func isValidHexDigest(digest string) bool {
@@ -816,7 +830,7 @@ func partialDownloadNameID(path string) string {
 }
 
 // GetPartialDownloadFilePath returns the file path for a partial download of a file with expected digest.
-// The partial file is placed in the destination directory, so the final move is atomic.
+// The partial file is placed in a private subdirectory on the destination filesystem.
 func GetPartialDownloadFilePath(path, digest string) string {
 	if digest == "" {
 		digest = "unknown"
@@ -824,14 +838,63 @@ func GetPartialDownloadFilePath(path, digest string) string {
 		digest = safeDigestComponent(digest)
 	}
 
-	// produces a path like .<destination-id>.<digest>.part
-	name := "." + partialDownloadNameID(path) + "." + digest + partialDownloadSuffix
+	// produces a path like .<destination-id>.qbee-partials/<digest>.part
+	directory := "." + partialDownloadNameID(path) + partialDownloadDirectorySuffix
+	name := digest + partialDownloadSuffix
 
-	return filepath.Join(filepath.Dir(path), name)
+	return filepath.Join(filepath.Dir(path), directory, name)
 }
 
 func legacyPartialDownloadFilePath(path string) string {
 	return filepath.Join(filepath.Dir(path), "."+filepath.Base(path)+partialDownloadSuffix)
+}
+
+func ensurePrivatePartialDownloadDirectory(tmpDst string) error {
+	dirPath := filepath.Dir(tmpDst)
+	parent, err := openDirectoryAnchored(filepath.Dir(dirPath))
+	if err != nil {
+		return fmt.Errorf("error opening partial download parent directory: %w", err)
+	}
+	defer func() { _ = parent.Close() }()
+
+	dirName := filepath.Base(dirPath)
+	if err = syscall.Mkdirat(int(parent.Fd()), dirName, 0700); err != nil && !errors.Is(err, fs.ErrExist) {
+		return fmt.Errorf("error creating partial download directory %s: %w", dirPath, err)
+	}
+
+	fd, err := syscall.Openat(int(parent.Fd()), dirName,
+		os.O_RDONLY|syscall.O_DIRECTORY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
+	if err != nil {
+		return fmt.Errorf("error opening partial download directory %s: %w", dirPath, err)
+	}
+
+	dir := os.NewFile(uintptr(fd), dirPath)
+	defer func() { _ = dir.Close() }()
+
+	info, err := dir.Stat()
+	if err != nil {
+		return fmt.Errorf("error checking partial download directory %s: %w", dirPath, err)
+	}
+
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || !info.IsDir() || int(stat.Uid) != os.Geteuid() {
+		return fmt.Errorf("partial download directory %s is not owned by the agent", dirPath)
+	}
+
+	if err = dir.Chmod(0700); err != nil {
+		return fmt.Errorf("error securing partial download directory %s: %w", dirPath, err)
+	}
+
+	return nil
+}
+
+func removePartialDownloadDirectory(tmpDst string) error {
+	dirPath := filepath.Dir(tmpDst)
+	if err := os.Remove(dirPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("error removing partial download directory %s: %w", dirPath, err)
+	}
+
+	return nil
 }
 
 func openDirectoryAnchored(dirPath string) (*os.File, error) {
@@ -864,42 +927,60 @@ func openDirectoryAnchored(dirPath string) (*os.File, error) {
 
 // removeStalePartialDownloads removes partial downloads of dst which don't match the keep path.
 func removeStalePartialDownloads(dst, keep string) error {
-	dirPath := filepath.Dir(dst)
+	dirPath := filepath.Dir(keep)
 
 	dir, err := openDirectoryAnchored(dirPath)
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("error opening directory %s: %w", dirPath, err)
+		}
+	} else {
+		defer func() { _ = dir.Close() }()
+
+		entries, readErr := dir.ReadDir(-1)
+		if readErr != nil {
+			return fmt.Errorf("error listing directory %s: %w", dirPath, readErr)
+		}
+
+		keepName := filepath.Base(keep)
+		for _, entry := range entries {
+			name := entry.Name()
+			if name == keepName || entry.IsDir() || !strings.HasSuffix(name, partialDownloadSuffix) {
+				continue
+			}
+
+			if err = syscall.Unlinkat(int(dir.Fd()), name); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return fmt.Errorf("error removing stale partial download %s: %w", name, err)
+			}
+		}
+	}
+
+	parentPath := filepath.Dir(dst)
+	parent, err := openDirectoryAnchored(parentPath)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil
 		}
-
-		return fmt.Errorf("error opening directory %s: %w", dirPath, err)
+		return fmt.Errorf("error opening directory %s: %w", parentPath, err)
 	}
-	defer func() {
-		_ = dir.Close()
-	}()
+	defer func() { _ = parent.Close() }()
 
-	entries, err := dir.ReadDir(-1)
+	entries, err := parent.ReadDir(-1)
 	if err != nil {
-		return fmt.Errorf("error listing directory %s: %w", dirPath, err)
+		return fmt.Errorf("error listing directory %s: %w", parentPath, err)
 	}
 
 	prefix := "." + partialDownloadNameID(dst) + "."
-	keepName := filepath.Base(keep)
 	legacyName := filepath.Base(legacyPartialDownloadFilePath(dst))
-
 	for _, entry := range entries {
 		name := entry.Name()
-
-		if name == keepName || entry.IsDir() {
+		if entry.IsDir() || (name != legacyName &&
+			(!strings.HasPrefix(name, prefix) || !strings.HasSuffix(name, partialDownloadSuffix))) {
 			continue
 		}
 
-		if name != legacyName && (!strings.HasPrefix(name, prefix) || !strings.HasSuffix(name, partialDownloadSuffix)) {
-			continue
-		}
-
-		if err = syscall.Unlinkat(int(dir.Fd()), name); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("error removing stale partial download %s: %w", name, err)
+		if err = syscall.Unlinkat(int(parent.Fd()), name); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("error removing legacy partial download %s: %w", name, err)
 		}
 	}
 
