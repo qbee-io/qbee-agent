@@ -57,6 +57,29 @@ type CommittedConfig struct {
 	EdgeURL string `json:"edge_url"`
 }
 
+// SecretsList returns a list of all secret values present in the CommittedConfig.
+func (cc *CommittedConfig) SecretsList() []string {
+	var secrets []string
+
+	if cc.BundleData.Parameters != nil {
+		secrets = append(secrets, cc.BundleData.Parameters.SecretsList()...)
+	}
+
+	if cc.BundleData.DockerCompose != nil {
+		secrets = append(secrets, cc.BundleData.DockerCompose.SecretsList()...)
+	}
+
+	if cc.BundleData.DockerContainers != nil {
+		secrets = append(secrets, cc.BundleData.DockerContainers.SecretsList()...)
+	}
+
+	if cc.BundleData.PodmanContainers != nil {
+		secrets = append(secrets, cc.BundleData.PodmanContainers.SecretsList()...)
+	}
+
+	return secrets
+}
+
 // HasBundle returns true if bundleName is set in the Bundles list.
 func (cc *CommittedConfig) HasBundle(bundleName string) bool {
 	return slices.Contains(cc.Bundles, bundleName)

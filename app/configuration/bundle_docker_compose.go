@@ -177,6 +177,19 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 	return nil
 }
 
+// SecretsList returns a list of all secrets.
+func (d DockerComposeBundle) SecretsList() []string {
+	var secrets []string
+
+	for _, registry := range d.RegistryAuths {
+		if registry.Password != "" {
+			secrets = append(secrets, registry.Password)
+		}
+	}
+
+	return secrets
+}
+
 // projectStatus is a project that is running in the system.
 type projectStatus struct {
 	Name   string `json:"Name"`

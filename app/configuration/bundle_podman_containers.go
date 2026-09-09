@@ -96,3 +96,16 @@ func (p PodmanContainerBundle) Execute(ctx context.Context, service *Service) er
 
 	return nil
 }
+
+// SecretsList returns a list of all secrets.
+func (p PodmanContainerBundle) SecretsList() []string {
+	var secrets []string
+
+	for _, registry := range p.RegistryAuths {
+		if registry.Password != "" {
+			secrets = append(secrets, registry.Password)
+		}
+	}
+
+	return secrets
+}
