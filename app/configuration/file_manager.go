@@ -309,7 +309,7 @@ func finalizePartialDownload(
 	}
 
 	if err = removePartialDownloadDirectory(tmpDst); err != nil {
-		return false, err
+		ReportWarning(ctx, err, "Unable to remove partial download directory %s", filepath.Dir(tmpDst))
 	}
 
 	ReportInfo(ctx, nil, msgWithLabel(label, "Successfully downloaded file %s to %s"), src, dst)
