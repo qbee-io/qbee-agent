@@ -220,7 +220,7 @@ func preparePartialDownload(dst string, fileMetadata *FileMetadata, fileCreateDa
 	}
 
 	// the partial download is larger than the expected file size, it is considered invalid and will be removed.
-	if partial.offset > fileMetadata.Size {
+	if fileMetadata.Size > 0 && partial.offset > fileMetadata.Size {
 		if err = syscall.Unlinkat(int(partial.directory.Fd()), partial.name); err != nil {
 			_ = partial.directory.Close()
 			return nil, fmt.Errorf("error removing invalid partial download %s: %w", partial.path, err)
@@ -338,7 +338,7 @@ func finalizePartialDownload(
 		return fmt.Errorf("error setting permissions on %s: %w", partial.path, err)
 	}
 
-	dstDir, err := os.Open(filepath.Dir(dst))
+	dstDir, err := openDirectoryAnchored(filepath.Dir(dst))
 	if err != nil {
 		return fmt.Errorf("error opening destination directory for %s: %w", dst, err)
 	}
