@@ -164,7 +164,7 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 
 	// the partial download already holds the full file, so requesting more bytes would fail with HTTP 416
 	if fileMetadata.Size > 0 && partial.offset == fileMetadata.Size {
-		return finalizePartialDownload(ctx, label, src, dst, partial.directory, partial.name, partial.path, fileMetadata, fileCreateData)
+		return srv.finalizeDownloadedFile(ctx, label, src, dst, partial, fileMetadata, fileCreateData)
 	}
 
 	// check if there is enough disk space, do not check if size is zero (unknown)
@@ -177,7 +177,7 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 		return false, err
 	}
 
-	return finalizePartialDownload(ctx, label, src, dst, partial.directory, partial.name, partial.path, fileMetadata, fileCreateData)
+	return srv.finalizeDownloadedFile(ctx, label, src, dst, partial, fileMetadata, fileCreateData)
 }
 
 type partialDownload struct {
@@ -259,6 +259,26 @@ func (srv *Service) downloadPartialFile(ctx context.Context, src string, partial
 	return nil
 }
 
+func (srv *Service) finalizeDownloadedFile(
+	ctx context.Context,
+	label, src, dst string,
+	partial *partialDownload,
+	fileMetadata *FileMetadata,
+	fileCreateData *fileCreateData,
+) (bool, error) {
+	if err := finalizePartialDownload(dst, partial, fileMetadata, fileCreateData); err != nil {
+		return false, err
+	}
+
+	if err := removePartialDownloadDirectory(partial.path); err != nil {
+		ReportWarning(ctx, err, "Unable to remove partial download directory %s", filepath.Dir(partial.path))
+	}
+
+	ReportInfo(ctx, nil, msgWithLabel(label, "Successfully downloaded file %s to %s"), src, dst)
+
+	return true, nil
+}
+
 // finalizePartialDownload verifies a fully downloaded partial file and moves it to its destination.
 //
 // The entry is opened for verification and later renamed relative to partialDir - the fd of the
@@ -269,71 +289,63 @@ func (srv *Service) downloadPartialFile(ctx context.Context, src string, partial
 // dst (CWE-367). Anchoring both the open and the rename to the same directory fd guarantees the
 // entry renamed is the entry that was verified, regardless of what happens to the pathname.
 func finalizePartialDownload(
-	ctx context.Context,
-	label, src, dst string,
-	partialDir *os.File,
-	name, tmpDst string,
+	dst string,
+	partial *partialDownload,
 	fileMetadata *FileMetadata,
 	fileCreateData *fileCreateData,
-) (bool, error) {
-	rawFd, err := syscall.Openat(int(partialDir.Fd()), name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
+) error {
+	rawFd, err := syscall.Openat(int(partial.directory.Fd()), partial.name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return false, fmt.Errorf("partial download %s disappeared before finalization", tmpDst)
+			return fmt.Errorf("partial download %s disappeared before finalization", partial.path)
 		}
 
-		return false, fmt.Errorf("error opening partial download %s: %w", tmpDst, err)
+		return fmt.Errorf("error opening partial download %s: %w", partial.path, err)
 	}
 
-	fd := os.NewFile(uintptr(rawFd), tmpDst)
+	fd := os.NewFile(uintptr(rawFd), partial.path)
 	defer func() { _ = fd.Close() }()
 
 	fileInfo, err := fd.Stat()
 	if err != nil {
-		return false, fmt.Errorf("error checking partial download %s: %w", tmpDst, err)
+		return fmt.Errorf("error checking partial download %s: %w", partial.path, err)
 	}
 
 	if !fileInfo.Mode().IsRegular() {
-		return false, fmt.Errorf("refusing to finalize non-regular partial download %s", tmpDst)
+		return fmt.Errorf("refusing to finalize non-regular partial download %s", partial.path)
 	}
 
 	fileReady, err := isFileReadyFd(fd, fileMetadata)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	if !fileReady {
 		// in case of error, remove the partial file
-		_ = syscall.Unlinkat(int(partialDir.Fd()), name)
-		_ = removePartialDownloadDirectory(tmpDst)
-		return false, fmt.Errorf("downloaded file %s is incomplete or has invalid contents", src)
+		_ = syscall.Unlinkat(int(partial.directory.Fd()), partial.name)
+		_ = removePartialDownloadDirectory(partial.path)
+		return fmt.Errorf("downloaded file is incomplete or has invalid contents")
 	}
 
 	if err = fd.Chown(fileCreateData.uid, fileCreateData.gid); err != nil {
-		return false, fmt.Errorf("error setting owner on %s: %w", tmpDst, err)
+		return fmt.Errorf("error setting owner on %s: %w", partial.path, err)
 	}
 	if err = fd.Chmod(fileManagerDefaultFilePermission); err != nil {
-		return false, fmt.Errorf("error setting permissions on %s: %w", tmpDst, err)
+		return fmt.Errorf("error setting permissions on %s: %w", partial.path, err)
 	}
 
 	dstDir, err := os.Open(filepath.Dir(dst))
 	if err != nil {
-		return false, fmt.Errorf("error opening destination directory for %s: %w", dst, err)
+		return fmt.Errorf("error opening destination directory for %s: %w", dst, err)
 	}
 
 	defer func() { _ = dstDir.Close() }()
 
-	if err = syscall.Renameat(int(partialDir.Fd()), name, int(dstDir.Fd()), filepath.Base(dst)); err != nil {
-		return false, fmt.Errorf("error renaming file %s to %s: %w", tmpDst, dst, err)
+	if err = syscall.Renameat(int(partial.directory.Fd()), partial.name, int(dstDir.Fd()), filepath.Base(dst)); err != nil {
+		return fmt.Errorf("error renaming file %s to %s: %w", partial.path, dst, err)
 	}
 
-	if err = removePartialDownloadDirectory(tmpDst); err != nil {
-		ReportWarning(ctx, err, "Unable to remove partial download directory %s", filepath.Dir(tmpDst))
-	}
-
-	ReportInfo(ctx, nil, msgWithLabel(label, "Successfully downloaded file %s to %s"), src, dst)
-
-	return true, nil
+	return nil
 }
 
 const localFileSchema = "file://"
