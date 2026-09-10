@@ -205,11 +205,13 @@ func preparePartialDownload(dst string, fileMetadata *FileMetadata, fileCreateDa
 		path:      path,
 	}
 
+	// remove any stale partial downloads before proceeding
 	if err = removeStalePartialDownloads(partial.directory, partial.name); err != nil {
 		_ = partial.directory.Close()
 		return nil, err
 	}
 
+	// check the current size of the partial download, if it exists
 	if fileInfo, statErr := statAt(partial.directory, partial.name); statErr == nil {
 		partial.offset = fileInfo.Size()
 	} else if !errors.Is(statErr, fs.ErrNotExist) {
@@ -217,6 +219,7 @@ func preparePartialDownload(dst string, fileMetadata *FileMetadata, fileCreateDa
 		return nil, fmt.Errorf("error checking partial download %s: %w", partial.path, statErr)
 	}
 
+	// the partial download is larger than the expected file size, it is considered invalid and will be removed.
 	if partial.offset > fileMetadata.Size {
 		if err = syscall.Unlinkat(int(partial.directory.Fd()), partial.name); err != nil {
 			_ = partial.directory.Close()
@@ -235,6 +238,7 @@ func (srv *Service) downloadPartialFile(ctx context.Context, src string, partial
 	}
 	defer func() { _ = srcFile.Close() }()
 
+	// create the destination file for the partial download
 	dstFile, err := createFileAt(partial.directory, partial.name, fileCreateData, fileManagerDefaultFilePermission, partial.offset == 0)
 	if err != nil {
 		return fmt.Errorf("error creating file %s: %w", partial.path, err)
@@ -986,6 +990,8 @@ func createFileAt(
 	return file, nil
 }
 
+// removePartialDownloadDirectory removes the directory containing the temporary destination file for a partial download.
+// assumes that the tmpDst directory is empty as this is called after renaming the partial download to its final destination.
 func removePartialDownloadDirectory(tmpDst string) error {
 	dirPath := filepath.Dir(tmpDst)
 	if err := os.Remove(dirPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -995,6 +1001,8 @@ func removePartialDownloadDirectory(tmpDst string) error {
 	return nil
 }
 
+// openDirectoryAnchored opens a directory at dirPath, resolving it relative to the filesystem root.
+// any symlinks in the path are not followed.
 func openDirectoryAnchored(dirPath string) (*os.File, error) {
 	dirPath = filepath.Clean(dirPath)
 	root := "."
@@ -1006,8 +1014,8 @@ func openDirectoryAnchored(dirPath string) (*os.File, error) {
 		return nil, err
 	}
 
-	components := strings.Split(strings.TrimPrefix(dirPath, string(filepath.Separator)), string(filepath.Separator))
-	for _, component := range components {
+	components := strings.SplitSeq(strings.TrimPrefix(dirPath, string(filepath.Separator)), string(filepath.Separator))
+	for component := range components {
 		if component == "" || component == "." {
 			continue
 		}
@@ -1037,6 +1045,7 @@ func removeStalePartialDownloads(dir *os.File, keepName string) error {
 			continue
 		}
 
+		// remove the stale partial download
 		if err = syscall.Unlinkat(int(dir.Fd()), name); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("error removing stale partial download %s: %w", name, err)
 		}
