@@ -948,9 +948,9 @@ func openPrivatePartialDownloadDirectory(tmpDst string) (*os.File, error) {
 	return dir, nil
 }
 
-// statAt returns file info for name, resolved relative to dir's fd rather than by pathname.
+// statAt returns file info for a regular file named name, resolved relative to dir's fd.
 func statAt(dir *os.File, name string) (os.FileInfo, error) {
-	fd, err := syscall.Openat(int(dir.Fd()), name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
+	fd, err := syscall.Openat(int(dir.Fd()), name, os.O_RDONLY|syscall.O_NONBLOCK|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -958,8 +958,15 @@ func statAt(dir *os.File, name string) (os.FileInfo, error) {
 	f := os.NewFile(uintptr(fd), name)
 	defer func() { _ = f.Close() }()
 
-	return f.Stat()
-}
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("partial download %s is not a regular file", name)
+	}
+
+	return info, nil
 
 // createFileAt creates (or truncates) name within dir and sets its ownership, resolving the
 // entry relative to dir's fd rather than by pathname.
