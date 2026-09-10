@@ -967,6 +967,7 @@ func statAt(dir *os.File, name string) (os.FileInfo, error) {
 	}
 
 	return info, nil
+}
 
 // createFileAt creates (or truncates) name within dir and sets its ownership, resolving the
 // entry relative to dir's fd rather than by pathname.
