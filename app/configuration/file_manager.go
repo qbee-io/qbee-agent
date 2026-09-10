@@ -149,95 +149,114 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 		return false, err
 	}
 
-	// partial download path, kept in a private directory on the destination filesystem
-	// so the final move is atomic and unprivileged users cannot replace the partial file
-	tmpDst := GetPartialDownloadFilePath(dst, fileMetadata.Digest())
-	partialName := filepath.Base(tmpDst)
-
 	// check local file create data
 	fileCreateData, err := determineFileCreateData(dst)
 	if err != nil {
 		return false, fmt.Errorf("error determining local fs data: %w", err)
 	}
 
-	if err = makeDirectories(dst, fileManagerDefaultDirectoryPermission, fileCreateData.uid, fileCreateData.gid); err != nil {
-		return false, err
-	}
-
-	// partialDir is the validated, agent-owned directory holding the partial file. The fd is
-	// kept open through finalization so every subsequent operation on the partial file is
-	// anchored to this directory rather than to a pathname another user could swap out.
-	partialDir, err := openPrivatePartialDownloadDirectory(tmpDst)
+	partial, err := preparePartialDownload(dst, fileMetadata, fileCreateData)
 	if err != nil {
 		return false, err
 	}
 
-	defer func() { _ = partialDir.Close() }()
-
-	// drop partial downloads for the same destination made for a different digest
-	if err = removeStalePartialDownloads(partialDir, partialName); err != nil {
-		return false, err
-	}
-
-	// find size of the already downloaded part if it exists
-	var offset int64
-	if fileInfo, statErr := statAt(partialDir, partialName); statErr == nil {
-		offset = fileInfo.Size()
-	} else if !errors.Is(statErr, fs.ErrNotExist) {
-		return false, fmt.Errorf("error checking partial download %s: %w", tmpDst, statErr)
-	}
-
-	// check if offset is not larger than expected file size
-	if offset > fileMetadata.Size {
-		// partial file is larger than expected, remove it and start over
-		if err = syscall.Unlinkat(int(partialDir.Fd()), partialName); err != nil {
-			return false, fmt.Errorf("error removing invalid partial download %s: %w", tmpDst, err)
-		}
-		offset = 0
-	}
+	defer func() { _ = partial.directory.Close() }()
 
 	// the partial download already holds the full file, so requesting more bytes would fail with HTTP 416
-	if fileMetadata.Size > 0 && offset == fileMetadata.Size {
-		return finalizePartialDownload(ctx, label, src, dst, partialDir, partialName, tmpDst, fileMetadata, fileCreateData)
+	if fileMetadata.Size > 0 && partial.offset == fileMetadata.Size {
+		return finalizePartialDownload(ctx, label, src, dst, partial.directory, partial.name, partial.path, fileMetadata, fileCreateData)
 	}
 
 	// check if there is enough disk space, do not check if size is zero (unknown)
-	if fileMetadata.Size > 0 && fileMetadata.Size-offset+freeDiskOverhead > fileCreateData.bytesAvail {
+	if fileMetadata.Size > 0 && fileMetadata.Size-partial.offset+freeDiskOverhead > fileCreateData.bytesAvail {
 		return false, fmt.Errorf("not enough disk space to download file %s: need %d bytes, have %d bytes",
-			src, fileMetadata.Size-offset+freeDiskOverhead, fileCreateData.bytesAvail)
+			src, fileMetadata.Size-partial.offset+freeDiskOverhead, fileCreateData.bytesAvail)
 	}
 
-	// download the file (or remaining part of it)
-	var srcFile io.ReadCloser
-	if srcFile, err = srv.getFile(ctx, src, offset); err != nil {
+	if err = srv.downloadPartialFile(ctx, src, partial, fileCreateData); err != nil {
 		return false, err
 	}
 
-	defer func() { _ = srcFile.Close() }()
+	return finalizePartialDownload(ctx, label, src, dst, partial.directory, partial.name, partial.path, fileMetadata, fileCreateData)
+}
 
-	var dstFile *os.File
-	if dstFile, err = createFileAt(partialDir, partialName, fileCreateData, fileManagerDefaultFilePermission, offset == 0); err != nil {
-		return false, fmt.Errorf("error creating file %s: %w", tmpDst, err)
+type partialDownload struct {
+	directory *os.File
+	name      string
+	path      string
+	offset    int64
+}
+
+// preparePartialDownload creates and validates the agent-owned directory before inspecting its entry.
+func preparePartialDownload(dst string, fileMetadata *FileMetadata, fileCreateData *fileCreateData) (*partialDownload, error) {
+	if err := makeDirectories(dst, fileManagerDefaultDirectoryPermission, fileCreateData.uid, fileCreateData.gid); err != nil {
+		return nil, err
 	}
 
-	if offset > 0 {
-		if _, err := dstFile.Seek(offset, io.SeekStart); err != nil {
+	path := GetPartialDownloadFilePath(dst, fileMetadata.Digest())
+	directory, err := openPrivatePartialDownloadDirectory(path)
+	if err != nil {
+		return nil, err
+	}
+
+	partial := &partialDownload{
+		directory: directory,
+		name:      filepath.Base(path),
+		path:      path,
+	}
+
+	if err = removeStalePartialDownloads(partial.directory, partial.name); err != nil {
+		_ = partial.directory.Close()
+		return nil, err
+	}
+
+	if fileInfo, statErr := statAt(partial.directory, partial.name); statErr == nil {
+		partial.offset = fileInfo.Size()
+	} else if !errors.Is(statErr, fs.ErrNotExist) {
+		_ = partial.directory.Close()
+		return nil, fmt.Errorf("error checking partial download %s: %w", partial.path, statErr)
+	}
+
+	if partial.offset > fileMetadata.Size {
+		if err = syscall.Unlinkat(int(partial.directory.Fd()), partial.name); err != nil {
+			_ = partial.directory.Close()
+			return nil, fmt.Errorf("error removing invalid partial download %s: %w", partial.path, err)
+		}
+		partial.offset = 0
+	}
+
+	return partial, nil
+}
+
+func (srv *Service) downloadPartialFile(ctx context.Context, src string, partial *partialDownload, fileCreateData *fileCreateData) error {
+	srcFile, err := srv.getFile(ctx, src, partial.offset)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = srcFile.Close() }()
+
+	dstFile, err := createFileAt(partial.directory, partial.name, fileCreateData, fileManagerDefaultFilePermission, partial.offset == 0)
+	if err != nil {
+		return fmt.Errorf("error creating file %s: %w", partial.path, err)
+	}
+
+	if partial.offset > 0 {
+		if _, err = dstFile.Seek(partial.offset, io.SeekStart); err != nil {
 			_ = dstFile.Close()
-			return false, fmt.Errorf("error seeking in file %s: %w", tmpDst, err)
+			return fmt.Errorf("error seeking in file %s: %w", partial.path, err)
 		}
 	}
 
-	defer func() { _ = dstFile.Close() }()
-
 	if _, err = io.Copy(dstFile, srcFile); err != nil {
-		return false, fmt.Errorf("error writing file %s: %w", tmpDst, err)
+		_ = dstFile.Close()
+		return fmt.Errorf("error writing file %s: %w", partial.path, err)
 	}
 
 	if err = dstFile.Close(); err != nil {
-		return false, fmt.Errorf("error writing file %s: %w", tmpDst, err)
+		return fmt.Errorf("error writing file %s: %w", partial.path, err)
 	}
 
-	return finalizePartialDownload(ctx, label, src, dst, partialDir, partialName, tmpDst, fileMetadata, fileCreateData)
+	return nil
 }
 
 // finalizePartialDownload verifies a fully downloaded partial file and moves it to its destination.
