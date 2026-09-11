@@ -469,6 +469,39 @@ func Test_downloadMetadataCompare_CompletePartialIsNotDownloadedAgain(t *testing
 	assert.True(t, errors.Is(err, fs.ErrNotExist))
 }
 
+func Test_downloadMetadataCompare_CompleteUnknownSizePartialIsNotDownloadedAgain(t *testing.T) {
+	tempDir := t.TempDir()
+	dst := filepath.Join(tempDir, "file.txt")
+	contents := []byte("this is the contents of the file")
+
+	fileMetadata := &FileMetadata{
+		Tags: map[string]string{fileDigestSHA256Tag: sha256Hex(contents)},
+		Size: 0,
+	}
+
+	tmpDst := GetPartialDownloadFilePath(dst, fileMetadata.Digest())
+	assert.NoError(t, os.Mkdir(filepath.Dir(tmpDst), 0700))
+	assert.NoError(t, os.WriteFile(tmpDst, contents, 0600))
+
+	// a source which cannot be read at all - the fully downloaded partial file must be
+	// verified and renamed without touching the source
+	src := "file://" + filepath.Join(tempDir, "does-not-exist")
+	srv := new(Service)
+
+	created, err := srv.downloadMetadataCompare(context.Background(), "", src, dst, fileMetadata)
+	assert.NoError(t, err)
+	assert.True(t, created)
+
+	got, err := os.ReadFile(dst)
+	assert.NoError(t, err)
+	assert.Equal(t, contents, got)
+
+	_, err = os.Stat(tmpDst)
+	assert.True(t, errors.Is(err, fs.ErrNotExist))
+	_, err = os.Stat(filepath.Dir(tmpDst))
+	assert.True(t, errors.Is(err, fs.ErrNotExist))
+}
+
 func Test_downloadMetadataCompare_RejectsSymlinkedCompletePartial(t *testing.T) {
 	tempDir := t.TempDir()
 	dst := filepath.Join(tempDir, "file.txt")

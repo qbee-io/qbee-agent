@@ -166,6 +166,15 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 	if fileMetadata.Size > 0 && partial.offset == fileMetadata.Size {
 		return srv.finalizeDownloadedFile(ctx, label, src, dst, partial, fileMetadata, fileCreateData)
 	}
+	if fileMetadata.Size == 0 && partial.offset > 0 {
+		partialReady, readyErr := isFileReady(partial.path, fileMetadata)
+		if readyErr != nil {
+			return false, readyErr
+		}
+		if partialReady {
+			return srv.finalizeDownloadedFile(ctx, label, src, dst, partial, fileMetadata, fileCreateData)
+		}
+	}
 
 	// check if there is enough disk space, do not check if size is zero (unknown)
 	if fileMetadata.Size > 0 && fileMetadata.Size-partial.offset+freeDiskOverhead > fileCreateData.bytesAvail {
