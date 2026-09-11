@@ -18,10 +18,18 @@ package configuration
 
 import (
 	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"go.qbee.io/agent/app/utils/assert"
 )
 
 func Test_renderTemplate(t *testing.T) {
@@ -332,4 +340,230 @@ func Test_createFile_doesNotFollowSymlinks(t *testing.T) {
 				victimFile, victimContent, got)
 		}
 	})
+}
+
+func Test_GetPartialDownloadFilePath(t *testing.T) {
+	validDigestA := strings.Repeat("a", sha256.Size*2)
+	validDigestB := strings.Repeat("b", sha256.Size*2)
+
+	t.Run("includes the digest and stays in the destination directory", func(t *testing.T) {
+		got := GetPartialDownloadFilePath("/var/lib/test.txt", validDigestA)
+		assert.Equal(t, filepath.Dir(filepath.Dir(got)), "/var/lib")
+		assert.Equal(t, filepath.Base(got), validDigestA+".part")
+	})
+
+	t.Run("different digests produce different paths", func(t *testing.T) {
+		a := GetPartialDownloadFilePath("/var/lib/test.txt", validDigestA)
+		b := GetPartialDownloadFilePath("/var/lib/test.txt", validDigestB)
+		assert.NotEqual(t, a, b)
+	})
+
+	t.Run("different destinations produce paths where neither basename is a prefix of the other", func(t *testing.T) {
+		a := filepath.Base(filepath.Dir(GetPartialDownloadFilePath("/var/lib/test.txt", validDigestA)))
+		b := filepath.Base(filepath.Dir(GetPartialDownloadFilePath("/var/lib/test.txt.other", validDigestA)))
+		assert.NotEqual(t, a, b)
+		assert.False(t, strings.HasPrefix(a, b) || strings.HasPrefix(b, a))
+	})
+
+	t.Run("malformed digests are hashed into a safe fixed-width identifier", func(t *testing.T) {
+		got := GetPartialDownloadFilePath("/var/lib/test.txt", "../../../etc/passwd")
+		assert.Equal(t, filepath.Dir(filepath.Dir(got)), "/var/lib")
+		assert.False(t, strings.Contains(filepath.Base(got), "/"))
+	})
+
+	t.Run("file name stays within NAME_MAX", func(t *testing.T) {
+		longName := strings.Repeat("a", 300)
+		got := filepath.Base(GetPartialDownloadFilePath("/var/lib/"+longName, validDigestA))
+		assert.False(t, len(got) > 255)
+	})
+}
+
+func Test_openPrivatePartialDownloadDirectory(t *testing.T) {
+	t.Run("creates private directory", func(t *testing.T) {
+		tmpDst := GetPartialDownloadFilePath(filepath.Join(t.TempDir(), "file.txt"), strings.Repeat("a", 64))
+		dir, err := openPrivatePartialDownloadDirectory(tmpDst)
+		assert.NoError(t, err)
+		defer func() { _ = dir.Close() }()
+
+		info, err := os.Stat(filepath.Dir(tmpDst))
+		assert.NoError(t, err)
+		assert.Equal(t, info.Mode().Perm(), os.FileMode(0700))
+	})
+
+	t.Run("rejects symlink", func(t *testing.T) {
+		tempDir := t.TempDir()
+		tmpDst := GetPartialDownloadFilePath(filepath.Join(tempDir, "file.txt"), strings.Repeat("a", 64))
+		target := filepath.Join(tempDir, "attacker-directory")
+		assert.NoError(t, os.Mkdir(target, 0700))
+		assert.NoError(t, os.Symlink(target, filepath.Dir(tmpDst)))
+		if _, err := openPrivatePartialDownloadDirectory(tmpDst); err == nil {
+			t.Fatal("expected symlinked partial download directory to be rejected")
+		}
+	})
+}
+
+func Test_downloadMetadataCompare_DestinationNameExceedingNameMax(t *testing.T) {
+	tempDir := t.TempDir()
+
+	contents := []byte("this is the contents of the file")
+	srcPath := filepath.Join(tempDir, "source.txt")
+
+	assert.NoError(t, os.WriteFile(srcPath, contents, 0600))
+	// a valid destination name which would exceed NAME_MAX once the digest and suffix are appended
+	dst := filepath.Join(tempDir, strings.Repeat("a", 250)+".txt")
+
+	fileMetadata := &FileMetadata{
+		Tags: map[string]string{fileDigestSHA256Tag: sha256Hex(contents)},
+		Size: int64(len(contents)),
+	}
+	name := filepath.Base(GetPartialDownloadFilePath(dst, fileMetadata.Digest()))
+	assert.False(t, len(name) > 255)
+
+	srv := new(Service)
+
+	created, err := srv.downloadMetadataCompare(context.Background(), "", "file://"+srcPath, dst, fileMetadata)
+	assert.NoError(t, err)
+	assert.True(t, created)
+
+	got, err := os.ReadFile(dst)
+	assert.NoError(t, err)
+	assert.Equal(t, contents, got)
+}
+
+func sha256Hex(contents []byte) string {
+	digest := sha256.Sum256(contents)
+
+	return hex.EncodeToString(digest[:])
+}
+
+func Test_downloadMetadataCompare_CompletePartialIsNotDownloadedAgain(t *testing.T) {
+	tempDir := t.TempDir()
+	dst := filepath.Join(tempDir, "file.txt")
+	contents := []byte("this is the contents of the file")
+
+	fileMetadata := &FileMetadata{
+		Tags: map[string]string{fileDigestSHA256Tag: sha256Hex(contents)},
+		Size: int64(len(contents)),
+	}
+
+	tmpDst := GetPartialDownloadFilePath(dst, fileMetadata.Digest())
+	assert.NoError(t, os.Mkdir(filepath.Dir(tmpDst), 0700))
+	assert.NoError(t, os.WriteFile(tmpDst, contents, 0600))
+
+	// a source which cannot be read at all - the fully downloaded partial file must be
+	// verified and renamed without touching the source
+	src := "file://" + filepath.Join(tempDir, "does-not-exist")
+	srv := new(Service)
+
+	created, err := srv.downloadMetadataCompare(context.Background(), "", src, dst, fileMetadata)
+	assert.NoError(t, err)
+	assert.True(t, created)
+
+	got, err := os.ReadFile(dst)
+	assert.NoError(t, err)
+	assert.Equal(t, contents, got)
+
+	_, err = os.Stat(tmpDst)
+	assert.True(t, errors.Is(err, fs.ErrNotExist))
+	_, err = os.Stat(filepath.Dir(tmpDst))
+	assert.True(t, errors.Is(err, fs.ErrNotExist))
+}
+
+func Test_downloadMetadataCompare_CompleteUnknownSizePartialIsNotDownloadedAgain(t *testing.T) {
+	tempDir := t.TempDir()
+	dst := filepath.Join(tempDir, "file.txt")
+	contents := []byte("this is the contents of the file")
+
+	fileMetadata := &FileMetadata{
+		Tags: map[string]string{fileDigestSHA256Tag: sha256Hex(contents)},
+		Size: 0,
+	}
+
+	tmpDst := GetPartialDownloadFilePath(dst, fileMetadata.Digest())
+	assert.NoError(t, os.Mkdir(filepath.Dir(tmpDst), 0700))
+	assert.NoError(t, os.WriteFile(tmpDst, contents, 0600))
+
+	// a source which cannot be read at all - the fully downloaded partial file must be
+	// verified and renamed without touching the source
+	src := "file://" + filepath.Join(tempDir, "does-not-exist")
+	srv := new(Service)
+
+	created, err := srv.downloadMetadataCompare(context.Background(), "", src, dst, fileMetadata)
+	assert.NoError(t, err)
+	assert.True(t, created)
+
+	got, err := os.ReadFile(dst)
+	assert.NoError(t, err)
+	assert.Equal(t, contents, got)
+
+	_, err = os.Stat(tmpDst)
+	assert.True(t, errors.Is(err, fs.ErrNotExist))
+	_, err = os.Stat(filepath.Dir(tmpDst))
+	assert.True(t, errors.Is(err, fs.ErrNotExist))
+}
+
+func Test_downloadMetadataCompare_RejectsSymlinkedCompletePartial(t *testing.T) {
+	tempDir := t.TempDir()
+	dst := filepath.Join(tempDir, "file.txt")
+	target := filepath.Join(tempDir, "target.txt")
+	contents := []byte("this is the contents of the file")
+	assert.NoError(t, os.WriteFile(target, contents, 0600))
+
+	fileMetadata := &FileMetadata{
+		Tags: map[string]string{fileDigestSHA256Tag: sha256Hex(contents)},
+		Size: int64(len(contents)),
+	}
+	tmpDst := GetPartialDownloadFilePath(dst, fileMetadata.Digest())
+	assert.NoError(t, os.Mkdir(filepath.Dir(tmpDst), 0700))
+	assert.NoError(t, os.Symlink(target, tmpDst))
+
+	_, err := new(Service).downloadMetadataCompare(
+		context.Background(), "", "file://"+target, dst, fileMetadata)
+	if err == nil {
+		t.Fatal("expected symlinked partial download to be rejected")
+	}
+
+	_, err = os.Lstat(dst)
+	assert.True(t, errors.Is(err, fs.ErrNotExist))
+}
+
+func Test_downloadMetadataCompare_RemovesPartialDownloadsWithOtherDigest(t *testing.T) {
+	tempDir := t.TempDir()
+
+	srcPath := filepath.Join(tempDir, "source.txt")
+	contents := []byte("this is the contents of the file")
+	assert.NoError(t, os.WriteFile(srcPath, contents, 0600))
+
+	dst := filepath.Join(tempDir, "file.txt")
+
+	fileMetadata := &FileMetadata{
+		Tags: map[string]string{fileDigestSHA256Tag: sha256Hex(contents)},
+		Size: int64(len(contents)),
+	}
+
+	// a leftover partial download of the same destination, but of previous contents
+	stalePartial := GetPartialDownloadFilePath(dst, sha256Hex([]byte("previous contents")))
+	assert.NoError(t, os.Mkdir(filepath.Dir(stalePartial), 0700))
+	assert.NoError(t, os.WriteFile(stalePartial, []byte("previous"), 0600))
+
+	// an unrelated file in the same directory which must be left alone
+	unrelated := filepath.Join(tempDir, ".other.txt.abc.part")
+	assert.NoError(t, os.WriteFile(unrelated, []byte("keep me"), 0600))
+
+	srv := new(Service)
+
+	created, err := srv.downloadMetadataCompare(context.Background(), "", "file://"+srcPath, dst, fileMetadata)
+	assert.NoError(t, err)
+	assert.True(t, created)
+
+	_, err = os.Stat(stalePartial)
+	assert.True(t, errors.Is(err, fs.ErrNotExist))
+
+	// this file should still exist
+	_, err = os.Stat(unrelated)
+	assert.NoError(t, err)
+
+	got, err := os.ReadFile(dst)
+	assert.NoError(t, err)
+	assert.Equal(t, contents, got)
 }
