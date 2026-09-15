@@ -143,6 +143,10 @@ func (srv *Service) downloadFile(ctx context.Context, label, src, dst string, fi
 func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst string, fileMetadata *FileMetadata) (bool, error) {
 	var err error
 
+	if fileMetadata.Size <= 0 {
+		return false, fmt.Errorf("invalid file metadata for %s: file size must be greater than zero", src)
+	}
+
 	// check if file already exists and has the right contents
 	var fileReady bool
 	if fileReady, err = isFileReady(dst, fileMetadata); err != nil || fileReady {
@@ -163,21 +167,11 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 	defer func() { _ = partial.directory.Close() }()
 
 	// the partial download already holds the full file, so requesting more bytes would fail with HTTP 416
-	if fileMetadata.Size > 0 && partial.offset == fileMetadata.Size {
+	if partial.offset == fileMetadata.Size {
 		return srv.finalizeDownloadedFile(ctx, label, src, dst, partial, fileMetadata, fileCreateData)
 	}
-	if fileMetadata.Size == 0 && partial.offset > 0 {
-		partialReady, readyErr := isFileReady(partial.path, fileMetadata)
-		if readyErr != nil {
-			return false, readyErr
-		}
-		if partialReady {
-			return srv.finalizeDownloadedFile(ctx, label, src, dst, partial, fileMetadata, fileCreateData)
-		}
-	}
-
-	// check if there is enough disk space, do not check if size is zero (unknown)
-	if fileMetadata.Size > 0 && fileMetadata.Size-partial.offset+freeDiskOverhead > fileCreateData.bytesAvail {
+	// check if there is enough disk space
+	if fileMetadata.Size-partial.offset+freeDiskOverhead > fileCreateData.bytesAvail {
 		return false, fmt.Errorf("not enough disk space to download file %s: need %d bytes, have %d bytes",
 			src, fileMetadata.Size-partial.offset+freeDiskOverhead, fileCreateData.bytesAvail)
 	}
