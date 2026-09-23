@@ -183,7 +183,6 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 	}
 
 	if mode == FullRun {
-		agent.do(ctx, "check-in", agent.checkIn)
 		agent.do(ctx, "remote-access", agent.doRemoteAccess(configData))
 		agent.do(ctx, "config", agent.doConfig(configData))
 		agent.do(ctx, "metrics", agent.doMetrics)
