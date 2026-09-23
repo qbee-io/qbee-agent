@@ -120,7 +120,7 @@ func (agent *Agent) Run(ctx context.Context) error {
 			// reset the ticker, so we don't run the update twice (scheduled and manually triggered)
 			agent.loopTicker.Reset(agent.Configuration.RunInterval())
 
-			go agent.RunOnce(ctx, FullRun)
+			go agent.RunOnce(ctx, FullRunFresh)
 		}
 	}
 }
@@ -136,6 +136,9 @@ type RunOnceMode int
 const (
 	// FullRun performs a full run of the agent routines.
 	FullRun RunOnceMode = iota
+
+	// FullRunFresh performs a full run of the agent routines based on a non-cached configuration.
+	FullRunFresh
 
 	// QuickRun performs only essential reporting required by the bootstrap process.
 	QuickRun
@@ -164,7 +167,8 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 
 	log.Debugf("starting agent run")
 
-	configData, err := agent.Configuration.Get(ctx)
+	requestFreshConfig := mode == FullRunFresh
+	configData, err := agent.Configuration.Get(ctx, requestFreshConfig)
 	if err != nil {
 		log.Errorf("failed to get device configuration from the device hub: %v", err)
 		return
@@ -182,13 +186,14 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 		return
 	}
 
-	if mode == FullRun {
+	switch mode {
+	case FullRun, FullRunFresh:
 		agent.do(ctx, "check-in", agent.checkIn)
 		agent.do(ctx, "remote-access", agent.doRemoteAccess(configData))
 		agent.do(ctx, "config", agent.doConfig(configData))
 		agent.do(ctx, "metrics", agent.doMetrics)
 		agent.do(ctx, "inventories", agent.doInventories)
-	} else {
+	case QuickRun:
 		agent.do(ctx, "system-inventory", agent.doSystemInventory)
 	}
 }

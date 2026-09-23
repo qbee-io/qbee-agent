@@ -100,7 +100,7 @@ var configCommand = cmd.Command{
 				return fmt.Errorf("cannot parse local config file: %w", err)
 			}
 		} else {
-			if configurationData, err = deviceAgent.Configuration.Get(ctx); err != nil {
+			if configurationData, err = deviceAgent.Configuration.Get(ctx, true); err != nil {
 				return err
 			}
 		}

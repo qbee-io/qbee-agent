@@ -171,7 +171,7 @@ func TestService_persistConfig(t *testing.T) {
 	})
 
 	t.Run("load config through public Get method", func(t *testing.T) {
-		committedConfig, err := srv.Get(context.Background())
+		committedConfig, err := srv.Get(context.Background(), false)
 		if err != nil {
 			t.Fatalf("failed to get config: %v", err)
 		}
@@ -188,7 +188,7 @@ func Test_ConfigEndpointBooleanReset(t *testing.T) {
 	srv.firstRunRetryCounter = 0
 
 	// first attempt to get config should fail and mark the config endpoint as unreachable
-	if _, err := srv.get(t.Context()); !errors.As(err, new(api.ConnectionError)) {
+	if _, err := srv.get(t.Context(), false); !errors.As(err, new(api.ConnectionError)) {
 		t.Fatalf("expected connection error, got %v", err)
 	}
 
@@ -208,7 +208,7 @@ func Test_ConfigEndpointBooleanReset(t *testing.T) {
 	srv.api.WithPort(fmt.Sprintf("%d", ts.Listener.Addr().(*net.TCPAddr).Port))
 
 	// this should reset the config endpoint unreachable flag to false and return an empty config without error
-	if _, err := srv.get(t.Context()); err != nil {
+	if _, err := srv.get(t.Context(), false); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 

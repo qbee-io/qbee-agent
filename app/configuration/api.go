@@ -34,8 +34,8 @@ import (
 const deviceConfigurationAPIPath = "/v1/org/device/auth/config"
 
 // get retrieves currently committed device configuration from the device hub API.
-func (srv *Service) get(ctx context.Context) (*CommittedConfig, error) {
-	cfg, err := srv.getWithRetry(ctx)
+func (srv *Service) get(ctx context.Context, fresh bool) (*CommittedConfig, error) {
+	cfg, err := srv.getWithRetry(ctx, fresh)
 
 	// set a flag if the config endpoint is unreachable to avoid running certain operations
 	// (eg. commands that require network) which would flood the logs with errors
@@ -54,20 +54,24 @@ const (
 	maxReconnectDelay = 10
 )
 
-func (srv *Service) getWithRetry(ctx context.Context) (*CommittedConfig, error) {
+func (srv *Service) getWithRetry(ctx context.Context, fresh bool) (*CommittedConfig, error) {
+	requestURL := deviceConfigurationAPIPath
+	if fresh {
+		requestURL = fmt.Sprintf("%s?f=1", deviceConfigurationAPIPath)
+	}
 
 	var err error
 	cfg := new(CommittedConfig)
 
 	if srv.firstRunRetryCounter == 0 {
-		err = srv.api.Get(ctx, deviceConfigurationAPIPath, cfg)
+		err = srv.api.Get(ctx, requestURL, cfg)
 		return cfg, err
 	}
 
 	// retry on first run as network might not be ready yet
 	for srv.firstRunRetryCounter > 0 {
 		srv.firstRunRetryCounter--
-		err = srv.api.Get(ctx, deviceConfigurationAPIPath, cfg)
+		err = srv.api.Get(ctx, requestURL, cfg)
 		if err != nil {
 			attempts := defaultFirstRunRetryCounter - srv.firstRunRetryCounter
 			reconnectIn := minReconnectDelay + rand.Int63n(maxReconnectDelay-minReconnectDelay)
