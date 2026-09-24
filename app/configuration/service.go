@@ -511,8 +511,8 @@ func (srv *Service) flushReportsBuffer(ctx context.Context) error {
 
 // Get returns the agent configuration.
 // If the configuration cannot be retrieved from the API, it will be loaded from the local cache.
-func (srv *Service) Get(ctx context.Context) (*CommittedConfig, error) {
-	cfg, err := srv.get(ctx)
+func (srv *Service) Get(ctx context.Context, fresh bool) (*CommittedConfig, error) {
+	cfg, err := srv.get(ctx, fresh)
 	if err != nil {
 		// if we failed to get config from API, try to load it from local file cache
 		cfg = new(CommittedConfig)

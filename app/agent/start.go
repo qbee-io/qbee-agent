@@ -39,7 +39,7 @@ func RunOnce(ctx context.Context, cfg *Config) error {
 	}
 
 	agent.disableRemoteAccess = true
-	agent.RunOnce(ctx, FullRun)
+	agent.RunOnce(ctx, FullRunFresh)
 
 	agent.Wait()
 
