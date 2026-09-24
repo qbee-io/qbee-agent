@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"runtime"
 )
 
 // BootstrapRequest is the request sent to the device hub during device bootstrap.
@@ -114,11 +113,4 @@ func (agent *Agent) sendBootstrapRequest(
 	}
 
 	return bootstrapResponse, nil
-}
-
-var checkInPath = fmt.Sprintf("/v1/org/device/auth/agent/%s/checkin", runtime.GOARCH)
-
-// checkIn sends a heartbeat to the device hub and retrieves agent metadata.
-func (agent *Agent) checkIn(ctx context.Context) error {
-	return agent.api.Get(ctx, checkInPath, nil)
 }
