@@ -281,7 +281,7 @@ func (srv *Service) resumeDownload(ctx context.Context, src string, partialFile 
 		return err
 	}
 
-	_, err = io.Copy(partialFile, srcFile)
+	_, err = io.CopyN(partialFile, srcFile, remaining)
 
 	return err
 }
