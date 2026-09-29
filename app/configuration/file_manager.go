@@ -183,6 +183,12 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 	}
 	defer func() { _ = partialFile.Close() }()
 
+	// refresh the available disk space before starting the download in case it has changed
+	// due stale partial downloads or other changes in disk usage.
+	if err = fileCreateData.refreshBytesAvail(); err != nil {
+		return false, err
+	}
+
 	if err = srv.resumeDownload(ctx, src, partialFile, fileMetadata.Size, fileCreateData.bytesAvail); err != nil {
 		return false, fmt.Errorf("error downloading %s to %s: %w", src, partialPath, err)
 	}
@@ -260,10 +266,10 @@ func (srv *Service) resumeDownload(ctx context.Context, src string, partialFile 
 		return nil
 	}
 
-remaining := size - offset
-if bytesAvail < freeDiskOverhead || remaining > bytesAvail-freeDiskOverhead {
-	return fmt.Errorf("not enough disk space: need %d bytes plus %d bytes overhead, have %d bytes", remaining, freeDiskOverhead, bytesAvail)
-}
+	remaining := size - offset
+	if bytesAvail < freeDiskOverhead || remaining > bytesAvail-freeDiskOverhead {
+		return fmt.Errorf("not enough disk space: need %d bytes plus %d bytes overhead, have %d bytes", remaining, freeDiskOverhead, bytesAvail)
+	}
 
 	srcFile, err := srv.getFile(ctx, src, offset)
 	if err != nil {
@@ -651,6 +657,7 @@ func isFileReadyFd(fd *os.File, fileMetadata *FileMetadata) (bool, error) {
 const freeDiskOverhead = 1024 * 1024 * 1 // 1MB
 
 type fileCreateData struct {
+	path       string
 	uid        int
 	gid        int
 	bytesAvail int64
@@ -668,6 +675,7 @@ func determineFileCreateData(dst string) (*fileCreateData, error) {
 			if parentDirPath == dst {
 				// this should never happen, but in case it does, use the process uid/gid
 				return &fileCreateData{
+					path:       dst,
 					uid:        os.Geteuid(),
 					gid:        os.Getgid(),
 					bytesAvail: 0,
@@ -689,7 +697,6 @@ func determineFileCreateData(dst string) (*fileCreateData, error) {
 	uid, gid := int(fileStat.Uid), int(fileStat.Gid)
 
 	// get diskspace available
-
 	stat := syscall.Statfs_t{}
 	if err = syscall.Statfs(dst, &stat); err != nil {
 		return nil, fmt.Errorf("cannot check disk space: %s - %w", dst, err)
@@ -701,7 +708,19 @@ func determineFileCreateData(dst string) (*fileCreateData, error) {
 		uid:        uid,
 		gid:        gid,
 		bytesAvail: bytesAvail,
+		path:       dst,
 	}, nil
+}
+
+// refreshBytesAvail updates the bytesAvail field of the fileCreateData by re-checking the available disk space.
+func (fcd *fileCreateData) refreshBytesAvail() error {
+	stat := syscall.Statfs_t{}
+	if err := syscall.Statfs(fcd.path, &stat); err != nil {
+		return fmt.Errorf("cannot check disk space: %s - %w", fcd.path, err)
+	}
+
+	fcd.bytesAvail = int64(stat.Bavail) * int64(stat.Bsize)
+	return nil
 }
 
 // makeDirectories checks if all directories for the dst file exist, if not, create them with provided owner and group.

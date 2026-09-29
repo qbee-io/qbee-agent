@@ -540,7 +540,7 @@ func Test_downloadMetadataCompare_RemovesPartialDownloadsWithOtherDigest(t *test
 	assert.NoError(t, os.Mkdir(filepath.Dir(stalePartial), 0700))
 	assert.NoError(t, os.WriteFile(stalePartial, []byte("previous"), 0600))
 
-// an unrelated file in the same partial directory which must be left alone
+	// an unrelated file in the same partial directory which must be left alone
 	unrelated := filepath.Join(filepath.Dir(stalePartial), "unrelated")
 	assert.NoError(t, os.WriteFile(unrelated, []byte("keep me"), 0600))
 
