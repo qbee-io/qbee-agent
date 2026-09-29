@@ -260,9 +260,10 @@ func (srv *Service) resumeDownload(ctx context.Context, src string, partialFile 
 		return nil
 	}
 
-	if size-offset+freeDiskOverhead > bytesAvail {
-		return fmt.Errorf("not enough disk space: need %d bytes, have %d bytes", size-offset+freeDiskOverhead, bytesAvail)
-	}
+remaining := size - offset
+if bytesAvail < freeDiskOverhead || remaining > bytesAvail-freeDiskOverhead {
+	return fmt.Errorf("not enough disk space: need %d bytes plus %d bytes overhead, have %d bytes", remaining, freeDiskOverhead, bytesAvail)
+}
 
 	srcFile, err := srv.getFile(ctx, src, offset)
 	if err != nil {
