@@ -33,6 +33,8 @@ import (
 	"strings"
 	"syscall"
 
+	"golang.org/x/sys/unix"
+
 	"go.qbee.io/agent/app/utils"
 )
 
@@ -297,8 +299,11 @@ func (srv *Service) resumeDownload(ctx context.Context, src string, partialFile 
 }
 
 // installPartialDownload sets ownership of the verified partialFile and renames it to dst.
-// The rename is performed within dstRoot, so the verified entry is the one installed and no
-// path component outside dst's directory can be substituted.
+//
+// The rename is issued with renameat(2) against the already-open directory descriptors, so neither
+// the staging directory nor dst's directory is resolved by name at rename time. That removes the
+// window in which either could be swapped for a symlink or another directory after being verified
+// (CWE-59, CWE-367).
 func installPartialDownload(dstRoot, partialDir *os.Root, partialFile *os.File, dst string, fileCreateData *fileCreateData) error {
 	if err := partialFile.Chown(fileCreateData.uid, fileCreateData.gid); err != nil {
 		return fmt.Errorf("error setting owner on %s: %w", dst, err)
@@ -308,25 +313,22 @@ func installPartialDownload(dstRoot, partialDir *os.Root, partialFile *os.File, 
 		return fmt.Errorf("error setting permissions on %s: %w", dst, err)
 	}
 
-	partialDirName := filepath.Base(partialDir.Name())
-
-	// make sure the directory dstRoot resolves for the rename is the very one we staged into
-	linkInfo, err := dstRoot.Lstat(partialDirName)
+	partialDirFile, err := partialDir.Open(".")
 	if err != nil {
-		return fmt.Errorf("error checking partial download directory for %s: %w", dst, err)
+		return fmt.Errorf("error opening partial download directory for %s: %w", dst, err)
 	}
+	defer func() { _ = partialDirFile.Close() }()
 
-	openedInfo, err := partialDir.Stat(".")
+	dstDirFile, err := dstRoot.Open(".")
 	if err != nil {
-		return fmt.Errorf("error checking partial download directory for %s: %w", dst, err)
+		return fmt.Errorf("error opening destination directory for %s: %w", dst, err)
 	}
+	defer func() { _ = dstDirFile.Close() }()
 
-	if !os.SameFile(linkInfo, openedInfo) {
-		return fmt.Errorf("partial download directory for %s was replaced", dst)
-	}
+	oldName := filepath.Base(partialFile.Name())
 
-	oldName := filepath.Join(partialDirName, filepath.Base(partialFile.Name()))
-	if err = dstRoot.Rename(oldName, filepath.Base(dst)); err != nil {
+	err = unix.Renameat(int(partialDirFile.Fd()), oldName, int(dstDirFile.Fd()), filepath.Base(dst))
+	if err != nil {
 		return fmt.Errorf("error renaming partial download to %s: %w", dst, err)
 	}
 
