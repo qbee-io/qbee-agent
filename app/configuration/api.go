@@ -132,6 +132,17 @@ func (srv *Service) getFileFromAPI(ctx context.Context, src string, offset int64
 		return nil, fmt.Errorf("error getting file: %w", err)
 	}
 
+	expectedStatusCode := http.StatusOK
+	if offset > 0 {
+		expectedStatusCode = http.StatusPartialContent
+	}
+
+	if response.StatusCode != expectedStatusCode {
+		_ = response.Body.Close()
+		return nil, fmt.Errorf("error getting file: unexpected response status %d (expected %d)",
+			response.StatusCode, expectedStatusCode)
+	}
+
 	return response.Body, nil
 }
 

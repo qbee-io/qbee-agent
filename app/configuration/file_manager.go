@@ -492,26 +492,41 @@ func calculateTemplateDigest(src string, params map[string]string) (string, erro
 	return hexDigest, nil
 }
 
+// rootRelativePath converts an absolute path into a path relative to the
+// filesystem root, suitable for use with methods on an os.Root rooted at "/".
+func rootRelativePath(path string) string {
+	return strings.TrimPrefix(filepath.Clean(path), "/")
+}
+
 // createFile under provided path and with provided uid and gid.
 //
 // The agent typically runs as root, so all path resolution here must refuse
-// to follow attacker-controlled symlinks (CWE-59). makeDirectories rejects
-// symlinked intermediate components; O_NOFOLLOW rejects a symlinked final
-// component so we never open, truncate, or chown an attacker-chosen target.
+// to follow attacker-controlled symlinks and avoid TOCTOU races (CWE-59).
+// os.Root confines every path resolution step to the filesystem root and
+// refuses to resolve a path through a symlink that would escape it (in
+// particular, absolute symlinks are always rejected), so we never open,
+// truncate, or chown an attacker-chosen target.
 func createFile(path string, fileCreateData *fileCreateData, permission os.FileMode, truncate bool) (*os.File, error) {
-	var err error
-	if err = makeDirectories(path, fileManagerDefaultDirectoryPermission, fileCreateData.uid, fileCreateData.gid); err != nil {
+	root, err := os.OpenRoot("/")
+	if err != nil {
+		return nil, fmt.Errorf("error opening root filesystem: %w", err)
+	}
+	defer func() { _ = root.Close() }()
+
+	relPath := rootRelativePath(path)
+
+	if err = makeDirectoriesInRoot(root, relPath, fileManagerDefaultDirectoryPermission, fileCreateData.uid, fileCreateData.gid); err != nil {
 		return nil, err
 	}
 
-	openFlags := os.O_RDWR | os.O_CREATE | syscall.O_NOFOLLOW
+	openFlags := os.O_RDWR | os.O_CREATE
 
 	if truncate {
 		openFlags = openFlags | os.O_TRUNC
 	}
 
 	var file *os.File
-	if file, err = os.OpenFile(path, openFlags, permission); err != nil {
+	if file, err = root.OpenFile(relPath, openFlags, permission); err != nil {
 		return nil, fmt.Errorf("error creating file %s: %w", path, err)
 	}
 
@@ -616,29 +631,43 @@ func determineFileCreateData(dst string) (*fileCreateData, error) {
 
 // makeDirectories checks if all directories for the dst file exist, if not, create them with provided owner and group.
 //
-// All ancestor components are inspected with os.Lstat so that a symlinked
-// directory (e.g. an attacker's ~/.ssh pointing at /root/.ssh) is rejected
-// rather than transparently traversed by the kernel (CWE-59).
+// Path resolution is confined to the filesystem root via os.Root, so a
+// symlinked directory component (e.g. an attacker's ~/.ssh pointing at
+// /root/.ssh) cannot be transparently traversed by the kernel (CWE-59),
+// and there is no separate check-then-create step for an attacker to race
+// (TOCTOU).
 func makeDirectories(dst string, permissions os.FileMode, uid, gid int) error {
-	if dst == "/" {
+	root, err := os.OpenRoot("/")
+	if err != nil {
+		return fmt.Errorf("error opening root filesystem: %w", err)
+	}
+	defer func() { _ = root.Close() }()
+
+	return makeDirectoriesInRoot(root, rootRelativePath(dst), permissions, uid, gid)
+}
+
+// makeDirectoriesInRoot checks if all directories for the dst file (given
+// relative to root) exist, if not, create them with provided owner and group.
+func makeDirectoriesInRoot(root *os.Root, dst string, permissions os.FileMode, uid, gid int) error {
+	dirPath := filepath.Dir(dst)
+
+	if dirPath == "." || dirPath == dst {
 		return nil
 	}
 
-	dirPath := filepath.Dir(dst)
-
 	// Always validate / materialize ancestors first so that symlinks higher
 	// up the path are caught even when dirPath itself already exists.
-	if err := makeDirectories(dirPath, permissions, uid, gid); err != nil {
+	if err := makeDirectoriesInRoot(root, dirPath, permissions, uid, gid); err != nil {
 		return err
 	}
 
-	dirInfo, err := os.Lstat(dirPath)
+	dirInfo, err := root.Lstat(dirPath)
 	if errors.Is(err, os.ErrNotExist) {
-		if err = os.Mkdir(dirPath, permissions); err != nil {
+		if err = root.Mkdir(dirPath, permissions); err != nil {
 			return fmt.Errorf("cannot create directorty %s: %w", dirPath, err)
 		}
 
-		if err = os.Chown(dirPath, uid, gid); err != nil {
+		if err = root.Chown(dirPath, uid, gid); err != nil {
 			return fmt.Errorf("cannot change owner of %s: %w", dirPath, err)
 		}
 
