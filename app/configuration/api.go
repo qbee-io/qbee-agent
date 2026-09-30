@@ -132,6 +132,19 @@ func (srv *Service) getFileFromAPI(ctx context.Context, src string, offset int64
 		return nil, fmt.Errorf("error getting file: %w", err)
 	}
 
+	// when requesting a range, the server must respond with 206 Partial Content,
+	// otherwise we would corrupt the file by appending its full contents at the offset
+	expectedStatus := http.StatusOK
+	if offset > 0 {
+		expectedStatus = http.StatusPartialContent
+	}
+
+	if response.StatusCode != expectedStatus {
+		_ = response.Body.Close()
+		return nil, fmt.Errorf("unexpected status code %d getting file %s, expected %d",
+			response.StatusCode, src, expectedStatus)
+	}
+
 	return response.Body, nil
 }
 

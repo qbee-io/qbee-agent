@@ -494,15 +494,17 @@ func calculateTemplateDigest(src string, params map[string]string) (string, erro
 
 // createFile under provided path and with provided uid and gid.
 //
-// The agent typically runs as root, so all path resolution here must refuse
-// to follow attacker-controlled symlinks (CWE-59). makeDirectories rejects
-// symlinked intermediate components; O_NOFOLLOW rejects a symlinked final
-// component so we never open, truncate, or chown an attacker-chosen target.
+// The agent typically runs as root, so path resolution is delegated to
+// os.Root, which resolves every component relative to an already-opened
+// directory. This prevents symlink attacks (CWE-59) and TOCTOU races;
+// O_NOFOLLOW additionally rejects a symlinked final component.
 func createFile(path string, fileCreateData *fileCreateData, permission os.FileMode, truncate bool) (*os.File, error) {
-	var err error
-	if err = makeDirectories(path, fileManagerDefaultDirectoryPermission, fileCreateData.uid, fileCreateData.gid); err != nil {
-		return nil, err
+	dirRoot, err := openDirectoryRoot(filepath.Dir(path), fileManagerDefaultDirectoryPermission, fileCreateData.uid, fileCreateData.gid)
+	if err != nil {
+		return nil, fmt.Errorf("error creating file %s: %w", path, err)
 	}
+
+	defer func() { _ = dirRoot.Close() }()
 
 	openFlags := os.O_RDWR | os.O_CREATE | syscall.O_NOFOLLOW
 
@@ -511,7 +513,7 @@ func createFile(path string, fileCreateData *fileCreateData, permission os.FileM
 	}
 
 	var file *os.File
-	if file, err = os.OpenFile(path, openFlags, permission); err != nil {
+	if file, err = dirRoot.OpenFile(filepath.Base(path), openFlags, permission); err != nil {
 		return nil, fmt.Errorf("error creating file %s: %w", path, err)
 	}
 
@@ -615,49 +617,64 @@ func determineFileCreateData(dst string) (*fileCreateData, error) {
 }
 
 // makeDirectories checks if all directories for the dst file exist, if not, create them with provided owner and group.
-//
-// All ancestor components are inspected with os.Lstat so that a symlinked
-// directory (e.g. an attacker's ~/.ssh pointing at /root/.ssh) is rejected
-// rather than transparently traversed by the kernel (CWE-59).
 func makeDirectories(dst string, permissions os.FileMode, uid, gid int) error {
-	if dst == "/" {
-		return nil
-	}
-
-	dirPath := filepath.Dir(dst)
-
-	// Always validate / materialize ancestors first so that symlinks higher
-	// up the path are caught even when dirPath itself already exists.
-	if err := makeDirectories(dirPath, permissions, uid, gid); err != nil {
+	dirRoot, err := openDirectoryRoot(filepath.Dir(dst), permissions, uid, gid)
+	if err != nil {
 		return err
 	}
 
-	dirInfo, err := os.Lstat(dirPath)
-	if errors.Is(err, os.ErrNotExist) {
-		if err = os.Mkdir(dirPath, permissions); err != nil {
-			return fmt.Errorf("cannot create directorty %s: %w", dirPath, err)
-		}
+	return dirRoot.Close()
+}
 
-		if err = os.Chown(dirPath, uid, gid); err != nil {
-			return fmt.Errorf("cannot change owner of %s: %w", dirPath, err)
-		}
-
-		return nil
+// openDirectoryRoot opens dirPath as an os.Root, creating any missing
+// directories with the provided permissions and ownership.
+//
+// Every path component is opened relative to its already-opened parent
+// directory using os.Root, so the kernel resolves each step against a pinned
+// directory handle (no TOCTOU races) and any symlink pointing outside its
+// parent directory (e.g. an attacker's ~/.ssh pointing at /root/.ssh) is
+// rejected rather than transparently traversed (CWE-59).
+func openDirectoryRoot(dirPath string, permissions os.FileMode, uid, gid int) (*os.Root, error) {
+	dirPath = filepath.Clean(dirPath)
+	if !filepath.IsAbs(dirPath) {
+		return nil, fmt.Errorf("absolute directory path required, got %s", dirPath)
 	}
 
+	root, err := os.OpenRoot("/")
 	if err != nil {
-		return fmt.Errorf("cannot create directory %s: %w", dirPath, err)
+		return nil, fmt.Errorf("cannot open filesystem root: %w", err)
 	}
 
-	if dirInfo.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("refusing to traverse symlinked path component %s", dirPath)
+	for _, component := range strings.Split(dirPath, string(os.PathSeparator)) {
+		if component == "" {
+			continue
+		}
+
+		subRoot, err := root.OpenRoot(component)
+		if errors.Is(err, fs.ErrNotExist) {
+			if err = root.Mkdir(component, permissions); err != nil {
+				_ = root.Close()
+				return nil, fmt.Errorf("cannot create directory %s in %s: %w", component, root.Name(), err)
+			}
+
+			if err = root.Chown(component, uid, gid); err != nil {
+				_ = root.Close()
+				return nil, fmt.Errorf("cannot change owner of %s in %s: %w", component, root.Name(), err)
+			}
+
+			subRoot, err = root.OpenRoot(component)
+		}
+
+		if err != nil {
+			_ = root.Close()
+			return nil, fmt.Errorf("cannot open directory %s in %s: %w", component, root.Name(), err)
+		}
+
+		_ = root.Close()
+		root = subRoot
 	}
 
-	if !dirInfo.IsDir() {
-		return fmt.Errorf("cannot create directory, %s is a file", dirPath)
-	}
-
-	return nil
+	return root, nil
 }
 
 const (
