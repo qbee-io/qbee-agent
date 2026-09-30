@@ -146,8 +146,8 @@ func (srv *Service) downloadFile(ctx context.Context, label, src, dst string, fi
 // partial file (open, write, verify, rename) goes through an os.Root anchored to dst's directory,
 // so other users can't substitute files or directories by pathname (CWE-59, CWE-367).
 func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst string, fileMetadata *FileMetadata) (bool, error) {
-	if fileMetadata.Size <= 0 {
-		return false, fmt.Errorf("invalid file metadata for %s: file size must be greater than zero", src)
+	if fileMetadata.Size < 0 {
+		return false, fmt.Errorf("invalid file metadata for %s: file size must not be negative", src)
 	}
 
 	// check if file already exists and has the right contents
@@ -190,13 +190,7 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 	}
 	defer func() { _ = partialFile.Close() }()
 
-	// refresh the available disk space before starting the download in case it has changed
-	// due stale partial downloads or other changes in disk usage.
-	if err = fileCreateData.refreshBytesAvail(); err != nil {
-		return false, err
-	}
-
-	if err = srv.resumeDownload(ctx, src, partialFile, fileMetadata.Size, fileCreateData.bytesAvail); err != nil {
+	if err = srv.resumeDownload(ctx, src, partialFile, fileMetadata.Size, fileCreateData); err != nil {
 		return false, fmt.Errorf("error downloading %s to %s: %w", src, partialPath, err)
 	}
 
@@ -258,13 +252,18 @@ func openPartialDownloadFile(dir *os.Root, name string) (*os.File, error) {
 }
 
 // resumeDownload appends the missing part of src to partialFile, starting over if it is larger than size.
-func (srv *Service) resumeDownload(ctx context.Context, src string, partialFile *os.File, size, bytesAvail int64) error {
+func (srv *Service) resumeDownload(ctx context.Context, src string, partialFile *os.File, size int64, fileCreateData *fileCreateData) error {
 	info, err := partialFile.Stat()
 	if err != nil {
 		return err
 	}
 
 	offset := info.Size()
+	// requesting bytes beyond a complete file would fail with HTTP 416
+	if offset == size {
+		return nil
+	}
+
 	if offset > size {
 		if err = partialFile.Truncate(0); err != nil {
 			return err
@@ -272,14 +271,14 @@ func (srv *Service) resumeDownload(ctx context.Context, src string, partialFile 
 		offset = 0
 	}
 
-	// requesting bytes beyond a complete file would fail with HTTP 416
-	if offset == size {
-		return nil
+	// refresh fileCreateData.bytesAvail before checking disk space
+	if err = fileCreateData.refreshBytesAvail(); err != nil {
+		return err
 	}
 
 	remaining := size - offset
-	if bytesAvail < freeDiskOverhead || remaining > bytesAvail-freeDiskOverhead {
-		return fmt.Errorf("not enough disk space: need %d bytes plus %d bytes overhead, have %d bytes", remaining, freeDiskOverhead, bytesAvail)
+	if fileCreateData.bytesAvail < freeDiskOverhead || remaining > fileCreateData.bytesAvail-freeDiskOverhead {
+		return fmt.Errorf("not enough disk space: need %d bytes plus %d bytes overhead, have %d bytes", remaining, freeDiskOverhead, fileCreateData.bytesAvail)
 	}
 
 	srcFile, err := srv.getFile(ctx, src, offset)

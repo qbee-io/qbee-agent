@@ -135,6 +135,7 @@ func (srv *Service) getFileFromAPI(ctx context.Context, src string, offset int64
 	}
 
 	if response.StatusCode != expectedStatusCode {
+		_ = response.Body.Close()
 		return nil, fmt.Errorf("unexpected status code: %d", response.StatusCode)
 	}
 
