@@ -478,14 +478,14 @@ func Test_downloadMetadataCompare_CompletePartialIsNotDownloadedAgain(t *testing
 	assert.True(t, errors.Is(err, fs.ErrNotExist))
 }
 
-func Test_downloadMetadataCompare_RejectsZeroSizeMetadata(t *testing.T) {
+func Test_downloadMetadataCompare_RejectsNegativeSizeMetadata(t *testing.T) {
 	tempDir := t.TempDir()
 	dst := filepath.Join(tempDir, "file.txt")
 	contents := []byte("this is the contents of the file")
 
 	fileMetadata := &FileMetadata{
 		Tags: map[string]string{fileDigestSHA256Tag: sha256Hex(contents)},
-		Size: 0,
+		Size: -1,
 	}
 
 	tmpDst := GetPartialDownloadFilePath(dst, fileMetadata.Digest())
@@ -496,13 +496,47 @@ func Test_downloadMetadataCompare_RejectsZeroSizeMetadata(t *testing.T) {
 	srv := new(Service)
 
 	created, err := srv.downloadMetadataCompare(context.Background(), "", src, dst, fileMetadata)
-	assert.True(t, strings.Contains(err.Error(), "file size must be greater than zero"))
+	assert.True(t, strings.Contains(err.Error(), "file size must not be negative"))
 	assert.False(t, created)
 
 	_, err = os.Stat(dst)
 	assert.True(t, errors.Is(err, fs.ErrNotExist))
 	_, err = os.Stat(tmpDst)
 	assert.NoError(t, err)
+}
+
+func Test_downloadMetadataCompare_AllowZeroSizeMetadata(t *testing.T) {
+	tempDir := t.TempDir()
+	dst := filepath.Join(tempDir, "file.txt")
+	contents := []byte("this is the contents of the file")
+
+	src := "file://" + filepath.Join(tempDir, "file-to-download")
+
+	assert.NoError(t, os.WriteFile(filepath.Join(tempDir, "file-to-download"), []byte{}, 0600))
+
+	fileMetadata := &FileMetadata{
+		Tags: map[string]string{fileDigestSHA256Tag: sha256Hex([]byte{})},
+		Size: 0,
+	}
+
+	tmpDst := GetPartialDownloadFilePath(dst, fileMetadata.Digest())
+	assert.NoError(t, os.Mkdir(filepath.Dir(tmpDst), 0700))
+	assert.NoError(t, os.WriteFile(tmpDst, contents, 0600))
+
+	srv := new(Service)
+
+	created, err := srv.downloadMetadataCompare(context.Background(), "", src, dst, fileMetadata)
+	assert.NoError(t, err)
+	assert.True(t, created)
+
+	_, err = os.Stat(dst)
+	assert.NoError(t, err)
+	got, err := os.ReadFile(dst)
+	assert.NoError(t, err)
+	assert.Equal(t, []byte{}, got)
+
+	_, err = os.Stat(tmpDst)
+	assert.True(t, errors.Is(err, fs.ErrNotExist))
 }
 
 func Test_downloadMetadataCompare_RejectsSymlinkedCompletePartial(t *testing.T) {
