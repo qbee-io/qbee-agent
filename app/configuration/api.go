@@ -123,13 +123,20 @@ func (srv *Service) getFileFromAPI(ctx context.Context, src string, offset int64
 		return nil, err
 	}
 
+	expectedStatusCode := http.StatusOK
 	if offset > 0 {
 		request.Header.Set("Range", fmt.Sprintf("bytes=%d-", offset))
+		expectedStatusCode = http.StatusPartialContent
 	}
 
 	var response *http.Response
 	if response, err = srv.api.Do(request); err != nil {
 		return nil, fmt.Errorf("error getting file: %w", err)
+	}
+
+	if response.StatusCode != expectedStatusCode {
+		_ = response.Body.Close()
+		return nil, fmt.Errorf("unexpected status code: %d", response.StatusCode)
 	}
 
 	return response.Body, nil
