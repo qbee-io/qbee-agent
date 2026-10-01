@@ -162,19 +162,15 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 		return false, fmt.Errorf("error determining local fs data: %w", err)
 	}
 
-	if err = makeDirectories(dst, fileManagerDefaultDirectoryPermission, fileCreateData.uid, fileCreateData.gid); err != nil {
-		return false, err
-	}
-
-	partialPath := GetPartialDownloadFilePath(dst, fileMetadata.Digest())
-	partialDirName := filepath.Base(filepath.Dir(partialPath))
-	partialName := filepath.Base(partialPath)
-
-	dstRoot, err := openDirectoryAnchored(filepath.Dir(dst))
+	dstRoot, err := makeDirectoriesAnchored(filepath.Dir(dst), fileManagerDefaultDirectoryPermission, fileCreateData.uid, fileCreateData.gid)
 	if err != nil {
 		return false, fmt.Errorf("error opening destination directory for %s: %w", dst, err)
 	}
 	defer func() { _ = dstRoot.Close() }()
+
+	partialPath := GetPartialDownloadFilePath(dst, fileMetadata.Digest())
+	partialDirName := filepath.Base(filepath.Dir(partialPath))
+	partialName := filepath.Base(partialPath)
 
 	partialDir, err := openPrivatePartialDownloadDirectory(dstRoot, partialDirName)
 	if err != nil {
@@ -610,24 +606,21 @@ func calculateTemplateDigest(src string, params map[string]string) (string, erro
 
 // createFile under provided path and with provided uid and gid.
 //
-// The agent typically runs as root, so all path resolution here must refuse
-// to follow attacker-controlled symlinks (CWE-59). makeDirectories rejects
-// symlinked intermediate components; O_NOFOLLOW rejects a symlinked final
-// component so we never open, truncate, or chown an attacker-chosen target.
+// makeDirectories rejects symlinked intermediate components; O_NOFOLLOW rejects a symlinked
+// final component so we never open, truncate, or chown an attacker-chosen target (CWE-59).
 func createFile(path string, fileCreateData *fileCreateData, permission os.FileMode, truncate bool) (*os.File, error) {
-	var err error
-	if err = makeDirectories(path, fileManagerDefaultDirectoryPermission, fileCreateData.uid, fileCreateData.gid); err != nil {
+	if err := makeDirectories(path, fileManagerDefaultDirectoryPermission, fileCreateData.uid, fileCreateData.gid); err != nil {
 		return nil, err
 	}
 
-	openFlags := os.O_RDWR | os.O_CREATE | syscall.O_NOFOLLOW
+	openFlags := os.O_RDWR | os.O_CREATE | unix.O_NOFOLLOW
 
 	if truncate {
 		openFlags = openFlags | os.O_TRUNC
 	}
 
-	var file *os.File
-	if file, err = os.OpenFile(path, openFlags, permission); err != nil {
+	file, err := os.OpenFile(path, openFlags, permission)
+	if err != nil {
 		return nil, fmt.Errorf("error creating file %s: %w", path, err)
 	}
 
@@ -719,19 +712,14 @@ func determineFileCreateData(dst string) (*fileCreateData, error) {
 		return nil, fmt.Errorf("cannot check file ownership: %s - unsupported OS", dst)
 	}
 
-	uid, gid := int(fileStat.Uid), int(fileStat.Gid)
-
-	// get diskspace available
-	stat := syscall.Statfs_t{}
-	if err = syscall.Statfs(dst, &stat); err != nil {
-		return nil, fmt.Errorf("cannot check disk space: %s - %w", dst, err)
+	bytesAvail, err := diskSpaceAvailable(dst)
+	if err != nil {
+		return nil, err
 	}
 
-	bytesAvail := int64(stat.Bavail) * int64(stat.Bsize)
-
 	return &fileCreateData{
-		uid:        uid,
-		gid:        gid,
+		uid:        int(fileStat.Uid),
+		gid:        int(fileStat.Gid),
 		bytesAvail: bytesAvail,
 		path:       dst,
 	}, nil
@@ -739,20 +727,27 @@ func determineFileCreateData(dst string) (*fileCreateData, error) {
 
 // refreshBytesAvail updates the bytesAvail field of the fileCreateData by re-checking the available disk space.
 func (fcd *fileCreateData) refreshBytesAvail() error {
-	stat := syscall.Statfs_t{}
-	if err := syscall.Statfs(fcd.path, &stat); err != nil {
-		return fmt.Errorf("cannot check disk space: %s - %w", fcd.path, err)
+	bytesAvail, err := diskSpaceAvailable(fcd.path)
+	if err != nil {
+		return err
 	}
 
-	fcd.bytesAvail = int64(stat.Bavail) * int64(stat.Bsize)
+	fcd.bytesAvail = bytesAvail
 	return nil
 }
 
+// diskSpaceAvailable returns the number of free bytes on the filesystem containing path.
+func diskSpaceAvailable(path string) (int64, error) {
+	var stat unix.Statfs_t
+	if err := unix.Statfs(path, &stat); err != nil {
+		return 0, fmt.Errorf("cannot check disk space: %s - %w", path, err)
+	}
+
+	return int64(stat.Bavail) * int64(stat.Bsize), nil
+}
+
 // makeDirectories checks if all directories for the dst file exist, if not, create them with provided owner and group.
-//
-// All ancestor components are inspected with os.Lstat so that a symlinked
-// directory (e.g. an attacker's ~/.ssh pointing at /root/.ssh) is rejected
-// rather than transparently traversed by the kernel (CWE-59).
+// Symlinked path components (e.g. an attacker's ~/.ssh pointing at /root/.ssh) are rejected (CWE-59).
 func makeDirectories(dst string, permissions os.FileMode, uid, gid int) error {
 	if dst == "/" {
 		return nil
@@ -760,35 +755,78 @@ func makeDirectories(dst string, permissions os.FileMode, uid, gid int) error {
 
 	dirPath := filepath.Dir(dst)
 
-	// Always validate / materialize ancestors first so that symlinks higher
-	// up the path are caught even when dirPath itself already exists.
-	if err := makeDirectories(dirPath, permissions, uid, gid); err != nil {
-		return err
-	}
-
-	dirInfo, err := os.Lstat(dirPath)
-	if errors.Is(err, os.ErrNotExist) {
-		if err = os.Mkdir(dirPath, permissions); err != nil {
-			return fmt.Errorf("cannot create directorty %s: %w", dirPath, err)
-		}
-
-		if err = os.Chown(dirPath, uid, gid); err != nil {
-			return fmt.Errorf("cannot change owner of %s: %w", dirPath, err)
-		}
-
-		return nil
-	}
-
+	root, err := makeDirectoriesAnchored(dirPath, permissions, uid, gid)
 	if err != nil {
 		return fmt.Errorf("cannot create directory %s: %w", dirPath, err)
 	}
 
-	if dirInfo.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("refusing to traverse symlinked path component %s", dirPath)
+	return root.Close()
+}
+
+// makeDirectoriesAnchored opens dirPath as an os.Root, creating missing components with the provided owner.
+// Each component is created and reopened through its already-open parent, never by pathname, so it
+// cannot be swapped out after a path-based check (CWE-59, CWE-367).
+func makeDirectoriesAnchored(dirPath string, permissions os.FileMode, uid, gid int) (*os.Root, error) {
+	root, err := openRootAnchor(dirPath)
+	if err != nil {
+		return nil, err
 	}
 
-	if !dirInfo.IsDir() {
-		return fmt.Errorf("cannot create directory, %s is a file", dirPath)
+	for _, name := range pathComponents(dirPath) {
+		next, err := ensureSubdirectoryAnchored(root, name, permissions, uid, gid)
+		_ = root.Close()
+		if err != nil {
+			return nil, err
+		}
+
+		root = next
+	}
+
+	return root, nil
+}
+
+// ensureSubdirectoryAnchored opens the directory name within parent, creating it with the given
+// owner first if missing. A directory that already existed keeps its current owner.
+func ensureSubdirectoryAnchored(parent *os.Root, name string, permissions os.FileMode, uid, gid int) (*os.Root, error) {
+	err := parent.Mkdir(name, permissions)
+	if err != nil && !errors.Is(err, fs.ErrExist) {
+		return nil, fmt.Errorf("cannot create directory %s: %w", name, err)
+	}
+
+	dir, openErr := openSubdirectoryAnchored(parent, name)
+	if openErr != nil {
+		return nil, openErr
+	}
+
+	// a directory that already existed keeps its current owner
+	if errors.Is(err, fs.ErrExist) {
+		return dir, nil
+	}
+
+	if err = verifyOwnedByAgent(dir); err != nil {
+		_ = dir.Close()
+		return nil, fmt.Errorf("directory %s was replaced after creating it: %w", name, err)
+	}
+
+	if err = dir.Chown(".", uid, gid); err != nil {
+		_ = dir.Close()
+		return nil, fmt.Errorf("cannot change owner of %s: %w", name, err)
+	}
+
+	return dir, nil
+}
+
+// verifyOwnedByAgent fails if dir isn't owned by the agent's effective user, e.g. because it was
+// swapped out right after being created.
+func verifyOwnedByAgent(dir *os.Root) error {
+	info, err := dir.Stat(".")
+	if err != nil {
+		return err
+	}
+
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || int(stat.Uid) != os.Geteuid() {
+		return fmt.Errorf("not owned by the agent")
 	}
 
 	return nil
@@ -868,16 +906,9 @@ func openPrivatePartialDownloadDirectory(parent *os.Root, dirName string) (*os.R
 		return nil, fmt.Errorf("error opening partial download directory %s: %w", dirName, err)
 	}
 
-	info, err := dir.Stat(".")
-	if err != nil {
+	if err = verifyOwnedByAgent(dir); err != nil {
 		_ = dir.Close()
-		return nil, fmt.Errorf("error checking partial download directory %s: %w", dirName, err)
-	}
-
-	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !ok || int(stat.Uid) != os.Geteuid() {
-		_ = dir.Close()
-		return nil, fmt.Errorf("partial download directory %s is not owned by the agent", dirName)
+		return nil, fmt.Errorf("partial download directory %s is not owned by the agent: %w", dirName, err)
 	}
 
 	if err = dir.Chmod(".", partialDownloadDirectoryPermission); err != nil {
@@ -891,35 +922,42 @@ func openPrivatePartialDownloadDirectory(parent *os.Root, dirName string) (*os.R
 // openDirectoryAnchored opens dirPath as an os.Root, resolving it relative to the filesystem
 // root one component at a time. Symlinked path components are rejected rather than traversed.
 func openDirectoryAnchored(dirPath string) (*os.Root, error) {
-	dirPath = filepath.Clean(dirPath)
-
-	start := "."
-	if filepath.IsAbs(dirPath) {
-		start = string(filepath.Separator)
-	}
-
-	root, err := os.OpenRoot(start)
+	root, err := openRootAnchor(dirPath)
 	if err != nil {
 		return nil, err
 	}
 
-	rest := strings.TrimPrefix(dirPath, string(filepath.Separator))
-
-	for component := range strings.SplitSeq(rest, string(filepath.Separator)) {
-		if component == "" || component == "." {
-			continue
-		}
-
-		next, openErr := openSubdirectoryAnchored(root, component)
+	for _, name := range pathComponents(dirPath) {
+		next, err := openSubdirectoryAnchored(root, name)
 		_ = root.Close()
-		if openErr != nil {
-			return nil, openErr
+		if err != nil {
+			return nil, err
 		}
 
 		root = next
 	}
 
 	return root, nil
+}
+
+// openRootAnchor opens the filesystem root (or cwd, for a relative dirPath) as an os.Root, ready
+// for its components to be resolved one at a time.
+func openRootAnchor(dirPath string) (*os.Root, error) {
+	if filepath.IsAbs(dirPath) {
+		return os.OpenRoot(string(filepath.Separator))
+	}
+
+	return os.OpenRoot(".")
+}
+
+// pathComponents splits dirPath into its non-empty path components.
+func pathComponents(dirPath string) []string {
+	dirPath = strings.Trim(filepath.Clean(dirPath), string(filepath.Separator))
+	if dirPath == "" || dirPath == "." {
+		return nil
+	}
+
+	return strings.Split(dirPath, string(filepath.Separator))
 }
 
 // openSubdirectoryAnchored opens the directory name within root, refusing to traverse a symlink.
