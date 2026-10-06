@@ -264,9 +264,8 @@ func Test_createFile_doesNotFollowSymlinks(t *testing.T) {
 		targetPath := filepath.Join(sshSymlink, "authorized_keys")
 
 		fcd := &fileCreateData{
-			uid:        os.Geteuid(),
-			gid:        os.Getegid(),
-			bytesAvail: 1 << 30,
+			uid: os.Geteuid(),
+			gid: os.Getegid(),
 		}
 
 		file, err := createFile(targetPath, fcd, sshAuthorizedKeysFilePermission, true)
@@ -315,9 +314,8 @@ func Test_createFile_doesNotFollowSymlinks(t *testing.T) {
 		}
 
 		fcd := &fileCreateData{
-			uid:        os.Geteuid(),
-			gid:        os.Getegid(),
-			bytesAvail: 1 << 30,
+			uid: os.Geteuid(),
+			gid: os.Getegid(),
 		}
 
 		file, err := createFile(stagingPath, fcd, fileManagerDefaultFilePermission, true)

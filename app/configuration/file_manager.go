@@ -259,14 +259,14 @@ func (srv *Service) resumeDownload(ctx context.Context, src string, partialFile 
 		offset = 0
 	}
 
-	// refresh fileCreateData.bytesAvail before checking disk space
-	if err = fileCreateData.refreshBytesAvail(); err != nil {
+	bytesAvail, err := diskSpaceAvailable(fileCreateData.path)
+	if err != nil {
 		return err
 	}
 
 	remaining := size - offset
-	if fileCreateData.bytesAvail < freeDiskOverhead || remaining > fileCreateData.bytesAvail-freeDiskOverhead {
-		return fmt.Errorf("not enough disk space: need %d bytes plus %d bytes overhead, have %d bytes", remaining, freeDiskOverhead, fileCreateData.bytesAvail)
+	if bytesAvail < freeDiskOverhead || remaining > bytesAvail-freeDiskOverhead {
+		return fmt.Errorf("not enough disk space: need %d bytes plus %d bytes overhead, have %d bytes", remaining, freeDiskOverhead, bytesAvail)
 	}
 
 	srcFile, err := srv.getFile(ctx, src, offset)
@@ -664,10 +664,9 @@ func isFileReadyFd(fd *os.File, fileMetadata *FileMetadata) (bool, error) {
 const freeDiskOverhead = 1024 * 1024 * 1 // 1MB
 
 type fileCreateData struct {
-	path       string
-	uid        int
-	gid        int
-	bytesAvail int64
+	path string
+	uid  int
+	gid  int
 }
 
 // determineFileCreateData detects uid and gid for the path.
@@ -682,10 +681,9 @@ func determineFileCreateData(dst string) (*fileCreateData, error) {
 			if parentDirPath == dst {
 				// this should never happen, but in case it does, use the process uid/gid
 				return &fileCreateData{
-					path:       dst,
-					uid:        os.Geteuid(),
-					gid:        os.Getgid(),
-					bytesAvail: 0,
+					path: dst,
+					uid:  os.Geteuid(),
+					gid:  os.Getgid(),
 				}, nil
 			}
 
@@ -701,28 +699,11 @@ func determineFileCreateData(dst string) (*fileCreateData, error) {
 		return nil, fmt.Errorf("cannot check file ownership: %s - unsupported OS", dst)
 	}
 
-	bytesAvail, err := diskSpaceAvailable(dst)
-	if err != nil {
-		return nil, err
-	}
-
 	return &fileCreateData{
-		uid:        int(fileStat.Uid),
-		gid:        int(fileStat.Gid),
-		bytesAvail: bytesAvail,
-		path:       dst,
+		uid:  int(fileStat.Uid),
+		gid:  int(fileStat.Gid),
+		path: dst,
 	}, nil
-}
-
-// refreshBytesAvail updates the bytesAvail field of the fileCreateData by re-checking the available disk space.
-func (fcd *fileCreateData) refreshBytesAvail() error {
-	bytesAvail, err := diskSpaceAvailable(fcd.path)
-	if err != nil {
-		return err
-	}
-
-	fcd.bytesAvail = bytesAvail
-	return nil
 }
 
 // diskSpaceAvailable returns the number of free bytes on the filesystem containing path.
