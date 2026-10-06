@@ -98,7 +98,7 @@ func testFileMetadata(contents []byte) *FileMetadata {
 func writePartialDownload(t *testing.T, dst string, fileMetadata *FileMetadata, contents []byte) string {
 	t.Helper()
 
-	partialPath := GetPartialDownloadFilePath(dst, fileMetadata.Digest())
+	partialPath := GetPartialDownloadFilePath(dst, fileMetadata.SHA256())
 	assert.NoError(t, os.Mkdir(filepath.Dir(partialPath), 0700))
 	assert.NoError(t, os.WriteFile(partialPath, contents, 0600))
 
@@ -108,7 +108,9 @@ func writePartialDownload(t *testing.T, dst string, fileMetadata *FileMetadata, 
 func assertNoPartialDownload(t *testing.T, dst string, fileMetadata *FileMetadata) {
 	t.Helper()
 
-	_, err := os.Stat(filepath.Dir(GetPartialDownloadFilePath(dst, fileMetadata.Digest())))
+	partialPath := GetPartialDownloadFilePath(dst, fileMetadata.SHA256())
+
+	_, err := os.Stat(filepath.Dir(partialPath))
 	assert.True(t, errors.Is(err, fs.ErrNotExist))
 }
 
@@ -198,7 +200,7 @@ func Test_downloadHTTP_ResumesAfterInterruptedDownload(t *testing.T) {
 
 	dst := filepath.Join(t.TempDir(), "file.txt")
 	fileMetadata := testFileMetadata(contents)
-	partialPath := GetPartialDownloadFilePath(dst, fileMetadata.Digest())
+	partialPath := GetPartialDownloadFilePath(dst, fileMetadata.SHA256())
 
 	created, err := srv.downloadMetadataCompare(t.Context(), "", "file.txt", dst, fileMetadata)
 	if !errors.Is(err, io.ErrUnexpectedEOF) {
@@ -337,7 +339,7 @@ func Test_downloadHTTP_UnexpectedStatus(t *testing.T) {
 			dst := filepath.Join(t.TempDir(), "file.txt")
 			fileMetadata := testFileMetadata(contents)
 
-			partialPath := GetPartialDownloadFilePath(dst, fileMetadata.Digest())
+			partialPath := GetPartialDownloadFilePath(dst, fileMetadata.SHA256())
 			if tt.partialLength > 0 {
 				writePartialDownload(t, dst, fileMetadata, contents[:tt.partialLength])
 			}

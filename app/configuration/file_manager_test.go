@@ -425,7 +425,7 @@ func Test_downloadMetadataCompare_DestinationNameExceedingNameMax(t *testing.T) 
 		Tags: map[string]string{fileDigestSHA256Tag: sha256Hex(contents)},
 		Size: int64(len(contents)),
 	}
-	name := filepath.Base(GetPartialDownloadFilePath(dst, fileMetadata.Digest()))
+	name := filepath.Base(GetPartialDownloadFilePath(dst, fileMetadata.SHA256()))
 	assert.False(t, len(name) > 255)
 
 	srv := new(Service)
@@ -455,7 +455,7 @@ func Test_downloadMetadataCompare_CompletePartialIsNotDownloadedAgain(t *testing
 		Size: int64(len(contents)),
 	}
 
-	tmpDst := GetPartialDownloadFilePath(dst, fileMetadata.Digest())
+	tmpDst := GetPartialDownloadFilePath(dst, fileMetadata.SHA256())
 	assert.NoError(t, os.Mkdir(filepath.Dir(tmpDst), 0700))
 	assert.NoError(t, os.WriteFile(tmpDst, contents, 0600))
 
@@ -488,7 +488,7 @@ func Test_downloadMetadataCompare_RejectsNegativeSizeMetadata(t *testing.T) {
 		Size: -1,
 	}
 
-	tmpDst := GetPartialDownloadFilePath(dst, fileMetadata.Digest())
+	tmpDst := GetPartialDownloadFilePath(dst, fileMetadata.SHA256())
 	assert.NoError(t, os.Mkdir(filepath.Dir(tmpDst), 0700))
 	assert.NoError(t, os.WriteFile(tmpDst, contents, 0600))
 
@@ -519,7 +519,7 @@ func Test_downloadMetadataCompare_AllowZeroSizeMetadata(t *testing.T) {
 		Size: 0,
 	}
 
-	tmpDst := GetPartialDownloadFilePath(dst, fileMetadata.Digest())
+	tmpDst := GetPartialDownloadFilePath(dst, fileMetadata.SHA256())
 	assert.NoError(t, os.Mkdir(filepath.Dir(tmpDst), 0700))
 	assert.NoError(t, os.WriteFile(tmpDst, contents, 0600))
 
@@ -550,7 +550,7 @@ func Test_downloadMetadataCompare_RejectsSymlinkedCompletePartial(t *testing.T) 
 		Tags: map[string]string{fileDigestSHA256Tag: sha256Hex(contents)},
 		Size: int64(len(contents)),
 	}
-	tmpDst := GetPartialDownloadFilePath(dst, fileMetadata.Digest())
+	tmpDst := GetPartialDownloadFilePath(dst, fileMetadata.SHA256())
 	assert.NoError(t, os.Mkdir(filepath.Dir(tmpDst), 0700))
 	assert.NoError(t, os.Symlink(target, tmpDst))
 

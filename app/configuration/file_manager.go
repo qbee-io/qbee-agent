@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -97,15 +96,6 @@ func (md *FileMetadata) SHA256() string {
 	return md.Tags[fileDigestSHA256Tag]
 }
 
-// Digest returns the digest identifying the expected contents of the file.
-func (md *FileMetadata) Digest() string {
-	if digest := md.SHA256(); digest != "" {
-		return digest
-	}
-
-	return md.MD5
-}
-
 // downloadFile and return true when file was created. In case the right file already existed, return false.
 func (srv *Service) downloadFile(ctx context.Context, label, src, dst string, file File) (bool, error) {
 	var err error
@@ -148,8 +138,8 @@ func (srv *Service) downloadFile(ctx context.Context, label, src, dst string, fi
 // partial file (open, write, verify, rename) goes through an os.Root anchored to dst's directory,
 // so other users can't substitute files or directories by pathname (CWE-59, CWE-367).
 func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst string, fileMetadata *FileMetadata) (bool, error) {
-	if fileMetadata.Size < 0 {
-		return false, fmt.Errorf("invalid file metadata for %s: file size must not be negative", src)
+	if fileMetadata.Size < 0 || fileMetadata.SHA256() == "" {
+		return false, fmt.Errorf("invalid file metadata for %s: file size must not be negative and SHA256 digest must be present", src)
 	}
 
 	// check if file already exists and has the right contents
@@ -168,7 +158,7 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 	}
 	defer func() { _ = dstRoot.Close() }()
 
-	partialPath := GetPartialDownloadFilePath(dst, fileMetadata.Digest())
+	partialPath := GetPartialDownloadFilePath(dst, fileMetadata.SHA256())
 	partialDirName := filepath.Base(filepath.Dir(partialPath))
 	partialName := filepath.Base(partialPath)
 
@@ -653,13 +643,12 @@ func isFileReadyFd(fd *os.File, fileMetadata *FileMetadata) (bool, error) {
 	var expectedHexDigest string
 	var digest hash.Hash
 
-	if fileMetadata.SHA256() != "" {
-		expectedHexDigest = fileMetadata.SHA256()
-		digest = sha256.New()
-	} else {
-		expectedHexDigest = fileMetadata.MD5
-		digest = md5.New()
+	if fileMetadata.SHA256() == "" {
+		return false, fmt.Errorf("no SHA256 digest available for file %s", fd.Name())
 	}
+
+	expectedHexDigest = fileMetadata.SHA256()
+	digest = sha256.New()
 
 	if _, err := io.Copy(digest, fd); err != nil {
 		return false, fmt.Errorf("calculating local file checksum failed: %w", err)
