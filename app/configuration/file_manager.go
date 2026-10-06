@@ -30,7 +30,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 
 	"golang.org/x/sys/unix"
 
@@ -182,6 +181,7 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 		return false, fmt.Errorf("error downloading %s to %s: %w", src, partialPath, err)
 	}
 
+	// rewind the partial file to the beginning before verifying its contents
 	if _, err = partialFile.Seek(0, io.SeekStart); err != nil {
 		return false, err
 	}
@@ -672,8 +672,8 @@ type fileCreateData struct {
 // determineFileCreateData detects uid and gid for the path.
 func determineFileCreateData(dst string) (*fileCreateData, error) {
 
-	fileInfo, err := os.Stat(dst)
-	if err != nil {
+	var fileStat unix.Stat_t
+	if err := unix.Stat(dst, &fileStat); err != nil {
 		// if path doesn't exist, try to determine owner of the parent directory
 		if errors.Is(err, fs.ErrNotExist) {
 			parentDirPath := filepath.Dir(dst)
@@ -694,11 +694,6 @@ func determineFileCreateData(dst string) (*fileCreateData, error) {
 	}
 
 	// if file exists, use its uid/gid
-	fileStat, ok := fileInfo.Sys().(*syscall.Stat_t)
-	if !ok {
-		return nil, fmt.Errorf("cannot check file ownership: %s - unsupported OS", dst)
-	}
-
 	return &fileCreateData{
 		uid:  int(fileStat.Uid),
 		gid:  int(fileStat.Gid),
@@ -773,11 +768,13 @@ func ensureSubdirectoryAnchored(parent *os.Root, name string, permissions os.Fil
 		return dir, nil
 	}
 
+	// newly created directory should be owned by the agent
 	if err = verifyOwnedByAgent(dir); err != nil {
 		_ = dir.Close()
 		return nil, fmt.Errorf("directory %s was replaced after creating it: %w", name, err)
 	}
 
+	// change the ownership of the newly created directory to the specified uid and gid
 	if err = dir.Chown(".", uid, gid); err != nil {
 		_ = dir.Close()
 		return nil, fmt.Errorf("cannot change owner of %s: %w", name, err)
@@ -789,13 +786,18 @@ func ensureSubdirectoryAnchored(parent *os.Root, name string, permissions os.Fil
 // verifyOwnedByAgent fails if dir isn't owned by the agent's effective user, e.g. because it was
 // swapped out right after being created.
 func verifyOwnedByAgent(dir *os.Root) error {
-	info, err := dir.Stat(".")
+	dirFile, err := dir.Open(".")
 	if err != nil {
 		return err
 	}
+	defer func() { _ = dirFile.Close() }()
 
-	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !ok || int(stat.Uid) != os.Geteuid() {
+	var stat unix.Stat_t
+	if err = unix.Fstat(int(dirFile.Fd()), &stat); err != nil {
+		return err
+	}
+
+	if int(stat.Uid) != os.Geteuid() {
 		return fmt.Errorf("not owned by the agent")
 	}
 
