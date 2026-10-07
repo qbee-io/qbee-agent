@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -31,7 +30,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
+
+	"golang.org/x/sys/unix"
 
 	"go.qbee.io/agent/app/utils"
 )
@@ -131,92 +131,194 @@ func (srv *Service) downloadFile(ctx context.Context, label, src, dst string, fi
 	return fileReady, err
 }
 
+// downloadMetadataCompare downloads src to dst unless dst already matches fileMetadata.
+//
+// The download is staged in a private, agent-owned directory next to dst. Every operation on the
+// partial file (open, write, verify, rename) goes through an os.Root anchored to dst's directory,
+// so other users can't substitute files or directories by pathname (CWE-59, CWE-367).
 func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst string, fileMetadata *FileMetadata) (bool, error) {
-	var err error
+	if fileMetadata.Size < 0 || fileMetadata.SHA256() == "" {
+		return false, fmt.Errorf("invalid file metadata for %s: file size must not be negative and SHA256 digest must be present", src)
+	}
 
 	// check if file already exists and has the right contents
-	var fileReady bool
-	if fileReady, err = isFileReady(dst, fileMetadata); err != nil || fileReady {
+	if fileReady, err := isFileReady(dst, fileMetadata); err != nil || fileReady {
 		return false, err
 	}
 
-	// partial download path
-	tmpDst := GetPartialDownloadFilePath(dst)
-
-	// find size of the already downloaded part if it exists
-	var offset int64
-	if fileInfo, err := os.Stat(tmpDst); err == nil {
-		offset = fileInfo.Size()
-	} else if !errors.Is(err, fs.ErrNotExist) {
-		return false, fmt.Errorf("error checking partial download %s: %w", tmpDst, err)
-	}
-
-	// check if offset is not larger than expected file size
-	if offset > fileMetadata.Size {
-		// partial file is larger than expected, remove it and start over
-		if err = os.Remove(tmpDst); err != nil {
-			return false, fmt.Errorf("error removing invalid partial download %s: %w", tmpDst, err)
-		}
-		offset = 0
-	}
-
-	// check local file create data
 	fileCreateData, err := determineFileCreateData(dst)
 	if err != nil {
 		return false, fmt.Errorf("error determining local fs data: %w", err)
 	}
 
-	// check if there is enough disk space, do not check if size is zero (unknown)
-	if fileMetadata.Size > 0 && fileMetadata.Size-offset+freeDiskOverhead > fileCreateData.bytesAvail {
-		return false, fmt.Errorf("not enough disk space to download file %s: need %d bytes, have %d bytes",
-			src, fileMetadata.Size-offset+freeDiskOverhead, fileCreateData.bytesAvail)
+	dstRoot, err := makeDirectoriesAnchored(filepath.Dir(dst), fileManagerDefaultDirectoryPermission, fileCreateData.uid, fileCreateData.gid)
+	if err != nil {
+		return false, fmt.Errorf("error opening destination directory for %s: %w", dst, err)
 	}
+	defer func() { _ = dstRoot.Close() }()
 
-	// download the file (or remaining part of it)
-	var srcFile io.ReadCloser
-	if srcFile, err = srv.getFile(ctx, src, offset); err != nil {
+	partialPath := GetPartialDownloadFilePath(dst, fileMetadata.SHA256())
+	partialDirName := filepath.Base(filepath.Dir(partialPath))
+	partialName := filepath.Base(partialPath)
+
+	partialDir, err := openPrivatePartialDownloadDirectory(dstRoot, partialDirName)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = partialDir.Close() }()
+
+	if err = removeStalePartialDownloads(partialDir, partialName); err != nil {
 		return false, err
 	}
 
-	defer func() { _ = srcFile.Close() }()
+	partialFile, err := openPartialDownloadFile(partialDir, partialName)
+	if err != nil {
+		return false, fmt.Errorf("error opening partial download %s: %w", partialPath, err)
+	}
+	defer func() { _ = partialFile.Close() }()
 
-	var dstFile *os.File
-	if dstFile, err = createFile(tmpDst, fileCreateData, fileManagerDefaultFilePermission, offset == 0); err != nil {
+	if err = srv.resumeDownload(ctx, src, partialFile, fileMetadata.Size, fileCreateData); err != nil {
+		return false, fmt.Errorf("error downloading %s to %s: %w", src, partialPath, err)
+	}
+
+	// rewind the partial file to the beginning before verifying its contents
+	if _, err = partialFile.Seek(0, io.SeekStart); err != nil {
 		return false, err
 	}
 
-	if offset > 0 {
-		if _, err := dstFile.Seek(offset, io.SeekStart); err != nil {
-			_ = dstFile.Close()
-			return false, fmt.Errorf("error seeking in file %s: %w", tmpDst, err)
-		}
-	}
-
-	defer func() { _ = dstFile.Close() }()
-
-	if _, err = io.Copy(dstFile, srcFile); err != nil {
-		return false, fmt.Errorf("error writing file %s: %w", tmpDst, err)
-	}
-
-	// check if the download to temporary file was successful
-	if fileReady, err = isFileReady(tmpDst, fileMetadata); err != nil {
+	valid, err := isFileReadyFd(partialFile, fileMetadata)
+	if err != nil {
 		return false, err
 	}
 
-	if !fileReady {
-		err = fmt.Errorf("downloaded file %s is incomplete or has invalid contents", src)
-		// in case of error, remove the partial file
-		_ = os.Remove(tmpDst)
+	if !valid {
+		_ = partialDir.Remove(partialName)
+		_ = dstRoot.Remove(partialDirName)
+		return false, fmt.Errorf("downloaded file is incomplete or has invalid contents")
+	}
+
+	if err = installPartialDownload(dstRoot, partialDir, partialFile, dst, fileCreateData); err != nil {
 		return false, err
 	}
 
-	if err = os.Rename(tmpDst, dst); err != nil {
-		return false, fmt.Errorf("error renaming file %s to %s: %w", tmpDst, dst, err)
+	if err = dstRoot.Remove(partialDirName); err != nil {
+		ReportWarning(ctx, err, "Unable to remove partial download directory %s", filepath.Dir(partialPath))
 	}
 
 	ReportInfo(ctx, nil, msgWithLabel(label, "Successfully downloaded file %s to %s"), src, dst)
 
 	return true, nil
+}
+
+// openPartialDownloadFile opens (or creates) the regular file name within dir.
+// O_RDWR makes opening a planted FIFO non-blocking on Linux; it is then rejected as non-regular.
+func openPartialDownloadFile(dir *os.Root, name string) (*os.File, error) {
+	// os.Root resolves symlinks itself, so a pre-existing symlink must be rejected explicitly.
+	if info, err := dir.Lstat(name); err == nil && !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", name)
+	} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+
+	file, err := dir.OpenFile(name, os.O_RDWR|os.O_CREATE, fileManagerDefaultFilePermission)
+	if err != nil {
+		return nil, err
+	}
+
+	info, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+
+	if !info.Mode().IsRegular() {
+		_ = file.Close()
+		return nil, fmt.Errorf("%s is not a regular file", name)
+	}
+
+	return file, nil
+}
+
+// resumeDownload appends the missing part of src to partialFile, starting over if it is larger than size.
+func (srv *Service) resumeDownload(ctx context.Context, src string, partialFile *os.File, size int64, fileCreateData *fileCreateData) error {
+	info, err := partialFile.Stat()
+	if err != nil {
+		return err
+	}
+
+	offset := info.Size()
+	// requesting bytes beyond a complete file would fail with HTTP 416
+	if offset == size {
+		return nil
+	}
+
+	if offset > size {
+		if err = partialFile.Truncate(0); err != nil {
+			return err
+		}
+		offset = 0
+	}
+
+	bytesAvail, err := diskSpaceAvailable(fileCreateData.path)
+	if err != nil {
+		return err
+	}
+
+	remaining := size - offset
+	if bytesAvail < freeDiskOverhead || remaining > bytesAvail-freeDiskOverhead {
+		return fmt.Errorf("not enough disk space: need %d bytes plus %d bytes overhead, have %d bytes", remaining, freeDiskOverhead, bytesAvail)
+	}
+
+	srcFile, err := srv.getFile(ctx, src, offset)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = srcFile.Close() }()
+
+	if _, err = partialFile.Seek(offset, io.SeekStart); err != nil {
+		return err
+	}
+
+	_, err = io.CopyN(partialFile, srcFile, remaining)
+
+	return err
+}
+
+// installPartialDownload sets ownership of the verified partialFile and renames it to dst.
+//
+// The rename is issued with renameat(2) against the already-open directory descriptors, so neither
+// the staging directory nor dst's directory is resolved by name at rename time. That removes the
+// window in which either could be swapped for a symlink or another directory after being verified
+// (CWE-59, CWE-367).
+func installPartialDownload(dstRoot, partialDir *os.Root, partialFile *os.File, dst string, fileCreateData *fileCreateData) error {
+	if err := partialFile.Chown(fileCreateData.uid, fileCreateData.gid); err != nil {
+		return fmt.Errorf("error setting owner on %s: %w", dst, err)
+	}
+
+	if err := partialFile.Chmod(fileManagerDefaultFilePermission); err != nil {
+		return fmt.Errorf("error setting permissions on %s: %w", dst, err)
+	}
+
+	partialDirFile, err := partialDir.Open(".")
+	if err != nil {
+		return fmt.Errorf("error opening partial download directory for %s: %w", dst, err)
+	}
+	defer func() { _ = partialDirFile.Close() }()
+
+	dstDirFile, err := dstRoot.Open(".")
+	if err != nil {
+		return fmt.Errorf("error opening destination directory for %s: %w", dst, err)
+	}
+	defer func() { _ = dstDirFile.Close() }()
+
+	oldName := filepath.Base(partialFile.Name())
+
+	err = unix.Renameat(int(partialDirFile.Fd()), oldName, int(dstDirFile.Fd()), filepath.Base(dst))
+	if err != nil {
+		return fmt.Errorf("error renaming partial download to %s: %w", dst, err)
+	}
+
+	return nil
 }
 
 const localFileSchema = "file://"
@@ -494,24 +596,21 @@ func calculateTemplateDigest(src string, params map[string]string) (string, erro
 
 // createFile under provided path and with provided uid and gid.
 //
-// The agent typically runs as root, so all path resolution here must refuse
-// to follow attacker-controlled symlinks (CWE-59). makeDirectories rejects
-// symlinked intermediate components; O_NOFOLLOW rejects a symlinked final
-// component so we never open, truncate, or chown an attacker-chosen target.
+// makeDirectories rejects symlinked intermediate components; O_NOFOLLOW rejects a symlinked
+// final component so we never open, truncate, or chown an attacker-chosen target (CWE-59).
 func createFile(path string, fileCreateData *fileCreateData, permission os.FileMode, truncate bool) (*os.File, error) {
-	var err error
-	if err = makeDirectories(path, fileManagerDefaultDirectoryPermission, fileCreateData.uid, fileCreateData.gid); err != nil {
+	if err := makeDirectories(path, fileManagerDefaultDirectoryPermission, fileCreateData.uid, fileCreateData.gid); err != nil {
 		return nil, err
 	}
 
-	openFlags := os.O_RDWR | os.O_CREATE | syscall.O_NOFOLLOW
+	openFlags := os.O_RDWR | os.O_CREATE | unix.O_NOFOLLOW
 
 	if truncate {
 		openFlags = openFlags | os.O_TRUNC
 	}
 
-	var file *os.File
-	if file, err = os.OpenFile(path, openFlags, permission); err != nil {
+	file, err := os.OpenFile(path, openFlags, permission)
+	if err != nil {
 		return nil, fmt.Errorf("error creating file %s: %w", path, err)
 	}
 
@@ -536,18 +635,22 @@ func isFileReady(path string, fileMetadata *FileMetadata) (bool, error) {
 
 	defer func() { _ = fd.Close() }()
 
+	return isFileReadyFd(fd, fileMetadata)
+}
+
+// isFileReadyFd returns true if the contents read from fd match fileMetadata's expected digest.
+func isFileReadyFd(fd *os.File, fileMetadata *FileMetadata) (bool, error) {
 	var expectedHexDigest string
 	var digest hash.Hash
 
-	if fileMetadata.SHA256() != "" {
-		expectedHexDigest = fileMetadata.SHA256()
-		digest = sha256.New()
-	} else {
-		expectedHexDigest = fileMetadata.MD5
-		digest = md5.New()
+	if fileMetadata.SHA256() == "" {
+		return false, fmt.Errorf("no SHA256 digest available for file %s", fd.Name())
 	}
 
-	if _, err = io.Copy(digest, fd); err != nil {
+	expectedHexDigest = fileMetadata.SHA256()
+	digest = sha256.New()
+
+	if _, err := io.Copy(digest, fd); err != nil {
 		return false, fmt.Errorf("calculating local file checksum failed: %w", err)
 	}
 
@@ -561,16 +664,16 @@ func isFileReady(path string, fileMetadata *FileMetadata) (bool, error) {
 const freeDiskOverhead = 1024 * 1024 * 1 // 1MB
 
 type fileCreateData struct {
-	uid        int
-	gid        int
-	bytesAvail int64
+	path string
+	uid  int
+	gid  int
 }
 
 // determineFileCreateData detects uid and gid for the path.
 func determineFileCreateData(dst string) (*fileCreateData, error) {
 
-	fileInfo, err := os.Stat(dst)
-	if err != nil {
+	var fileStat unix.Stat_t
+	if err := unix.Stat(dst, &fileStat); err != nil {
 		// if path doesn't exist, try to determine owner of the parent directory
 		if errors.Is(err, fs.ErrNotExist) {
 			parentDirPath := filepath.Dir(dst)
@@ -578,9 +681,9 @@ func determineFileCreateData(dst string) (*fileCreateData, error) {
 			if parentDirPath == dst {
 				// this should never happen, but in case it does, use the process uid/gid
 				return &fileCreateData{
-					uid:        os.Geteuid(),
-					gid:        os.Getgid(),
-					bytesAvail: 0,
+					path: dst,
+					uid:  os.Geteuid(),
+					gid:  os.Getgid(),
 				}, nil
 			}
 
@@ -591,34 +694,25 @@ func determineFileCreateData(dst string) (*fileCreateData, error) {
 	}
 
 	// if file exists, use its uid/gid
-	fileStat, ok := fileInfo.Sys().(*syscall.Stat_t)
-	if !ok {
-		return nil, fmt.Errorf("cannot check file ownership: %s - unsupported OS", dst)
-	}
-
-	uid, gid := int(fileStat.Uid), int(fileStat.Gid)
-
-	// get diskspace available
-
-	stat := syscall.Statfs_t{}
-	if err = syscall.Statfs(dst, &stat); err != nil {
-		return nil, fmt.Errorf("cannot check disk space: %s - %w", dst, err)
-	}
-
-	bytesAvail := int64(stat.Bavail) * int64(stat.Bsize)
-
 	return &fileCreateData{
-		uid:        uid,
-		gid:        gid,
-		bytesAvail: bytesAvail,
+		uid:  int(fileStat.Uid),
+		gid:  int(fileStat.Gid),
+		path: dst,
 	}, nil
 }
 
+// diskSpaceAvailable returns the number of free bytes on the filesystem containing path.
+func diskSpaceAvailable(path string) (int64, error) {
+	var stat unix.Statfs_t
+	if err := unix.Statfs(path, &stat); err != nil {
+		return 0, fmt.Errorf("cannot check disk space: %s - %w", path, err)
+	}
+
+	return int64(stat.Bavail) * int64(stat.Bsize), nil
+}
+
 // makeDirectories checks if all directories for the dst file exist, if not, create them with provided owner and group.
-//
-// All ancestor components are inspected with os.Lstat so that a symlinked
-// directory (e.g. an attacker's ~/.ssh pointing at /root/.ssh) is rejected
-// rather than transparently traversed by the kernel (CWE-59).
+// Symlinked path components (e.g. an attacker's ~/.ssh pointing at /root/.ssh) are rejected (CWE-59).
 func makeDirectories(dst string, permissions os.FileMode, uid, gid int) error {
 	if dst == "/" {
 		return nil
@@ -626,35 +720,85 @@ func makeDirectories(dst string, permissions os.FileMode, uid, gid int) error {
 
 	dirPath := filepath.Dir(dst)
 
-	// Always validate / materialize ancestors first so that symlinks higher
-	// up the path are caught even when dirPath itself already exists.
-	if err := makeDirectories(dirPath, permissions, uid, gid); err != nil {
-		return err
-	}
-
-	dirInfo, err := os.Lstat(dirPath)
-	if errors.Is(err, os.ErrNotExist) {
-		if err = os.Mkdir(dirPath, permissions); err != nil {
-			return fmt.Errorf("cannot create directorty %s: %w", dirPath, err)
-		}
-
-		if err = os.Chown(dirPath, uid, gid); err != nil {
-			return fmt.Errorf("cannot change owner of %s: %w", dirPath, err)
-		}
-
-		return nil
-	}
-
+	root, err := makeDirectoriesAnchored(dirPath, permissions, uid, gid)
 	if err != nil {
 		return fmt.Errorf("cannot create directory %s: %w", dirPath, err)
 	}
 
-	if dirInfo.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("refusing to traverse symlinked path component %s", dirPath)
+	return root.Close()
+}
+
+// makeDirectoriesAnchored opens dirPath as an os.Root, creating missing components with the provided owner.
+// Each component is created and reopened through its already-open parent, never by pathname, so it
+// cannot be swapped out after a path-based check (CWE-59, CWE-367).
+func makeDirectoriesAnchored(dirPath string, permissions os.FileMode, uid, gid int) (*os.Root, error) {
+	root, err := openRootAnchor(dirPath)
+	if err != nil {
+		return nil, err
 	}
 
-	if !dirInfo.IsDir() {
-		return fmt.Errorf("cannot create directory, %s is a file", dirPath)
+	for _, name := range pathComponents(dirPath) {
+		next, err := ensureSubdirectoryAnchored(root, name, permissions, uid, gid)
+		_ = root.Close()
+		if err != nil {
+			return nil, err
+		}
+
+		root = next
+	}
+
+	return root, nil
+}
+
+// ensureSubdirectoryAnchored opens the directory name within parent, creating it with the given
+// owner first if missing. A directory that already existed keeps its current owner.
+func ensureSubdirectoryAnchored(parent *os.Root, name string, permissions os.FileMode, uid, gid int) (*os.Root, error) {
+	err := parent.Mkdir(name, permissions)
+	if err != nil && !errors.Is(err, fs.ErrExist) {
+		return nil, fmt.Errorf("cannot create directory %s: %w", name, err)
+	}
+
+	dir, openErr := openSubdirectoryAnchored(parent, name)
+	if openErr != nil {
+		return nil, openErr
+	}
+
+	// a directory that already existed keeps its current owner
+	if errors.Is(err, fs.ErrExist) {
+		return dir, nil
+	}
+
+	// newly created directory should be owned by the agent
+	if err = verifyOwnedByAgent(dir); err != nil {
+		_ = dir.Close()
+		return nil, fmt.Errorf("directory %s was replaced after creating it: %w", name, err)
+	}
+
+	// change the ownership of the newly created directory to the specified uid and gid
+	if err = dir.Chown(".", uid, gid); err != nil {
+		_ = dir.Close()
+		return nil, fmt.Errorf("cannot change owner of %s: %w", name, err)
+	}
+
+	return dir, nil
+}
+
+// verifyOwnedByAgent fails if dir isn't owned by the agent's effective user, e.g. because it was
+// swapped out right after being created.
+func verifyOwnedByAgent(dir *os.Root) error {
+	dirFile, err := dir.Open(".")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = dirFile.Close() }()
+
+	var stat unix.Stat_t
+	if err = unix.Fstat(int(dirFile.Fd()), &stat); err != nil {
+		return err
+	}
+
+	if int(stat.Uid) != os.Geteuid() {
+		return fmt.Errorf("not owned by the agent")
 	}
 
 	return nil
@@ -709,7 +853,140 @@ func resolveDestinationPath(source, destination string) (string, error) {
 	return destination, nil
 }
 
-// GetPartialDownloadFilePath returns the file path for a partial download.
-func GetPartialDownloadFilePath(path string) string {
-	return filepath.Join(filepath.Dir(path), fmt.Sprintf(".%s.part", filepath.Base(path)))
+const partialDownloadSuffix = ".part"
+const partialDownloadDirectorySuffix = ".qbee-partials"
+const partialDownloadDirectoryPermission = 0700
+
+// GetPartialDownloadFilePath returns <dir>/.<sha256(basename)>.qbee-partials/<sha256(digest)>.part for path.
+// Hashing keeps names within NAME_MAX and free of path separators from untrusted input.
+func GetPartialDownloadFilePath(path, digest string) string {
+	directory := fmt.Sprintf(".%x%s", sha256.Sum256([]byte(filepath.Base(path))), partialDownloadDirectorySuffix)
+	name := fmt.Sprintf("%x%s", sha256.Sum256([]byte(digest)), partialDownloadSuffix)
+
+	return filepath.Join(filepath.Dir(path), directory, name)
+}
+
+// openPrivatePartialDownloadDirectory creates (if needed) and opens the 0700, agent-owned
+// directory dirName within parent.
+func openPrivatePartialDownloadDirectory(parent *os.Root, dirName string) (*os.Root, error) {
+	if err := parent.Mkdir(dirName, partialDownloadDirectoryPermission); err != nil && !errors.Is(err, fs.ErrExist) {
+		return nil, fmt.Errorf("error creating partial download directory %s: %w", dirName, err)
+	}
+
+	dir, err := openSubdirectoryAnchored(parent, dirName)
+	if err != nil {
+		return nil, fmt.Errorf("error opening partial download directory %s: %w", dirName, err)
+	}
+
+	if err = verifyOwnedByAgent(dir); err != nil {
+		_ = dir.Close()
+		return nil, fmt.Errorf("partial download directory %s is not owned by the agent: %w", dirName, err)
+	}
+
+	if err = dir.Chmod(".", partialDownloadDirectoryPermission); err != nil {
+		_ = dir.Close()
+		return nil, fmt.Errorf("error securing partial download directory %s: %w", dirName, err)
+	}
+
+	return dir, nil
+}
+
+// openDirectoryAnchored opens dirPath as an os.Root, resolving it relative to the filesystem
+// root one component at a time. Symlinked path components are rejected rather than traversed.
+func openDirectoryAnchored(dirPath string) (*os.Root, error) {
+	root, err := openRootAnchor(dirPath)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, name := range pathComponents(dirPath) {
+		next, err := openSubdirectoryAnchored(root, name)
+		_ = root.Close()
+		if err != nil {
+			return nil, err
+		}
+
+		root = next
+	}
+
+	return root, nil
+}
+
+// openRootAnchor opens the filesystem root (or cwd, for a relative dirPath) as an os.Root, ready
+// for its components to be resolved one at a time.
+func openRootAnchor(dirPath string) (*os.Root, error) {
+	if filepath.IsAbs(dirPath) {
+		return os.OpenRoot(string(filepath.Separator))
+	}
+
+	return os.OpenRoot(".")
+}
+
+// pathComponents splits dirPath into its non-empty path components.
+func pathComponents(dirPath string) []string {
+	dirPath = strings.Trim(filepath.Clean(dirPath), string(filepath.Separator))
+	if dirPath == "" || dirPath == "." {
+		return nil
+	}
+
+	return strings.Split(dirPath, string(filepath.Separator))
+}
+
+// openSubdirectoryAnchored opens the directory name within root, refusing to traverse a symlink.
+// The opened directory is compared with the inspected entry, so it cannot be swapped in between
+// the check and the open (CWE-59, CWE-367).
+func openSubdirectoryAnchored(root *os.Root, name string) (*os.Root, error) {
+	linkInfo, err := root.Lstat(name)
+	if err != nil {
+		return nil, err
+	}
+
+	if linkInfo.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("refusing to traverse symlinked path component %s", name)
+	}
+
+	if !linkInfo.IsDir() {
+		return nil, fmt.Errorf("%s is not a directory", name)
+	}
+
+	subRoot, err := root.OpenRoot(name)
+	if err != nil {
+		return nil, err
+	}
+
+	openedInfo, err := subRoot.Stat(".")
+	if err != nil {
+		_ = subRoot.Close()
+		return nil, err
+	}
+
+	if !os.SameFile(linkInfo, openedInfo) {
+		_ = subRoot.Close()
+		return nil, fmt.Errorf("path component %s was replaced while opening it", name)
+	}
+
+	return subRoot, nil
+}
+
+// removeStalePartialDownloads removes partial downloads within dir left over from a previous
+// attempt made for a different digest, keeping only keepName.
+func removeStalePartialDownloads(dir *os.Root, keepName string) error {
+	entries, err := fs.ReadDir(dir.FS(), ".")
+	if err != nil {
+		return fmt.Errorf("error listing partial download directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		name := entry.Name()
+		if name == keepName || entry.IsDir() || !strings.HasSuffix(name, partialDownloadSuffix) {
+			continue
+		}
+
+		// remove the stale partial download
+		if err = dir.Remove(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("error removing stale partial download %s: %w", name, err)
+		}
+	}
+
+	return nil
 }
