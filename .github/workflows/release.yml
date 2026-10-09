@@ -80,11 +80,7 @@ jobs:
             platform: arm/v7
             install: dpkg -i ./dist/qbee-agent_${{ github.ref_name }}.0_armhf.deb
 
-          - image: debian:bookworm-slim
-            platform: mips64le
-            install: dpkg -i ./dist/qbee-agent_${{ github.ref_name }}.0_mips64el.deb
-
-          - image: debian:testing-slim
+          - image: debian:stable-slim
             platform: riscv64
             install: dpkg -i ./dist/qbee-agent_${{ github.ref_name }}.0_riscv64.deb
 
