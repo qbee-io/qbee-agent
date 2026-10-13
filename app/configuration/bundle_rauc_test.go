@@ -35,6 +35,45 @@ func Test_Should_Generate_Rauc_Path(t *testing.T) {
 	assert.True(t, raucPath == "")
 }
 
+func Test_Redact(t *testing.T) {
+
+	var testCases = []struct {
+		name       string
+		raucBundle RaucBundle
+		input      string
+		raucPath   string
+		expected   string
+	}{
+		{
+			name: "downloaded bundle retains local install path",
+			raucBundle: RaucBundle{
+				RaucBundle: "https://example.com/bundle.raucb",
+				Download:   true,
+			},
+			input:    "failed to install rauc bundle /var/cache/rauc/bundle.raucb: some error",
+			raucPath: "/var/cache/rauc/bundle.raucb",
+			expected: "failed to install rauc bundle /var/cache/rauc/bundle.raucb: some error",
+		},
+		{
+			name: "streaming bundle replaces signed url with rauc bundle",
+			raucBundle: RaucBundle{
+				RaucBundle: "/path/to/bundle.raucb",
+				Download:   false,
+			},
+			input:    "failed to install rauc bundle https://example.com/signed/bundle.raucb?token=abc: some error",
+			raucPath: "https://example.com/signed/bundle.raucb?token=abc",
+			expected: "failed to install rauc bundle /path/to/bundle.raucb: some error",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := tc.raucBundle.redact(tc.input, tc.raucPath)
+			assert.Equal(t, result, tc.expected)
+		})
+	}
+}
+
 func Test_IsCompatible(t *testing.T) {
 
 	var testCases = []struct {
