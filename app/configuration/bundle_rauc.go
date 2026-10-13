@@ -161,7 +161,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	// some bootloader interfaces do not report the new slot as boot primary after install
 	newRaucStatus, err := image.GetRaucStatus(ctx)
 
-	// errors should not happen at thils point, we should return
+	// errors should not happen at this point, we should return
 
 	if err != nil {
 		ReportError(ctx, err, "Failed to get new RAUC status after installation")
@@ -267,7 +267,10 @@ func isLastInstall(lastInstallFile string, bundleInfo *RaucBundleInfo) (bool, er
 
 	var lastInstall RaucBundleInfo
 	if err := json.Unmarshal(data, &lastInstall); err != nil {
-		return false, err
+		if removeErr := os.Remove(lastInstallFile); removeErr != nil && !os.IsNotExist(removeErr) {
+			return false, fmt.Errorf("remove invalid RAUC last-install record: %w", removeErr)
+		}
+		return false, nil
 	}
 
 	return lastInstall.Hash == bundleInfo.Hash, nil
