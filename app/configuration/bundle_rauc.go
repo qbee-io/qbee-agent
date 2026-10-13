@@ -158,11 +158,13 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		r.RaucBundle,
 	)
 
+	// Evaluate if a reboot is required after RAUC bundle installation
+	if CheckCondition(ctx, r.RebootCondition) {
+		service.RebootAfterRun(ctx)
+	}
+
 	// some bootloader interfaces do not report the new slot as boot primary after install
 	newRaucStatus, err := image.GetRaucStatus(ctx)
-
-	// errors should not happen at this point, we should return
-
 	if err != nil {
 		ReportError(ctx, err, "Failed to get new RAUC status after installation")
 		return err
@@ -178,9 +180,6 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return err
 	}
 
-	if CheckCondition(ctx, r.RebootCondition) {
-		service.RebootAfterRun(ctx)
-	}
 	return nil
 }
 
