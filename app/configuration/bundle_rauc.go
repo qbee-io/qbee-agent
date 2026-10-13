@@ -125,7 +125,10 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return err
 	}
 
-	execInstall, err := shouldInstall(raucStatus, raucBundleInfo)
+	raucStateDir := path.Join(service.cacheDirectory, "rauc")
+	pendingFile := path.Join(raucStateDir, raucPendingInstallFile)
+
+	execInstall, err := shouldInstall(raucStatus, raucBundleInfo, pendingFile)
 
 	if err != nil {
 		ReportError(ctx, err, "Failed to install RAUC bundle")
@@ -154,6 +157,18 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		"RAUC bundle successfully installed '%s'",
 		r.RaucBundle,
 	)
+
+	// some bootloader interfaces do not report the new slot as boot primary after install
+	newRaucStatus, err := image.GetRaucStatus(ctx)
+	if err != nil || newRaucStatus.BootPrimary == raucStatus.BootPrimary {
+		if err := writePendingInstall(raucStateDir, pendingFile, raucBundleInfo); err != nil {
+			ReportError(ctx, err, "Failed to record pending RAUC bundle installation")
+			return err
+		}
+	} else if err := os.Remove(pendingFile); err != nil && !os.IsNotExist(err) {
+		ReportError(ctx, err, "Failed to remove pending RAUC bundle installation record")
+		return err
+	}
 
 	if CheckCondition(ctx, r.RebootCondition) {
 		service.RebootAfterRun(ctx)
@@ -217,7 +232,44 @@ func (r RaucBundle) getRaucBundleInfo(ctx context.Context, url string) (*RaucBun
 	return &raucInfoBundle, nil
 }
 
-func shouldInstall(localRaucInfo *image.RaucStatus, remoteBundleData *RaucBundleInfo) (bool, error) {
+// raucPendingInstallFile records a bundle installed while boot primary remained unchanged.
+const raucPendingInstallFile = "pending_install.json"
+
+func writePendingInstall(stateDir, pendingFile string, bundleInfo *RaucBundleInfo) error {
+	if err := os.MkdirAll(stateDir, 0700); err != nil {
+		return err
+	}
+
+	data, err := json.Marshal(bundleInfo)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(pendingFile, data, 0600)
+}
+
+func isPendingInstall(pendingFile string, bundleInfo *RaucBundleInfo) (bool, error) {
+	data, err := os.ReadFile(pendingFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	var pending RaucBundleInfo
+	if err := json.Unmarshal(data, &pending); err != nil {
+		return false, err
+	}
+
+	return pending.Hash == bundleInfo.Hash, nil
+}
+
+func shouldInstall(
+	localRaucInfo *image.RaucStatus,
+	remoteBundleData *RaucBundleInfo,
+	pendingFile string,
+) (bool, error) {
 
 	if remoteBundleData.Compatible != localRaucInfo.Compatible {
 		return false, fmt.Errorf("RAUC bundle '%s' is not compatible with the system '%s'", remoteBundleData.Compatible, localRaucInfo.Compatible)
@@ -229,6 +281,14 @@ func shouldInstall(localRaucInfo *image.RaucStatus, remoteBundleData *RaucBundle
 	}
 
 	if remoteBundleData.Hash == currentSlotData.SlotStatus.Bundle.Hash {
+		return false, nil
+	}
+
+	pending, err := isPendingInstall(pendingFile, remoteBundleData)
+	if err != nil {
+		return false, err
+	}
+	if pending {
 		return false, nil
 	}
 
