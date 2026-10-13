@@ -139,3 +139,82 @@ func TestParseCommandLine(t *testing.T) {
 		})
 	}
 }
+
+func TestRunCommandOutput(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("success returns stdout and no error", func(t *testing.T) {
+		out, err := RunCommand(ctx, []string{"sh", "-c", "echo 'success stdout'"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if strings.TrimSpace(string(out)) != "success stdout" {
+			t.Fatalf("unexpected output: %s", string(out))
+		}
+	})
+
+	t.Run("failure with stdout and stderr includes both in error and returns stdout", func(t *testing.T) {
+		out, err := RunCommand(ctx, []string{"sh", "-c", "echo 'failed stdout'; echo 'failed stderr' >&2; exit 1"})
+		if err == nil {
+			t.Fatalf("expected error, got nil")
+		}
+		if strings.TrimSpace(string(out)) != "failed stdout" {
+			t.Fatalf("unexpected output: %s", string(out))
+		}
+		errStr := err.Error()
+		if !strings.Contains(errStr, "failed stdout") {
+			t.Fatalf("expected error to contain stdout, got: %s", errStr)
+		}
+		if !strings.Contains(errStr, "failed stderr") {
+			t.Fatalf("expected error to contain stderr, got: %s", errStr)
+		}
+		// verify stdout precedes stderr in error string
+		stdoutIdx := strings.Index(errStr, "failed stdout")
+		stderrIdx := strings.Index(errStr, "failed stderr")
+		if stdoutIdx >= stderrIdx {
+			t.Fatalf("expected stdout before stderr in error, got: %s", errStr)
+		}
+	})
+
+	t.Run("failure with only stdout includes stdout in error and returns stdout", func(t *testing.T) {
+		out, err := RunCommand(ctx, []string{"sh", "-c", "echo 'only stdout'; exit 1"})
+		if err == nil {
+			t.Fatalf("expected error, got nil")
+		}
+		if strings.TrimSpace(string(out)) != "only stdout" {
+			t.Fatalf("unexpected output: %s", string(out))
+		}
+		errStr := err.Error()
+		if !strings.Contains(errStr, "only stdout") {
+			t.Fatalf("expected error to contain stdout, got: %s", errStr)
+		}
+	})
+
+	t.Run("failure with only stderr includes stderr in error", func(t *testing.T) {
+		out, err := RunCommand(ctx, []string{"sh", "-c", "echo 'only stderr' >&2; exit 1"})
+		if err == nil {
+			t.Fatalf("expected error, got nil")
+		}
+		if len(out) != 0 {
+			t.Fatalf("expected empty output, got: %s", string(out))
+		}
+		errStr := err.Error()
+		if !strings.Contains(errStr, "only stderr") {
+			t.Fatalf("expected error to contain stderr, got: %s", errStr)
+		}
+	})
+
+	t.Run("failure with no output has no trailing newline in error", func(t *testing.T) {
+		out, err := RunCommand(ctx, []string{"sh", "-c", "exit 1"})
+		if err == nil {
+			t.Fatalf("expected error, got nil")
+		}
+		if len(out) != 0 {
+			t.Fatalf("expected empty output, got: %s", string(out))
+		}
+		errStr := err.Error()
+		if strings.HasSuffix(errStr, "\n") {
+			t.Fatalf("expected no trailing newline in error, got: %q", errStr)
+		}
+	})
+}

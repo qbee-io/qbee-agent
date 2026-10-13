@@ -78,16 +78,26 @@ func RunPrivilegedCommand(ctx context.Context, cmd []string) ([]byte, error) {
 // RunCommandOutput runs a command and returns its output as a string.
 func RunCommandOutput(command *exec.Cmd) ([]byte, error) {
 	output, err := command.Output()
-
-	if err != nil {
-		exitError := new(exec.ExitError)
-		if errors.As(err, &exitError) {
-			return nil, fmt.Errorf("error running command %v: %w\n%s", command.Args, err, exitError.Stderr)
-		}
-
-		return nil, fmt.Errorf("error running command %v: %w", command.Args, err)
+	if err == nil {
+		return output, nil
 	}
-	return output, nil
+
+	var parts [][]byte
+	if stdout := bytes.TrimSpace(output); len(stdout) > 0 {
+		parts = append(parts, stdout)
+	}
+
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
+		if stderr := bytes.TrimSpace(exitErr.Stderr); len(stderr) > 0 {
+			parts = append(parts, stderr)
+		}
+	}
+
+	if len(parts) > 0 {
+		return output, fmt.Errorf("error running command %v: %w\n%s", command.Args, err, bytes.Join(parts, []byte("\n")))
+	}
+
+	return output, fmt.Errorf("error running command %v: %w", command.Args, err)
 }
 
 // NewCommand creates a new exec.Cmd with the given context and command.
