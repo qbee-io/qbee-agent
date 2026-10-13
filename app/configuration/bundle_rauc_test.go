@@ -93,12 +93,12 @@ func Test_Before_Install(t *testing.T) {
 
 	assert.Equal(t, bundleInfo.Compatible, "qemu86-64 demo platform")
 
-	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, filepath.Join(t.TempDir(), raucPendingInstallFile))
+	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, filepath.Join(t.TempDir(), raucLastInstallFile))
 	assert.NoError(t, err)
 	assert.True(t, doInstall)
 }
 
-func Test_Pending_Install(t *testing.T) {
+func Test_Last_Install(t *testing.T) {
 	var raucStatus image.RaucStatus
 	err := json.Unmarshal([]byte(StatusBeforeInstall), &raucStatus)
 	assert.NoError(t, err)
@@ -108,16 +108,16 @@ func Test_Pending_Install(t *testing.T) {
 	assert.NoError(t, err)
 
 	stateDir := filepath.Join(t.TempDir(), "rauc")
-	pendingFile := filepath.Join(stateDir, raucPendingInstallFile)
-	assert.NoError(t, writePendingInstall(stateDir, pendingFile, &bundleInfo))
+	lastInstallFile := filepath.Join(stateDir, raucLastInstallFile)
+	assert.NoError(t, writeLastInstall(stateDir, lastInstallFile, &bundleInfo))
 
-	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, pendingFile)
+	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, lastInstallFile)
 	assert.NoError(t, err)
 	assert.False(t, doInstall)
 
 	otherBundle := bundleInfo
 	otherBundle.Hash = "different"
-	doInstall, err = shouldInstall(&raucStatus, &otherBundle, pendingFile)
+	doInstall, err = shouldInstall(&raucStatus, &otherBundle, lastInstallFile)
 	assert.NoError(t, err)
 	assert.True(t, doInstall)
 }
@@ -137,7 +137,7 @@ func Test_After_Reboot(t *testing.T) {
 
 	assert.Equal(t, bundleInfo.Compatible, "qemu86-64 demo platform")
 
-	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, filepath.Join(t.TempDir(), raucPendingInstallFile))
+	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, filepath.Join(t.TempDir(), raucLastInstallFile))
 	assert.NoError(t, err)
 	assert.False(t, doInstall)
 }
@@ -159,7 +159,7 @@ func Test_Incompatible_Bundle(t *testing.T) {
 
 	bundleInfo.Compatible = "qemu86-64 demo platform 2"
 
-	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, filepath.Join(t.TempDir(), raucPendingInstallFile))
+	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, filepath.Join(t.TempDir(), raucLastInstallFile))
 
 	assert.True(t, err != nil)
 	assert.Equal(t, err.Error(), "RAUC bundle 'qemu86-64 demo platform 2' is not compatible with the system 'qemu86-64 demo platform'")
@@ -516,6 +516,63 @@ func Test_UpgradeNoReboot(t *testing.T) {
 	}
 
 	r.MustExec("rm", "-f", raucStatePath)
+	reports, _ = ExecuteTestConfigInDocker(r, config)
+	assert.Equal(t, reports, expectedReports)
+}
+
+func Test_InstallBootPrimaryNotUpdated(t *testing.T) {
+	r := runner.NewRaucRunner(t)
+
+	// makes dummy-bootloader.sh ignore set-primary, so boot primary stays unchanged after install
+	r.MustExec("touch", "/etc/rauc/primary-slot-state-override")
+
+	raucBundlePath := "file:///rauc/test-bundle-1.0.0.raucb"
+	destinationPath := filepath.Join(r.GetStateDirectory(), "rauc", "bundle.raucb")
+	raucCacheDir := filepath.Join(r.GetStateDirectory(), "app_workdir", "cache", "rauc")
+	raucStatePath := filepath.Join(raucCacheDir, "state.json")
+	lastInstallPath := filepath.Join(raucCacheDir, raucLastInstallFile)
+
+	raucConfig := RaucBundle{
+		RaucBundle:      raucBundlePath,
+		Download:        true,
+		DownloadPath:    destinationPath,
+		RebootCondition: "/bin/false",
+	}
+	raucConfig.Enabled = true
+
+	config := CommittedConfig{
+		Bundles: []string{BundleRauc},
+		BundleData: BundleData{
+			Rauc: &raucConfig,
+		},
+	}
+
+	expectedReports := []string{
+		"[INFO] Successfully downloaded file " + raucBundlePath + " to " + destinationPath,
+		"[INFO] RAUC bundle successfully installed '" + raucBundlePath + "'",
+	}
+
+	reports, _ := ExecuteTestConfigInDocker(r, config)
+	assert.Equal(t, reports, expectedReports)
+
+	var raucStatus image.RaucStatus
+	assert.NoError(t, json.Unmarshal(r.MustExec("rauc", "status", "--output-format", "json"), &raucStatus))
+	assert.Equal(t, raucStatus.BootPrimary, "appfs.0")
+
+	// run again to verify that the installation does not repeat
+
+	reports, _ = ExecuteTestConfigInDocker(r, config)
+	assert.Empty(t, reports)
+
+	r.MustExec("test", "-f", lastInstallPath)
+
+	// force a re-download so the install decision isn't short-circuited by the download state
+	r.MustExec("rm", "-f", destinationPath, raucStatePath)
+
+	expectedReports = []string{
+		"[INFO] Successfully downloaded file " + raucBundlePath + " to " + destinationPath,
+	}
+
 	reports, _ = ExecuteTestConfigInDocker(r, config)
 	assert.Equal(t, reports, expectedReports)
 }
