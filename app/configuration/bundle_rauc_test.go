@@ -543,7 +543,8 @@ func Test_FailedInfoReportsStdout(t *testing.T) {
 
 	badBundlePath := "file:///rauc/bad-bundle.raucb"
 	destinationPath := filepath.Join(r.GetStateDirectory(), "rauc", "bundle.raucb")
-	r.CreateFile("/rauc/bad-bundle.raucb", []byte("not a valid bundle"))
+	// make the file world-readable so it's also accessible when running as an unprivileged user
+	r.CreateFileWithPerms("/rauc/bad-bundle.raucb", []byte("not a valid bundle"), 0644)
 
 	raucConfig := RaucBundle{
 		RaucBundle:   badBundlePath,
