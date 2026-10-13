@@ -126,9 +126,9 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	}
 
 	raucStateDir := path.Join(service.cacheDirectory, "rauc")
-	pendingFile := path.Join(raucStateDir, raucPendingInstallFile)
+	lastInstallFile := path.Join(raucStateDir, raucLastInstallFile)
 
-	execInstall, err := shouldInstall(raucStatus, raucBundleInfo, pendingFile)
+	execInstall, err := shouldInstall(raucStatus, raucBundleInfo, lastInstallFile)
 
 	if err != nil {
 		ReportError(ctx, err, "Failed to install RAUC bundle")
@@ -160,13 +160,21 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 
 	// some bootloader interfaces do not report the new slot as boot primary after install
 	newRaucStatus, err := image.GetRaucStatus(ctx)
-	if err != nil || newRaucStatus.BootPrimary == raucStatus.BootPrimary {
-		if err := writePendingInstall(raucStateDir, pendingFile, raucBundleInfo); err != nil {
-			ReportError(ctx, err, "Failed to record pending RAUC bundle installation")
+
+	// errors should not happen at thils point, we should return
+
+	if err != nil {
+		ReportError(ctx, err, "Failed to get new RAUC status after installation")
+		return err
+	}
+
+	if newRaucStatus.BootPrimary == raucStatus.BootPrimary {
+		if err := writeLastInstall(raucStateDir, lastInstallFile, raucBundleInfo); err != nil {
+			ReportError(ctx, err, "Failed to record last RAUC bundle installation")
 			return err
 		}
-	} else if err := os.Remove(pendingFile); err != nil && !os.IsNotExist(err) {
-		ReportError(ctx, err, "Failed to remove pending RAUC bundle installation record")
+	} else if err := os.Remove(lastInstallFile); err != nil && !os.IsNotExist(err) {
+		ReportError(ctx, err, "Failed to remove last RAUC bundle installation record")
 		return err
 	}
 
@@ -232,10 +240,10 @@ func (r RaucBundle) getRaucBundleInfo(ctx context.Context, url string) (*RaucBun
 	return &raucInfoBundle, nil
 }
 
-// raucPendingInstallFile records a bundle installed while boot primary remained unchanged.
-const raucPendingInstallFile = "pending_install.json"
+// raucLastInstallFile records the last bundle installed while boot primary remained unchanged.
+const raucLastInstallFile = "last_install.json"
 
-func writePendingInstall(stateDir, pendingFile string, bundleInfo *RaucBundleInfo) error {
+func writeLastInstall(stateDir, lastInstallFile string, bundleInfo *RaucBundleInfo) error {
 	if err := os.MkdirAll(stateDir, 0700); err != nil {
 		return err
 	}
@@ -245,11 +253,11 @@ func writePendingInstall(stateDir, pendingFile string, bundleInfo *RaucBundleInf
 		return err
 	}
 
-	return os.WriteFile(pendingFile, data, 0600)
+	return os.WriteFile(lastInstallFile, data, 0600)
 }
 
-func isPendingInstall(pendingFile string, bundleInfo *RaucBundleInfo) (bool, error) {
-	data, err := os.ReadFile(pendingFile)
+func isLastInstall(lastInstallFile string, bundleInfo *RaucBundleInfo) (bool, error) {
+	data, err := os.ReadFile(lastInstallFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return false, nil
@@ -257,18 +265,18 @@ func isPendingInstall(pendingFile string, bundleInfo *RaucBundleInfo) (bool, err
 		return false, err
 	}
 
-	var pending RaucBundleInfo
-	if err := json.Unmarshal(data, &pending); err != nil {
+	var lastInstall RaucBundleInfo
+	if err := json.Unmarshal(data, &lastInstall); err != nil {
 		return false, err
 	}
 
-	return pending.Hash == bundleInfo.Hash, nil
+	return lastInstall.Hash == bundleInfo.Hash, nil
 }
 
 func shouldInstall(
 	localRaucInfo *image.RaucStatus,
 	remoteBundleData *RaucBundleInfo,
-	pendingFile string,
+	lastInstallFile string,
 ) (bool, error) {
 
 	if remoteBundleData.Compatible != localRaucInfo.Compatible {
@@ -284,11 +292,11 @@ func shouldInstall(
 		return false, nil
 	}
 
-	pending, err := isPendingInstall(pendingFile, remoteBundleData)
+	alreadyInstalled, err := isLastInstall(lastInstallFile, remoteBundleData)
 	if err != nil {
 		return false, err
 	}
-	if pending {
+	if alreadyInstalled {
 		return false, nil
 	}
 
