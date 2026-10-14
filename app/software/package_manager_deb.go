@@ -298,12 +298,12 @@ func (deb *DebianPackageManager) UpgradeAll(ctx context.Context) (int, []byte, e
 		cache.Delete(debianPackagesCacheKey)
 	}()
 
-	upgradeOutput, err := utils.RunCommandReportOutput(aptUpgradeCmd)
+	upgradeOutput, err := utils.RunCommandForReport(aptUpgradeCmd)
 	if err != nil {
 		return 0, upgradeOutput, err
 	}
 
-	distUpgradeOutput, err := utils.RunCommandReportOutput(aptDistUpgradeCmd)
+	distUpgradeOutput, err := utils.RunCommandForReport(aptDistUpgradeCmd)
 	if err != nil {
 		return 0, distUpgradeOutput, err
 	}
@@ -340,7 +340,7 @@ func (deb *DebianPackageManager) Install(ctx context.Context, pkgName, version s
 
 	defer cache.Delete(debianPackagesCacheKey)
 
-	return utils.RunCommandReportOutput(aptCmd)
+	return utils.RunCommandForReport(aptCmd)
 }
 
 // InstallLocal package.
@@ -369,7 +369,7 @@ func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath s
 
 	aptCmd.Env = []string{"DEBIAN_FRONTEND=noninteractive"}
 
-	aptOutput, err := utils.RunCommandReportOutput(aptCmd)
+	aptOutput, err := utils.RunCommandForReport(aptCmd)
 	return append(dpkgOutput, aptOutput...), err
 }
 

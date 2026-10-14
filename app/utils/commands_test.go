@@ -141,7 +141,7 @@ func TestParseCommandLine(t *testing.T) {
 	}
 }
 
-func TestRunCommandOutput(t *testing.T) {
+func TestRunCommand(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("success returns stdout and no error", func(t *testing.T) {
@@ -309,13 +309,13 @@ func TestRunCommandCheck(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("success returns no error", func(t *testing.T) {
-		if err := RunCommandCheck(ctx, []string{"sh", "-c", "echo 'ignored'; exit 0"}); err != nil {
+		if err := RunCommandForCheck(ctx, []string{"sh", "-c", "echo 'ignored'; exit 0"}); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 
 	t.Run("failure returns an error with no output captured", func(t *testing.T) {
-		err := RunCommandCheck(ctx, []string{"sh", "-c", "echo 'ignored stdout'; echo 'ignored stderr' >&2; exit 1"})
+		err := RunCommandForCheck(ctx, []string{"sh", "-c", "echo 'ignored stdout'; echo 'ignored stderr' >&2; exit 1"})
 		if err == nil {
 			t.Fatalf("expected error, got nil")
 		}
