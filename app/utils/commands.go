@@ -21,10 +21,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"syscall"
 	"time"
 )
@@ -35,9 +37,11 @@ const (
 	contextKeyElevationCommand cmdCtxKey = iota
 )
 
-// RunCommand runs a command and returns its output.
-func RunCommand(ctx context.Context, cmd []string) ([]byte, error) {
-	return RunCommandOutput(NewCommand(ctx, cmd))
+// RunCommand runs a command and returns its stdout, for parsing into structured data.
+// Output is bounded to parseOutputBytesLimit and ErrOutputLimitExceeded is returned if it's exceeded.
+// okExitCode lists exit codes treated as success (default: 0).
+func RunCommand(ctx context.Context, cmd []string, okExitCode ...int) ([]byte, error) {
+	return runCommandParsed(NewCommand(ctx, cmd), okExitCode)
 }
 
 // NewPrivilegedCommand creates a new exec.Cmd with privilege elevation if needed.
@@ -66,31 +70,109 @@ func NewPrivilegedCommand(ctx context.Context, cmd []string) (*exec.Cmd, error) 
 	return NewCommand(ctx, cmd), nil
 }
 
-// RunPrivilegedCommand runs a command with the configured elevation command and returns its output.
-func RunPrivilegedCommand(ctx context.Context, cmd []string) ([]byte, error) {
+// RunPrivilegedCommand runs a command with the configured elevation command and returns its stdout,
+// for parsing into structured data. See RunCommand for output bounds and okExitCode.
+func RunPrivilegedCommand(ctx context.Context, cmd []string, okExitCode ...int) ([]byte, error) {
 	command, err := NewPrivilegedCommand(ctx, cmd)
 	if err != nil {
 		return nil, err
 	}
-	return RunCommandOutput(command)
+	return runCommandParsed(command, okExitCode)
 }
 
-// RunCommandOutput runs a command and returns its output as a string.
-func RunCommandOutput(command *exec.Cmd) ([]byte, error) {
-	output, err := command.Output()
-	if err == nil {
+// RunCommandReport runs a command and returns the tail of its combined stdout/stderr output, for
+// recording as part of a report. Output is bounded to reportOutputBytesLimit by retaining only the
+// tail; this never produces an error on its own. An error is returned only when the command's exit
+// code isn't one of okExitCode (default: 0).
+func RunCommandReport(ctx context.Context, cmd []string, okExitCode ...int) ([]byte, error) {
+	return runCommandReport(NewCommand(ctx, cmd), okExitCode)
+}
+
+// RunPrivilegedCommandReport runs a command with the configured elevation command and returns the tail
+// of its combined stdout/stderr output. See RunCommandReport for output bounds and okExitCode.
+func RunPrivilegedCommandReport(ctx context.Context, cmd []string, okExitCode ...int) ([]byte, error) {
+	command, err := NewPrivilegedCommand(ctx, cmd)
+	if err != nil {
+		return nil, err
+	}
+	return runCommandReport(command, okExitCode)
+}
+
+// parseOutputBytesLimit bounds stdout returned from RunCommand/RunPrivilegedCommand.
+const parseOutputBytesLimit = 1024 * 1024 // 1MB
+
+// reportOutputBytesLimit bounds the combined stdout/stderr tail returned from RunCommandReport/
+// RunPrivilegedCommandReport.
+const reportOutputBytesLimit = 8 * 1024 * 1024 // 8MB
+
+// ErrOutputLimitExceeded is returned when a command's stdout exceeds parseOutputBytesLimit.
+var ErrOutputLimitExceeded = errors.New("command output exceeds limit")
+
+// resolveOkExitCodes returns okExitCode, or []int{0} when none are provided.
+func resolveOkExitCodes(okExitCode []int) []int {
+	if len(okExitCode) == 0 {
+		return []int{0}
+	}
+	return okExitCode
+}
+
+// isOkExitCode reports whether err is an *exec.ExitError with a code in okExitCodes.
+func isOkExitCode(err error, okExitCodes []int) bool {
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		return false
+	}
+	return slices.Contains(okExitCodes, exitErr.ExitCode())
+}
+
+// limitedBuffer keeps up to limit bytes and discards the rest, while still draining the writer.
+type limitedBuffer struct {
+	buffer   bytes.Buffer
+	limit    int
+	exceeded bool
+}
+
+func (lb *limitedBuffer) Write(data []byte) (int, error) {
+	if remaining := lb.limit - lb.buffer.Len(); len(data) > remaining {
+		lb.buffer.Write(data[:remaining])
+		lb.exceeded = true
+	} else {
+		lb.buffer.Write(data)
+	}
+	return len(data), nil
+}
+
+// runCommandParsed runs command, capturing stdout (bounded to parseOutputBytesLimit, hard failure on
+// overflow) and stderr (same bound, for diagnostics only) for structured-data use cases.
+func runCommandParsed(command *exec.Cmd, okExitCode []int) ([]byte, error) {
+	okExitCodes := resolveOkExitCodes(okExitCode)
+
+	stdout := &limitedBuffer{limit: parseOutputBytesLimit}
+	stderr := &limitedBuffer{limit: parseOutputBytesLimit}
+
+	command.Stdout = stdout
+	command.Stderr = stderr
+
+	err := command.Run()
+	output := stdout.buffer.Bytes()
+
+	if err == nil || isOkExitCode(err, okExitCodes) {
+		if stdout.exceeded {
+			return output, fmt.Errorf("error running command %v: %w", command.Args, ErrOutputLimitExceeded)
+		}
 		return output, nil
 	}
 
-	var parts [][]byte
-	if stdout := bytes.TrimSpace(output); len(stdout) > 0 {
-		parts = append(parts, stdout)
+	if stdout.exceeded {
+		err = errors.Join(err, ErrOutputLimitExceeded)
 	}
 
-	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
-		if stderr := bytes.TrimSpace(exitErr.Stderr); len(stderr) > 0 {
-			parts = append(parts, stderr)
-		}
+	var parts [][]byte
+	if trimmed := bytes.TrimSpace(output); len(trimmed) > 0 {
+		parts = append(parts, trimmed)
+	}
+	if trimmed := bytes.TrimSpace(stderr.buffer.Bytes()); len(trimmed) > 0 {
+		parts = append(parts, trimmed)
 	}
 
 	if len(parts) > 0 {
@@ -98,6 +180,52 @@ func RunCommandOutput(command *exec.Cmd) ([]byte, error) {
 	}
 
 	return output, fmt.Errorf("error running command %v: %w", command.Args, err)
+}
+
+// runCommandReport runs command, capturing a tail of the combined stdout/stderr output bounded to
+// reportOutputBytesLimit, for recording as part of a report.
+func runCommandReport(command *exec.Cmd, okExitCode []int) ([]byte, error) {
+	okExitCodes := resolveOkExitCodes(okExitCode)
+
+	tailBuffer := NewTailBuffer(reportOutputBytesLimit)
+	command.Stdout = tailBuffer
+	command.Stderr = tailBuffer
+
+	err := command.Run()
+	output := bytes.Join(tailBuffer.Close(), []byte("\n"))
+
+	if err == nil || isOkExitCode(err, okExitCodes) {
+		return output, nil
+	}
+
+	// the output is also returned separately, but callers often only forward the error (e.g. to a
+	// report), so include it there too.
+	if len(output) > 0 {
+		return output, fmt.Errorf("error running command %v: %w\n%s", command.Args, err, output)
+	}
+
+	return output, fmt.Errorf("error running command %v: %w", command.Args, err)
+}
+
+// RunCommandOutput runs a pre-built command and returns its stdout, for parsing into structured data.
+// See RunCommand for output bounds.
+func RunCommandOutput(command *exec.Cmd) ([]byte, error) {
+	return runCommandParsed(command, nil)
+}
+
+// RunCommandReportOutput runs a pre-built command and returns the tail of its combined stdout/stderr
+// output, for recording as part of a report. See RunCommandReport for output bounds and okExitCode.
+func RunCommandReportOutput(command *exec.Cmd, okExitCode ...int) ([]byte, error) {
+	return runCommandReport(command, okExitCode)
+}
+
+// RunCommandCheck runs a command for its exit status only, discarding stdout and stderr without
+// allocating any buffer for them. Use this when only the exit code matters, e.g. conditions.
+func RunCommandCheck(ctx context.Context, cmd []string) error {
+	command := NewCommand(ctx, cmd)
+	command.Stdout = io.Discard
+	command.Stderr = io.Discard
+	return command.Run()
 }
 
 // NewCommand creates a new exec.Cmd with the given context and command.

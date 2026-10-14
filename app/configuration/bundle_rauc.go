@@ -137,7 +137,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	}
 
 	raucInstallCmd := []string{"rauc", "install", raucPath}
-	output, err := utils.RunPrivilegedCommand(ctx, raucInstallCmd)
+	output, err := utils.RunPrivilegedCommandReport(ctx, raucInstallCmd)
 
 	if err != nil {
 		ReportError(

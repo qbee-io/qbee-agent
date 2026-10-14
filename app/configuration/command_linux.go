@@ -19,11 +19,9 @@
 package configuration
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os/exec"
-	"syscall"
 
 	"go.qbee.io/agent/app/utils"
 )
@@ -41,8 +39,6 @@ func getShell() string {
 	return ""
 }
 
-const commandOutputBytesLimit = 1024 * 1024 // 1MB
-
 // RunCommand runs a command and returns its output.
 func RunCommand(ctx context.Context, command string) ([]byte, error) {
 	command = resolveParameters(ctx, command)
@@ -52,29 +48,5 @@ func RunCommand(ctx context.Context, command string) ([]byte, error) {
 		return nil, fmt.Errorf("cannot execute command '%s', no supported shell found", command)
 	}
 
-	cmd := exec.CommandContext(ctx, shell, "-c", command)
-
-	// set pgid, so we can terminate all subprocesses as well
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setpgid:   true,
-		Pdeathsig: syscall.SIGINT,
-	}
-
-	// explicitly set working directory to root
-	cmd.Dir = "/"
-
-	// append tail buffer to Stdout to collect only most recent bytes
-	tailBuffer := utils.NewTailBuffer(commandOutputBytesLimit)
-
-	cmd.Stdout = tailBuffer
-	cmd.Stderr = tailBuffer
-
-	// run the command
-	err := cmd.Run()
-
-	// grab tail of the output
-	outputLines := tailBuffer.Close()
-	output := bytes.Join(outputLines, []byte("\n"))
-
-	return output, err
+	return utils.RunCommandReport(ctx, []string{shell, "-c", command})
 }

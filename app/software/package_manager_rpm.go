@@ -156,22 +156,15 @@ func (rpm *RpmPackageManager) listAvailableUpdates(ctx context.Context) (map[str
 	updates := make(map[string]string)
 
 	// yum check-updates returns 100 when there are updates available
-	cmdProc, err := utils.NewPrivilegedCommand(ctx, cmd)
-	if err != nil {
-		return nil, fmt.Errorf("error creating command %v: %w", cmd, err)
-	}
-
-	output, err := cmdProc.CombinedOutput()
+	output, err := utils.RunPrivilegedCommand(ctx, cmd)
 	// no error, no updates
 	if err == nil {
 		return nil, nil
 	}
 
-	exitError := new(exec.ExitError)
-	if errors.As(err, &exitError) {
-		if exitError.ExitCode() != 100 {
-			return nil, fmt.Errorf("error running command %v: %w\n%s", cmd, err, exitError.Stderr)
-		}
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 100 {
+		return nil, err
 	}
 
 	err = utils.ForLines(bytes.NewBuffer(output), func(line string) error {
@@ -261,7 +254,7 @@ func (rpm *RpmPackageManager) UpgradeAll(ctx context.Context) (int, []byte, erro
 	}
 
 	var output []byte
-	if output, err = utils.RunPrivilegedCommand(ctx, upgradeCommand); err != nil {
+	if output, err = utils.RunPrivilegedCommandReport(ctx, upgradeCommand); err != nil {
 		return 0, output, err
 	}
 
@@ -289,7 +282,7 @@ func (rpm *RpmPackageManager) Install(ctx context.Context, pkgName, version stri
 		pkgName,
 	}
 
-	return utils.RunPrivilegedCommand(ctx, installCommand)
+	return utils.RunPrivilegedCommandReport(ctx, installCommand)
 }
 
 // InstallLocal package.
@@ -307,7 +300,7 @@ func (rpm *RpmPackageManager) InstallLocal(ctx context.Context, pkgFilePath stri
 		pkgFilePath,
 	}
 
-	return utils.RunPrivilegedCommand(ctx, installCmd)
+	return utils.RunPrivilegedCommandReport(ctx, installCmd)
 }
 
 // PackageArchitecture returns the architecture of the package manager

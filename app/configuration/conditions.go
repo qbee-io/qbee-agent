@@ -34,7 +34,7 @@ func CheckCondition(ctx context.Context, condition string) bool {
 	}
 
 	// return with no error when pre-condition fails
-	if _, err := utils.RunCommand(ctx, []string{getShell(), "-c", condition}); err != nil {
+	if err := utils.RunCommandCheck(ctx, []string{getShell(), "-c", condition}); err != nil {
 		return false
 	}
 

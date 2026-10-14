@@ -148,7 +148,7 @@ func (c FirewallChain) execute(ctx context.Context, table FirewallTableName, cha
 
 	// flush all rules
 	flushCmd := []string{iptablesBin, "-t", string(table), "-F", string(chain)}
-	if _, err = utils.RunPrivilegedCommand(ctx, flushCmd); err != nil {
+	if _, err = utils.RunPrivilegedCommandReport(ctx, flushCmd); err != nil {
 		ReportError(ctx, err, "Firewall configuration failed.")
 		return err
 	}
@@ -158,7 +158,7 @@ func (c FirewallChain) execute(ctx context.Context, table FirewallTableName, cha
 	// apply correct rules
 	for _, rule := range applyRules {
 		cmd := append([]string{iptablesBin, "-t", string(table)}, strings.Fields(rule)...)
-		if _, err = utils.RunPrivilegedCommand(ctx, cmd); err != nil {
+		if _, err = utils.RunPrivilegedCommandReport(ctx, cmd); err != nil {
 			ReportError(ctx, err, "Firewall configuration failed.")
 			return err
 		}

@@ -164,7 +164,7 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 				"--force-recreate",
 			}
 
-			output, err := utils.RunCommand(ctx, dockerComposeStart)
+			output, err := utils.RunCommandReport(ctx, dockerComposeStart)
 			if err != nil {
 				ReportError(ctx, err, "Cannot start compose project %s", project.Name)
 				return err
@@ -359,7 +359,7 @@ func (p projectStatus) remove(ctx context.Context, service *Service, projectName
 		"all",
 	}
 
-	if output, err := utils.RunCommand(ctx, dockerComposeStop); err != nil {
+	if output, err := utils.RunCommandReport(ctx, dockerComposeStop); err != nil {
 		return output, err
 	}
 

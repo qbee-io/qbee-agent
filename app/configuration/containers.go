@@ -175,7 +175,7 @@ func (c Container) run(ctx context.Context, srv *Service, containerBin string) e
 		return err
 	}
 
-	output, err := utils.RunCommand(ctx, runCmd)
+	output, err := utils.RunCommandReport(ctx, runCmd)
 	if err != nil {
 		ReportError(ctx, err, "Unable to start container for image %s.", c.Image)
 		return err
@@ -210,7 +210,7 @@ func (c Container) kill(ctx context.Context, containerID, containerBin string) {
 		containerBin, "kill", containerID,
 	}
 	// Attempt to forcefully kill the container
-	if _, err := utils.RunCommand(ctx, cmd); err != nil {
+	if _, err := utils.RunCommandReport(ctx, cmd); err != nil {
 		log.Errorf("Failed to kill container %s: %w", containerID, err)
 	}
 
@@ -220,7 +220,7 @@ func (c Container) kill(ctx context.Context, containerID, containerBin string) {
 	}
 
 	// Attempt to remove the container
-	if _, err := utils.RunCommand(ctx, cmd); err != nil {
+	if _, err := utils.RunCommandReport(ctx, cmd); err != nil {
 		log.Errorf("Failed to remove container %s: %w", containerID, err)
 	}
 }
@@ -236,7 +236,7 @@ func (c Container) restart(ctx context.Context, srv *Service, containerBin, cont
 
 	c.kill(ctx, containerID, containerBin)
 
-	output, err := utils.RunCommand(ctx, runCmd)
+	output, err := utils.RunCommandReport(ctx, runCmd)
 	if err != nil {
 		ReportError(ctx, err, "Unable to restart container for image %s.", c.Image)
 		return err
@@ -426,7 +426,7 @@ func (a RegistryAuth) execute(ctx context.Context, dockerBin string) error {
 
 	// otherwise we need to add those credentials with login command
 	cmd := []string{dockerBin, "login", "--username", a.Username, "--password", a.Password, a.URL()}
-	output, err := utils.RunCommand(ctx, cmd)
+	output, err := utils.RunCommandReport(ctx, cmd)
 	if err != nil {
 		ReportError(ctx, err, "Unable to authenticate with %s repository.", a.URL())
 		return err
