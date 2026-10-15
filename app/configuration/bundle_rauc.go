@@ -187,17 +187,13 @@ func updateLastInstall(
 	lastInstallFile := path.Join(stateDir, raucLastInstallFile)
 
 	if newStatus.BootPrimary == oldStatus.BootPrimary {
-		if err := writeLastInstall(stateDir, lastInstallFile, bundleInfo); err != nil {
+		if err := writeLastInstall(stateDir, lastInstallFile, newStatus.BootPrimary, bundleInfo); err != nil {
 			return fmt.Errorf("failed to record last RAUC bundle installation: %w", err)
 		}
 		return nil
 	}
 
-	if err := os.Remove(lastInstallFile); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove last RAUC bundle installation record: %w", err)
-	}
-
-	return nil
+	return removeLastInstall(lastInstallFile)
 }
 
 // RaucImageInfo represents the information about a RAUC image.
@@ -264,12 +260,21 @@ func raucStateDirectory(service *Service) string {
 	return path.Join(service.cacheDirectory, "rauc")
 }
 
-func writeLastInstall(stateDir, lastInstallFile string, bundleInfo *RaucBundleInfo) error {
+// raucLastInstall is the persisted record of the last bundle installed while boot primary remained unchanged.
+type raucLastInstall struct {
+	// BootPrimary is the boot primary slot at the time of installation.
+	BootPrimary string `json:"boot_primary"`
+
+	// Bundle is the installed bundle info.
+	Bundle *RaucBundleInfo `json:"bundle"`
+}
+
+func writeLastInstall(stateDir, lastInstallFile, bootPrimary string, bundleInfo *RaucBundleInfo) error {
 	if err := os.MkdirAll(stateDir, 0700); err != nil {
 		return err
 	}
 
-	data, err := json.Marshal(bundleInfo)
+	data, err := json.Marshal(raucLastInstall{BootPrimary: bootPrimary, Bundle: bundleInfo})
 	if err != nil {
 		return err
 	}
@@ -277,24 +282,32 @@ func writeLastInstall(stateDir, lastInstallFile string, bundleInfo *RaucBundleIn
 	return os.WriteFile(lastInstallFile, data, 0600)
 }
 
-func isLastInstall(lastInstallFile string, bundleInfo *RaucBundleInfo) (bool, error) {
+func removeLastInstall(lastInstallFile string) error {
+	if err := os.Remove(lastInstallFile); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove RAUC last-install record: %w", err)
+	}
+	return nil
+}
+
+// readLastInstall returns the last-install record if it is still valid for the current boot primary slot.
+// Invalid records, or records associated with a different boot primary slot, are removed and nil is returned.
+func readLastInstall(lastInstallFile, bootPrimary string) (*raucLastInstall, error) {
 	data, err := os.ReadFile(lastInstallFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return false, nil
+			return nil, nil
 		}
-		return false, err
+		return nil, err
 	}
 
-	var lastInstall RaucBundleInfo
-	if err := json.Unmarshal(data, &lastInstall); err != nil {
-		if removeErr := os.Remove(lastInstallFile); removeErr != nil && !os.IsNotExist(removeErr) {
-			return false, fmt.Errorf("remove invalid RAUC last-install record: %w", removeErr)
-		}
-		return false, nil
+	var lastInstall raucLastInstall
+	if err := json.Unmarshal(data, &lastInstall); err != nil ||
+		lastInstall.Bundle == nil ||
+		lastInstall.BootPrimary != bootPrimary {
+		return nil, removeLastInstall(lastInstallFile)
 	}
 
-	return lastInstall.Hash == bundleInfo.Hash, nil
+	return &lastInstall, nil
 }
 
 func shouldInstall(
@@ -312,17 +325,19 @@ func shouldInstall(
 		return false, err
 	}
 
-	if remoteBundleData.Hash == currentSlotData.SlotStatus.Bundle.Hash {
-		return false, nil
-	}
-
+	// Read (and invalidate on boot primary change) the last-install record before any early return,
+	// so a stale record can't suppress a needed installation after a later boot primary change.
 	lastInstallFile := path.Join(raucStateDirectory(service), raucLastInstallFile)
-	alreadyInstalled, err := isLastInstall(lastInstallFile, remoteBundleData)
+	lastInstall, err := readLastInstall(lastInstallFile, localRaucInfo.BootPrimary)
 	if err != nil {
 		return false, err
 	}
 
-	if alreadyInstalled {
+	if remoteBundleData.Hash == currentSlotData.SlotStatus.Bundle.Hash {
+		return false, nil
+	}
+
+	if lastInstall != nil && lastInstall.Bundle.Hash == remoteBundleData.Hash {
 		return false, nil
 	}
 

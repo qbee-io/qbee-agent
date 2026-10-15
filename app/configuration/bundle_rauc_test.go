@@ -3,6 +3,7 @@ package configuration
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -149,7 +150,7 @@ func Test_Last_Install(t *testing.T) {
 	service := New(nil, "", t.TempDir())
 	stateDir := raucStateDirectory(service)
 	lastInstallFile := filepath.Join(stateDir, raucLastInstallFile)
-	assert.NoError(t, writeLastInstall(stateDir, lastInstallFile, &bundleInfo))
+	assert.NoError(t, writeLastInstall(stateDir, lastInstallFile, raucStatus.BootPrimary, &bundleInfo))
 
 	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, service)
 	assert.NoError(t, err)
@@ -160,6 +161,66 @@ func Test_Last_Install(t *testing.T) {
 	doInstall, err = shouldInstall(&raucStatus, &otherBundle, service)
 	assert.NoError(t, err)
 	assert.True(t, doInstall)
+}
+
+func Test_Last_Install_Invalidated_On_Boot_Primary_Change(t *testing.T) {
+	var statusA image.RaucStatus
+	assert.NoError(t, json.Unmarshal([]byte(StatusBeforeInstall), &statusA))
+
+	var statusB image.RaucStatus
+	assert.NoError(t, json.Unmarshal([]byte(StatusAfterReboot), &statusB))
+
+	var bundleInfo RaucBundleInfo
+	assert.NoError(t, json.Unmarshal([]byte(BundleInfo), &bundleInfo))
+
+	service := New(nil, "", t.TempDir())
+	stateDir := raucStateDirectory(service)
+	lastInstallFile := filepath.Join(stateDir, raucLastInstallFile)
+
+	// bundle installed into B while boot primary remained A
+	assert.NoError(t, writeLastInstall(stateDir, lastInstallFile, statusA.BootPrimary, &bundleInfo))
+
+	doInstall, err := shouldInstall(&statusA, &bundleInfo, service)
+	assert.NoError(t, err)
+	assert.False(t, doInstall)
+
+	// booted and committed B, which already contains the bundle
+	doInstall, err = shouldInstall(&statusB, &bundleInfo, service)
+	assert.NoError(t, err)
+	assert.False(t, doInstall)
+
+	_, err = os.Stat(lastInstallFile)
+	assert.True(t, os.IsNotExist(err))
+
+	// rolled back to A, the bundle must be installed again
+	doInstall, err = shouldInstall(&statusA, &bundleInfo, service)
+	assert.NoError(t, err)
+	assert.True(t, doInstall)
+}
+
+func Test_Last_Install_Legacy_Record(t *testing.T) {
+	var raucStatus image.RaucStatus
+	assert.NoError(t, json.Unmarshal([]byte(StatusBeforeInstall), &raucStatus))
+
+	var bundleInfo RaucBundleInfo
+	assert.NoError(t, json.Unmarshal([]byte(BundleInfo), &bundleInfo))
+
+	service := New(nil, "", t.TempDir())
+	stateDir := raucStateDirectory(service)
+	lastInstallFile := filepath.Join(stateDir, raucLastInstallFile)
+
+	// record without associated boot primary state cannot be trusted
+	legacy, err := json.Marshal(bundleInfo)
+	assert.NoError(t, err)
+	assert.NoError(t, os.MkdirAll(stateDir, 0700))
+	assert.NoError(t, os.WriteFile(lastInstallFile, legacy, 0600))
+
+	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, service)
+	assert.NoError(t, err)
+	assert.True(t, doInstall)
+
+	_, err = os.Stat(lastInstallFile)
+	assert.True(t, os.IsNotExist(err))
 }
 
 func Test_After_Reboot(t *testing.T) {
