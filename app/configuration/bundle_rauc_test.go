@@ -198,29 +198,43 @@ func Test_Last_Install_Invalidated_On_Boot_Primary_Change(t *testing.T) {
 	assert.True(t, doInstall)
 }
 
-func Test_Last_Install_Legacy_Record(t *testing.T) {
+func Test_Last_Install_Invalid_Record(t *testing.T) {
 	var raucStatus image.RaucStatus
 	assert.NoError(t, json.Unmarshal([]byte(StatusBeforeInstall), &raucStatus))
 
 	var bundleInfo RaucBundleInfo
 	assert.NoError(t, json.Unmarshal([]byte(BundleInfo), &bundleInfo))
 
-	service := New(nil, "", t.TempDir())
-	stateDir := raucStateDirectory(service)
-	lastInstallFile := filepath.Join(stateDir, raucLastInstallFile)
-
-	// record without associated boot primary state cannot be trusted
-	legacy, err := json.Marshal(bundleInfo)
+	bundleJSON, err := json.Marshal(bundleInfo)
 	assert.NoError(t, err)
-	assert.NoError(t, os.MkdirAll(stateDir, 0700))
-	assert.NoError(t, os.WriteFile(lastInstallFile, legacy, 0600))
 
-	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, service)
-	assert.NoError(t, err)
-	assert.True(t, doInstall)
+	tests := []struct {
+		name string
+		data string
+	}{
+		{name: "malformed json", data: "{not json"},
+		{name: "missing bundle", data: `{"boot_primary":"` + raucStatus.BootPrimary + `"}`},
+		{name: "missing boot primary", data: `{"bundle":` + string(bundleJSON) + `}`},
+		{name: "empty boot primary", data: `{"boot_primary":"","bundle":` + string(bundleJSON) + `}`},
+	}
 
-	_, err = os.Stat(lastInstallFile)
-	assert.True(t, os.IsNotExist(err))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := New(nil, "", t.TempDir())
+			stateDir := raucStateDirectory(service)
+			lastInstallFile := filepath.Join(stateDir, raucLastInstallFile)
+
+			assert.NoError(t, os.MkdirAll(stateDir, 0700))
+			assert.NoError(t, os.WriteFile(lastInstallFile, []byte(tt.data), 0600))
+
+			doInstall, err := shouldInstall(&raucStatus, &bundleInfo, service)
+			assert.NoError(t, err)
+			assert.True(t, doInstall)
+
+			_, err = os.Stat(lastInstallFile)
+			assert.True(t, os.IsNotExist(err))
+		})
+	}
 }
 
 func Test_After_Reboot(t *testing.T) {
