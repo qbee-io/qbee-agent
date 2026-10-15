@@ -574,7 +574,7 @@ func Test_FailedInstallReportsStdout(t *testing.T) {
 	// Stdout should be included in error report (contains LastError and progress)
 	assert.True(t, strings.Contains(combinedLogs, "LastError: Installation error"))
 	// Stderr should also be included
-	assert.True(t, strings.Contains(combinedLogs, "Installing `"+raucBundlePath+"` failed"))
+	assert.True(t, strings.Contains(combinedLogs, "Installing `"+destinationPath+"` failed"))
 }
 
 func Test_FailedInfoReportsStdout(t *testing.T) {
