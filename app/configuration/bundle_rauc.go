@@ -180,7 +180,7 @@ func updateLastInstall(
 ) error {
 	newStatus, err := image.GetRaucStatus(ctx)
 	if err != nil {
-		return fmt.Errorf("Failed to get new RAUC status after installation: %w", err)
+		return fmt.Errorf("failed to get new RAUC status after installation: %w", err)
 	}
 
 	stateDir := raucStateDirectory(service)
@@ -188,13 +188,13 @@ func updateLastInstall(
 
 	if newStatus.BootPrimary == oldStatus.BootPrimary {
 		if err := writeLastInstall(stateDir, lastInstallFile, bundleInfo); err != nil {
-			return fmt.Errorf("Failed to record last RAUC bundle installation: %w", err)
+			return fmt.Errorf("failed to record last RAUC bundle installation: %w", err)
 		}
 		return nil
 	}
 
 	if err := os.Remove(lastInstallFile); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("Failed to remove last RAUC bundle installation record: %w", err)
+		return fmt.Errorf("failed to remove last RAUC bundle installation record: %w", err)
 	}
 
 	return nil
