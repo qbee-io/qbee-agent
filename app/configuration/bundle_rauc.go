@@ -114,7 +114,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	if err != nil {
 		ReportError(
 			ctx,
-			strings.ReplaceAll(err.Error(), raucPath, r.RaucBundle),
+			r.redact(err.Error(), raucPath),
 			"Failed to get RAUC bundle info for '%s'", r.RaucBundle,
 		)
 		return err
@@ -142,7 +142,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	if err != nil {
 		ReportError(
 			ctx,
-			strings.ReplaceAll(err.Error(), raucPath, r.RaucBundle),
+			r.redact(err.Error(), raucPath),
 			"Failed to install RAUC bundle",
 		)
 		return err
@@ -150,7 +150,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 
 	ReportInfo(
 		ctx,
-		strings.ReplaceAll(string(output), raucPath, r.RaucBundle),
+		r.redact(string(output), raucPath),
 		"RAUC bundle successfully installed '%s'",
 		r.RaucBundle,
 	)
@@ -421,4 +421,11 @@ func generateStreamingURL(service *Service, raucBundle string) (string, error) {
 
 	filePath := path.Join(fileManagerPublicAPIPath, raucBundle)
 	return service.urlSigner.SignURL(filePath)
+}
+
+func (r *RaucBundle) redact(s string, raucPath string) string {
+	if r.Download {
+		return s
+	}
+	return strings.ReplaceAll(s, raucPath, r.RaucBundle)
 }
