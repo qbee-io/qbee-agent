@@ -671,10 +671,13 @@ func writeFileAnchored(path string, data []byte, dirPermission, filePermission o
 	if err != nil {
 		return fmt.Errorf("error writing file %s: %w", path, err)
 	}
-	defer func() { _ = file.Close() }()
-
-	if _, err = file.Write(data); err != nil {
-		return fmt.Errorf("error writing file %s: %w", path, err)
+	_, writeErr := file.Write(data)
+	closeErr := file.Close()
+	if writeErr != nil {
+		return fmt.Errorf("error writing file %s: %w", path, writeErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("error closing file %s: %w", path, closeErr)
 	}
 
 	return nil
