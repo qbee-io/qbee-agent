@@ -618,7 +618,7 @@ func createFile(path string, fileCreateData *fileCreateData, permission os.FileM
 		return nil, fmt.Errorf("error creating file %s: %w", path, lerr)
 	}
 
-	openFlags := os.O_RDWR | os.O_CREATE
+	openFlags := os.O_RDWR | os.O_CREATE | unix.O_NOFOLLOW
 
 	if truncate {
 		openFlags = openFlags | os.O_TRUNC
