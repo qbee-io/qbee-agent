@@ -303,7 +303,6 @@ func shouldInstall(
 	service *Service,
 ) (bool, error) {
 
-	lastInstallFile := path.Join(raucStateDirectory(service), raucLastInstallFile)
 	if remoteBundleData.Compatible != localRaucInfo.Compatible {
 		return false, fmt.Errorf("RAUC bundle '%s' is not compatible with the system '%s'", remoteBundleData.Compatible, localRaucInfo.Compatible)
 	}
@@ -317,15 +316,16 @@ func shouldInstall(
 		return false, nil
 	}
 
+	lastInstallFile := path.Join(raucStateDirectory(service), raucLastInstallFile)
 	alreadyInstalled, err := isLastInstall(lastInstallFile, remoteBundleData)
 	if err != nil {
 		return false, err
 	}
+
 	if alreadyInstalled {
 		return false, nil
 	}
 
-	// image is compatible and not installed on currently running slot
 	return true, nil
 }
 
