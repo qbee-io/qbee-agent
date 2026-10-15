@@ -125,10 +125,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return err
 	}
 
-	raucStateDir := path.Join(service.cacheDirectory, "rauc")
-	lastInstallFile := path.Join(raucStateDir, raucLastInstallFile)
-
-	execInstall, err := shouldInstall(raucStatus, raucBundleInfo, lastInstallFile)
+	execInstall, err := shouldInstall(raucStatus, raucBundleInfo, service)
 
 	if err != nil {
 		ReportError(ctx, err, "Failed to install RAUC bundle")
@@ -163,21 +160,41 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		service.RebootAfterRun(ctx)
 	}
 
-	// some bootloader interfaces do not report the new slot as boot primary after install
-	newRaucStatus, err := image.GetRaucStatus(ctx)
-	if err != nil {
-		ReportError(ctx, err, "Failed to get new RAUC status after installation")
+	// Some bootloader interfaces do not report the new slot as boot primary after install.
+	// This ensures that the last installation record is updated correctly even if the boot primary slot did not change.
+	if err := updateLastInstall(ctx, service, raucStatus, raucBundleInfo); err != nil {
+		ReportError(ctx, err, "Failed to update last RAUC bundle installation record")
 		return err
 	}
 
-	if newRaucStatus.BootPrimary == raucStatus.BootPrimary {
-		if err := writeLastInstall(raucStateDir, lastInstallFile, raucBundleInfo); err != nil {
-			ReportError(ctx, err, "Failed to record last RAUC bundle installation")
-			return err
+	return nil
+}
+
+// updateLastInstall records the installed bundle if boot primary did not change after installation,
+// otherwise it removes any previous record.
+func updateLastInstall(
+	ctx context.Context,
+	service *Service,
+	oldStatus *image.RaucStatus,
+	bundleInfo *RaucBundleInfo,
+) error {
+	newStatus, err := image.GetRaucStatus(ctx)
+	if err != nil {
+		return fmt.Errorf("Failed to get new RAUC status after installation: %w", err)
+	}
+
+	stateDir := raucStateDirectory(service)
+	lastInstallFile := path.Join(stateDir, raucLastInstallFile)
+
+	if newStatus.BootPrimary == oldStatus.BootPrimary {
+		if err := writeLastInstall(stateDir, lastInstallFile, bundleInfo); err != nil {
+			return fmt.Errorf("Failed to record last RAUC bundle installation: %w", err)
 		}
-	} else if err := os.Remove(lastInstallFile); err != nil && !os.IsNotExist(err) {
-		ReportError(ctx, err, "Failed to remove last RAUC bundle installation record")
-		return err
+		return nil
+	}
+
+	if err := os.Remove(lastInstallFile); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("Failed to remove last RAUC bundle installation record: %w", err)
 	}
 
 	return nil
@@ -242,6 +259,11 @@ func (r RaucBundle) getRaucBundleInfo(ctx context.Context, url string) (*RaucBun
 // raucLastInstallFile records the last bundle installed while boot primary remained unchanged.
 const raucLastInstallFile = "last_install.json"
 
+// raucStateDirectory returns the directory where RAUC bundle state is persisted.
+func raucStateDirectory(service *Service) string {
+	return path.Join(service.cacheDirectory, "rauc")
+}
+
 func writeLastInstall(stateDir, lastInstallFile string, bundleInfo *RaucBundleInfo) error {
 	if err := os.MkdirAll(stateDir, 0700); err != nil {
 		return err
@@ -278,9 +300,10 @@ func isLastInstall(lastInstallFile string, bundleInfo *RaucBundleInfo) (bool, er
 func shouldInstall(
 	localRaucInfo *image.RaucStatus,
 	remoteBundleData *RaucBundleInfo,
-	lastInstallFile string,
+	service *Service,
 ) (bool, error) {
 
+	lastInstallFile := path.Join(raucStateDirectory(service), raucLastInstallFile)
 	if remoteBundleData.Compatible != localRaucInfo.Compatible {
 		return false, fmt.Errorf("RAUC bundle '%s' is not compatible with the system '%s'", remoteBundleData.Compatible, localRaucInfo.Compatible)
 	}
@@ -337,7 +360,7 @@ func downloadRaucBundle(ctx context.Context, service *Service, raucPath, raucDow
 		return "", err
 	}
 
-	raucStateDir := path.Join(service.cacheDirectory, "rauc")
+	raucStateDir := raucStateDirectory(service)
 
 	if _, err := os.Stat(raucStateDir); os.IsNotExist(err) {
 		if err := os.MkdirAll(raucStateDir, 0700); err != nil {

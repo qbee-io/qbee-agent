@@ -93,7 +93,7 @@ func Test_Before_Install(t *testing.T) {
 
 	assert.Equal(t, bundleInfo.Compatible, "qemu86-64 demo platform")
 
-	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, filepath.Join(t.TempDir(), raucLastInstallFile))
+	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, New(nil, "", t.TempDir()))
 	assert.NoError(t, err)
 	assert.True(t, doInstall)
 }
@@ -107,17 +107,18 @@ func Test_Last_Install(t *testing.T) {
 	err = json.Unmarshal([]byte(BundleInfo), &bundleInfo)
 	assert.NoError(t, err)
 
-	stateDir := filepath.Join(t.TempDir(), "rauc")
+	service := New(nil, "", t.TempDir())
+	stateDir := raucStateDirectory(service)
 	lastInstallFile := filepath.Join(stateDir, raucLastInstallFile)
 	assert.NoError(t, writeLastInstall(stateDir, lastInstallFile, &bundleInfo))
 
-	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, lastInstallFile)
+	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, service)
 	assert.NoError(t, err)
 	assert.False(t, doInstall)
 
 	otherBundle := bundleInfo
 	otherBundle.Hash = "different"
-	doInstall, err = shouldInstall(&raucStatus, &otherBundle, lastInstallFile)
+	doInstall, err = shouldInstall(&raucStatus, &otherBundle, service)
 	assert.NoError(t, err)
 	assert.True(t, doInstall)
 }
@@ -137,7 +138,7 @@ func Test_After_Reboot(t *testing.T) {
 
 	assert.Equal(t, bundleInfo.Compatible, "qemu86-64 demo platform")
 
-	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, filepath.Join(t.TempDir(), raucLastInstallFile))
+	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, New(nil, "", t.TempDir()))
 	assert.NoError(t, err)
 	assert.False(t, doInstall)
 }
@@ -159,7 +160,7 @@ func Test_Incompatible_Bundle(t *testing.T) {
 
 	bundleInfo.Compatible = "qemu86-64 demo platform 2"
 
-	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, filepath.Join(t.TempDir(), raucLastInstallFile))
+	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, New(nil, "", t.TempDir()))
 
 	assert.True(t, err != nil)
 	assert.Equal(t, err.Error(), "RAUC bundle 'qemu86-64 demo platform 2' is not compatible with the system 'qemu86-64 demo platform'")
