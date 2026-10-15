@@ -325,16 +325,16 @@ func shouldInstall(
 		return false, err
 	}
 
+	if remoteBundleData.Hash == currentSlotData.SlotStatus.Bundle.Hash {
+		return false, nil
+	}
+
 	// Read (and invalidate on boot primary change) the last-install record before any early return,
 	// so a stale record can't suppress a needed installation after a later boot primary change.
 	lastInstallFile := path.Join(raucStateDirectory(service), raucLastInstallFile)
 	lastInstall, err := readLastInstall(lastInstallFile, localRaucInfo.BootPrimary)
 	if err != nil {
 		return false, err
-	}
-
-	if remoteBundleData.Hash == currentSlotData.SlotStatus.Bundle.Hash {
-		return false, nil
 	}
 
 	if lastInstall != nil && lastInstall.Bundle.Hash == remoteBundleData.Hash {
