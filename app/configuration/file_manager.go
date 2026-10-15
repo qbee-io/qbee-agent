@@ -667,7 +667,7 @@ func writeFileAnchored(path string, data []byte, dirPermission, filePermission o
 		return fmt.Errorf("error writing file %s: %w", path, lerr)
 	}
 
-	file, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, filePermission)
+	file, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|unix.O_NOFOLLOW, filePermission)
 	if err != nil {
 		return fmt.Errorf("error writing file %s: %w", path, err)
 	}
