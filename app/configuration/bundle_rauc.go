@@ -289,9 +289,9 @@ func removeLastInstall(lastInstallFile string) error {
 	return nil
 }
 
-// readLastInstall returns the last-install record if it is still valid for the current boot primary slot.
-// Invalid records, or records associated with a different boot primary slot, are removed and nil is returned.
-func readLastInstall(lastInstallFile, bootPrimary string) (*raucLastInstall, error) {
+// getOrDiscardLastInstall returns the last-install record if it is valid for the current boot primary slot.
+// Otherwise, the record is removed from disk and nil is returned.
+func getOrDiscardLastInstall(lastInstallFile, bootPrimary string) (*raucLastInstall, error) {
 	data, err := os.ReadFile(lastInstallFile)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -300,6 +300,7 @@ func readLastInstall(lastInstallFile, bootPrimary string) (*raucLastInstall, err
 		return nil, err
 	}
 
+	// Remove the last-install record if it is invalid or was written for a different boot primary slot.
 	var lastInstall raucLastInstall
 	if err := json.Unmarshal(data, &lastInstall); err != nil ||
 		lastInstall.Bundle == nil ||
@@ -325,18 +326,23 @@ func shouldInstall(
 		return false, err
 	}
 
-	if remoteBundleData.Hash == currentSlotData.SlotStatus.Bundle.Hash {
-		return false, nil
-	}
-
-	// Read (and invalidate on boot primary change) the last-install record before any early return,
-	// so a stale record can't suppress a needed installation after a later boot primary change.
+	// The last-install record is only meaningful while the boot primary slot is the one it was written for.
+	// A stale record must be discarded here, before the "already running" check below, because that check
+	// returns early. If we only discarded it after that check, a record written while booted from slot A would
+	// survive while running from slot B (where the bundle is already active). After a later fallback to slot A,
+	// the leftover record would match boot primary again and wrongly suppress reinstalling the bundle.
 	lastInstallFile := path.Join(raucStateDirectory(service), raucLastInstallFile)
-	lastInstall, err := readLastInstall(lastInstallFile, localRaucInfo.BootPrimary)
+	lastInstall, err := getOrDiscardLastInstall(lastInstallFile, localRaucInfo.BootPrimary)
 	if err != nil {
 		return false, err
 	}
 
+	// Bundle is already running from the boot primary slot.
+	if remoteBundleData.Hash == currentSlotData.SlotStatus.Bundle.Hash {
+		return false, nil
+	}
+
+	// Bundle was already installed, but the bootloader has not switched boot primary to it yet.
 	if lastInstall != nil && lastInstall.Bundle.Hash == remoteBundleData.Hash {
 		return false, nil
 	}
