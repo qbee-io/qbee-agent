@@ -596,11 +596,26 @@ func calculateTemplateDigest(src string, params map[string]string) (string, erro
 
 // createFile under provided path and with provided uid and gid.
 //
-// makeDirectories rejects symlinked intermediate components; O_NOFOLLOW rejects a symlinked
-// final component so we never open, truncate, or chown an attacker-chosen target (CWE-59).
+// The directory is opened via makeDirectoriesAnchored and the file is created through that
+// os.Root, so no path-based lookup happens between directory creation and file open. A
+// pre-existing symlink at the final component is rejected explicitly, since os.Root follows
+// symlinks that stay within the root. Together this closes the TOCTOU window in which a
+// directory component or the destination itself could be swapped for a symlink after being
+// checked (CWE-59, CWE-367).
 func createFile(path string, fileCreateData *fileCreateData, permission os.FileMode, truncate bool) (*os.File, error) {
-	if err := makeDirectories(path, fileManagerDefaultDirectoryPermission, fileCreateData.uid, fileCreateData.gid); err != nil {
-		return nil, err
+	dirPath := filepath.Dir(path)
+	name := filepath.Base(path)
+
+	root, err := makeDirectoriesAnchored(dirPath, fileManagerDefaultDirectoryPermission, fileCreateData.uid, fileCreateData.gid)
+	if err != nil {
+		return nil, fmt.Errorf("error opening destination directory for %s: %w", path, err)
+	}
+	defer func() { _ = root.Close() }()
+
+	if info, lerr := root.Lstat(name); lerr == nil && !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("error creating file %s: %s is not a regular file", path, name)
+	} else if lerr != nil && !errors.Is(lerr, fs.ErrNotExist) {
+		return nil, fmt.Errorf("error creating file %s: %w", path, lerr)
 	}
 
 	openFlags := os.O_RDWR | os.O_CREATE | unix.O_NOFOLLOW
@@ -609,9 +624,17 @@ func createFile(path string, fileCreateData *fileCreateData, permission os.FileM
 		openFlags = openFlags | os.O_TRUNC
 	}
 
-	file, err := os.OpenFile(path, openFlags, permission)
+	file, err := root.OpenFile(name, openFlags, permission)
 	if err != nil {
 		return nil, fmt.Errorf("error creating file %s: %w", path, err)
+	}
+
+	if info, serr := file.Stat(); serr != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("error creating file %s: %w", path, serr)
+	} else if !info.Mode().IsRegular() {
+		_ = file.Close()
+		return nil, fmt.Errorf("error creating file %s: %s is not a regular file", path, name)
 	}
 
 	if err = file.Chown(fileCreateData.uid, fileCreateData.gid); err != nil {
@@ -620,6 +643,63 @@ func createFile(path string, fileCreateData *fileCreateData, permission os.FileM
 	}
 
 	return file, nil
+}
+
+// writeFileAnchored (over)writes name under path with data.
+//
+// The directory is opened via makeDirectoriesAnchored and the write goes through that os.Root, with
+// a pre-existing symlink at the final component rejected explicitly, so neither a directory
+// component nor the destination file can be swapped for a symlink to redirect the write (CWE-59,
+// CWE-367). Used for agent-managed state files whose directory may not exist yet.
+func writeFileAnchored(path string, data []byte, dirPermission, filePermission os.FileMode) error {
+	dirPath := filepath.Dir(path)
+	name := filepath.Base(path)
+
+	root, err := makeDirectoriesAnchored(dirPath, dirPermission, os.Geteuid(), os.Getegid())
+	if err != nil {
+		return fmt.Errorf("error opening directory for %s: %w", path, err)
+	}
+	defer func() { _ = root.Close() }()
+
+	if info, lerr := root.Lstat(name); lerr == nil && !info.Mode().IsRegular() {
+		return fmt.Errorf("error writing file %s: %s is not a regular file", path, name)
+	} else if lerr != nil && !errors.Is(lerr, fs.ErrNotExist) {
+		return fmt.Errorf("error writing file %s: %w", path, lerr)
+	}
+
+	// Open without O_TRUNC and with O_NONBLOCK so that if the destination was replaced by a FIFO
+	// between the Lstat check above and this open, the open doesn't block waiting for a reader and
+	// doesn't write any data into a pipe before the regular-file check below runs. Only after
+	// confirming the opened descriptor refers to a regular file do we truncate and write to it,
+	// closing the TOCTOU window between the check and the open (CWE-367).
+	file, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|unix.O_NOFOLLOW|unix.O_NONBLOCK, filePermission)
+	if err != nil {
+		return fmt.Errorf("error writing file %s: %w", path, err)
+	}
+
+	if info, serr := file.Stat(); serr != nil {
+		_ = file.Close()
+		return fmt.Errorf("error writing file %s: %w", path, serr)
+	} else if !info.Mode().IsRegular() {
+		_ = file.Close()
+		return fmt.Errorf("error writing file %s: %s is not a regular file", path, name)
+	}
+
+	if truncErr := file.Truncate(0); truncErr != nil {
+		_ = file.Close()
+		return fmt.Errorf("error writing file %s: %w", path, truncErr)
+	}
+
+	_, writeErr := file.Write(data)
+	closeErr := file.Close()
+	if writeErr != nil {
+		return fmt.Errorf("error writing file %s: %w", path, writeErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("error closing file %s: %w", path, closeErr)
+	}
+
+	return nil
 }
 
 // isFileReady returns true if provided file exists and has expected contents.

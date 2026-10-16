@@ -27,7 +27,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
+
+	"golang.org/x/sys/unix"
 
 	"go.qbee.io/agent/app/utils/assert"
 )
@@ -337,6 +341,225 @@ func Test_createFile_doesNotFollowSymlinks(t *testing.T) {
 				" path:     %s\n want:     %q\n got:      %q",
 				victimFile, victimContent, got)
 		}
+	})
+}
+
+// Test_writeFileAnchored covers writeFileAnchored, used for /etc/shadow and bundle state files,
+// separately from createFile. Permissions are chosen so common umasks (022, 027) leave them intact.
+func Test_writeFileAnchored(t *testing.T) {
+	const dirPerm, filePerm = os.FileMode(0750), os.FileMode(0640)
+
+	assertContents := func(t *testing.T, path string, want []byte) {
+		t.Helper()
+		got, err := os.ReadFile(path)
+		assert.NoError(t, err)
+		assert.Equal(t, got, want)
+	}
+
+	t.Run("creates missing parents with requested permissions", func(t *testing.T) {
+		base := t.TempDir()
+		path := filepath.Join(base, "a", "b", "state.json")
+
+		assert.NoError(t, writeFileAnchored(path, []byte("data"), dirPerm, filePerm))
+
+		for _, dir := range []string{filepath.Join(base, "a"), filepath.Join(base, "a", "b")} {
+			info, err := os.Lstat(dir)
+			assert.NoError(t, err)
+			assert.True(t, info.IsDir())
+			assert.Equal(t, info.Mode().Perm(), dirPerm)
+		}
+
+		info, err := os.Lstat(path)
+		assert.NoError(t, err)
+		assert.True(t, info.Mode().IsRegular())
+		assert.Equal(t, info.Mode().Perm(), filePerm)
+		assertContents(t, path, []byte("data"))
+	})
+
+	t.Run("creates regular file in existing directory", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "state.json")
+
+		assert.NoError(t, writeFileAnchored(path, []byte("data"), dirPerm, filePerm))
+
+		info, err := os.Lstat(path)
+		assert.NoError(t, err)
+		assert.True(t, info.Mode().IsRegular())
+		assert.Equal(t, info.Mode().Perm(), filePerm)
+		assertContents(t, path, []byte("data"))
+	})
+
+	t.Run("overwrites and truncates existing regular file", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "state.json")
+		assert.NoError(t, os.WriteFile(path, []byte("much-longer-original-content"), filePerm))
+
+		assert.NoError(t, writeFileAnchored(path, []byte("new"), dirPerm, filePerm))
+
+		assertContents(t, path, []byte("new"))
+	})
+
+	t.Run("rejects symlinked intermediate directory", func(t *testing.T) {
+		base := t.TempDir()
+		victimDir := filepath.Join(base, "victim")
+		assert.NoError(t, os.Mkdir(victimDir, 0700))
+		victimFile := filepath.Join(victimDir, "shadow")
+		victimContent := []byte("victim-content\n")
+		assert.NoError(t, os.WriteFile(victimFile, victimContent, 0600))
+
+		link := filepath.Join(base, "link")
+		assert.NoError(t, os.Symlink(victimDir, link))
+
+		err := writeFileAnchored(filepath.Join(link, "shadow"), []byte("attacker"), dirPerm, filePerm)
+		assert.True(t, err != nil)
+		assertContents(t, victimFile, victimContent)
+	})
+
+	t.Run("rejects symlinked intermediate directory below a real parent", func(t *testing.T) {
+		base := t.TempDir()
+		victimDir := filepath.Join(base, "victim")
+		assert.NoError(t, os.Mkdir(victimDir, 0700))
+		victimFile := filepath.Join(victimDir, "state.json")
+		victimContent := []byte("victim-content\n")
+		assert.NoError(t, os.WriteFile(victimFile, victimContent, 0600))
+
+		assert.NoError(t, os.Mkdir(filepath.Join(base, "a"), 0700))
+		assert.NoError(t, os.Symlink(victimDir, filepath.Join(base, "a", "b")))
+
+		err := writeFileAnchored(filepath.Join(base, "a", "b", "state.json"), []byte("attacker"), dirPerm, filePerm)
+		assert.True(t, err != nil)
+		assertContents(t, victimFile, victimContent)
+	})
+
+	t.Run("rejects absolute final symlink outside directory", func(t *testing.T) {
+		base := t.TempDir()
+		victimFile := filepath.Join(base, "victim")
+		victimContent := []byte("victim-content\n")
+		assert.NoError(t, os.WriteFile(victimFile, victimContent, 0600))
+
+		stateDir := filepath.Join(base, "state")
+		assert.NoError(t, os.Mkdir(stateDir, 0700))
+		path := filepath.Join(stateDir, "state.json")
+		assert.NoError(t, os.Symlink(victimFile, path))
+
+		err := writeFileAnchored(path, []byte("attacker"), dirPerm, filePerm)
+		assert.True(t, err != nil)
+		assertContents(t, victimFile, victimContent)
+	})
+
+	t.Run("rejects relative final symlink within directory", func(t *testing.T) {
+		base := t.TempDir()
+		sibling := filepath.Join(base, "sibling")
+		siblingContent := []byte("sibling-content\n")
+		assert.NoError(t, os.WriteFile(sibling, siblingContent, 0600))
+
+		path := filepath.Join(base, "state.json")
+		assert.NoError(t, os.Symlink("sibling", path))
+
+		err := writeFileAnchored(path, []byte("attacker"), dirPerm, filePerm)
+		assert.True(t, err != nil)
+		assertContents(t, sibling, siblingContent)
+	})
+
+	t.Run("rejects dangling final symlink without creating its target", func(t *testing.T) {
+		base := t.TempDir()
+		target := filepath.Join(base, "created-by-attacker")
+		path := filepath.Join(base, "state.json")
+		assert.NoError(t, os.Symlink("created-by-attacker", path))
+
+		err := writeFileAnchored(path, []byte("attacker"), dirPerm, filePerm)
+		assert.True(t, err != nil)
+
+		_, statErr := os.Lstat(target)
+		assert.True(t, errors.Is(statErr, fs.ErrNotExist))
+	})
+
+	t.Run("rejects directory destination", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "state.json")
+		assert.NoError(t, os.Mkdir(path, 0700))
+
+		err := writeFileAnchored(path, []byte("data"), dirPerm, filePerm)
+		assert.True(t, err != nil)
+
+		info, statErr := os.Lstat(path)
+		assert.NoError(t, statErr)
+		assert.True(t, info.IsDir())
+	})
+
+	t.Run("rejects FIFO destination without blocking", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "state.json")
+		assert.NoError(t, unix.Mkfifo(path, 0600))
+
+		err := writeFileAnchored(path, []byte("data"), dirPerm, filePerm)
+		assert.True(t, err != nil)
+
+		info, statErr := os.Lstat(path)
+		assert.NoError(t, statErr)
+		assert.True(t, info.Mode()&os.ModeNamedPipe != 0)
+	})
+
+	t.Run("does not block or leak data when destination is swapped for a FIFO after the check", func(t *testing.T) {
+		// Regression test for the TOCTOU window between root.Lstat and root.OpenFile: the
+		// destination doesn't exist (or is regular) when checked, but is replaced with a FIFO
+		// right before the open. A vulnerable implementation would either block forever on the
+		// write-only open (no reader) or silently "succeed" by writing the payload into the pipe
+		// (with a reader), instead of rejecting the non-regular destination.
+		path := filepath.Join(t.TempDir(), "state.json")
+
+		stopRacing := make(chan struct{})
+		var wg sync.WaitGroup
+
+		// Racer: continuously toggles the destination between absent and a FIFO with an attached
+		// non-blocking reader, trying to land in the window between the check and the open.
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-stopRacing:
+					return
+				default:
+				}
+
+				_ = os.Remove(path)
+				if unix.Mkfifo(path, 0600) != nil {
+					continue
+				}
+
+				if reader, openErr := os.OpenFile(path, os.O_RDONLY|unix.O_NONBLOCK, 0); openErr == nil {
+					buf := make([]byte, 64)
+					for {
+						n, readErr := reader.Read(buf)
+						if n > 0 {
+							assert.True(t, !bytes.Contains(buf[:n], []byte("attacker")))
+						}
+						if readErr != nil {
+							break
+						}
+					}
+					_ = reader.Close()
+				}
+
+				_ = os.Remove(path)
+			}
+		}()
+
+		done := make(chan error, 1)
+		go func() {
+			var err error
+			for i := 0; i < 2000; i++ {
+				err = writeFileAnchored(path, []byte("attacker"), dirPerm, filePerm)
+			}
+			done <- err
+		}()
+
+		select {
+		case <-done:
+			// completed without blocking; the final call's error depends on the race outcome.
+		case <-time.After(10 * time.Second):
+			t.Fatal("writeFileAnchored blocked when destination was raced to a FIFO between check and open")
+		}
+
+		close(stopRacing)
+		wg.Wait()
 	})
 }
 
