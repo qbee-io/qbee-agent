@@ -173,8 +173,11 @@ func fileOperationWithContext(ctx context.Context, operation func() error) error
 	errCh := make(chan error, 1)
 
 	go func() {
-		defer releaseGoroutineSlot()
-		errCh <- operation()
+		// Release the slot before publishing the result, so callers observe the decremented count once they return.
+		errCh <- func() error {
+			defer releaseGoroutineSlot()
+			return operation()
+		}()
 	}()
 
 	select {
