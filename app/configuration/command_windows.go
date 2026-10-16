@@ -27,7 +27,7 @@ import (
 	"go.qbee.io/agent/app/utils"
 )
 
-const commandOutputLinesLimit = 100
+const commandOutputBytesLimit = 1024 * 1024 // 1MB
 
 func RunCommand(ctx context.Context, command string) ([]byte, error) {
 	command = resolveParameters(ctx, command)
@@ -44,8 +44,8 @@ func RunCommand(ctx context.Context, command string) ([]byte, error) {
 	// explicitly set working directory to root
 	cmd.Dir = `C:\`
 
-	// append tail buffer to Stdout to collect only most recent lines
-	tailBuffer := utils.NewTailBuffer(commandOutputLinesLimit)
+	// append tail buffer to Stdout to collect only most recent bytes
+	tailBuffer := utils.NewTailBuffer(commandOutputBytesLimit)
 
 	cmd.Stdout = tailBuffer
 	cmd.Stderr = tailBuffer

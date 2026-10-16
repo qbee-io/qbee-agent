@@ -18,11 +18,11 @@
 
 package main
 
-import "syscall"
+import "golang.org/x/sys/unix"
 
 var defaultUmask int = 0077
 
 func init() {
 	// set global umask
-	syscall.Umask(defaultUmask)
+	unix.Umask(defaultUmask)
 }
