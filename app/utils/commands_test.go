@@ -18,6 +18,7 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -138,4 +139,181 @@ func TestParseCommandLine(t *testing.T) {
 
 		})
 	}
+}
+
+func TestRunCommand(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("success returns stdout and no error", func(t *testing.T) {
+		out, err := RunCommand(ctx, []string{"sh", "-c", "echo 'success stdout'"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if strings.TrimSpace(string(out)) != "success stdout" {
+			t.Fatalf("unexpected output: %s", string(out))
+		}
+	})
+
+	t.Run("failure with stdout and stderr includes both in error and returns stdout", func(t *testing.T) {
+		out, err := RunCommand(ctx, []string{"sh", "-c", "echo 'failed stdout'; echo 'failed stderr' >&2; exit 1"})
+		if err == nil {
+			t.Fatalf("expected error, got nil")
+		}
+		if strings.TrimSpace(string(out)) != "failed stdout" {
+			t.Fatalf("unexpected output: %s", string(out))
+		}
+		// assert on the suffix, since the command args (included in the error) also contain these strings
+		errStr := err.Error()
+		if !strings.HasSuffix(errStr, "\nfailed stdout\nfailed stderr") {
+			t.Fatalf("expected error to end with stdout followed by stderr, got: %q", errStr)
+		}
+	})
+
+	t.Run("failure with only stdout includes stdout in error and returns stdout", func(t *testing.T) {
+		out, err := RunCommand(ctx, []string{"sh", "-c", "echo 'only stdout'; exit 1"})
+		if err == nil {
+			t.Fatalf("expected error, got nil")
+		}
+		if strings.TrimSpace(string(out)) != "only stdout" {
+			t.Fatalf("unexpected output: %s", string(out))
+		}
+		errStr := err.Error()
+		if !strings.HasSuffix(errStr, "\nonly stdout") {
+			t.Fatalf("expected error to end with stdout, got: %q", errStr)
+		}
+	})
+
+	t.Run("failure with only stderr includes stderr in error", func(t *testing.T) {
+		out, err := RunCommand(ctx, []string{"sh", "-c", "echo 'only stderr' >&2; exit 1"})
+		if err == nil {
+			t.Fatalf("expected error, got nil")
+		}
+		if len(out) != 0 {
+			t.Fatalf("expected empty output, got: %s", string(out))
+		}
+		errStr := err.Error()
+		if !strings.HasSuffix(errStr, "\nonly stderr") {
+			t.Fatalf("expected error to end with stderr, got: %q", errStr)
+		}
+	})
+
+	t.Run("failure with verbose stdout bounds error and stdout, returns ErrOutputLimitExceeded", func(t *testing.T) {
+		out, err := RunCommand(ctx, []string{"sh", "-c", "seq 1 300000; exit 1"})
+		if err == nil {
+			t.Fatalf("expected error, got nil")
+		}
+		if !errors.Is(err, ErrOutputLimitExceeded) {
+			t.Fatalf("expected ErrOutputLimitExceeded, got: %v", err)
+		}
+		if len(out) != parseOutputBytesLimit {
+			t.Fatalf("expected stdout bounded to %d bytes, got %d bytes", parseOutputBytesLimit, len(out))
+		}
+	})
+
+	t.Run("success with stdout exceeding the limit returns ErrOutputLimitExceeded", func(t *testing.T) {
+		out, err := RunCommand(ctx, []string{"sh", "-c", "yes | head -c $((1024*1024+1))"})
+		if !errors.Is(err, ErrOutputLimitExceeded) {
+			t.Fatalf("expected ErrOutputLimitExceeded, got: %v", err)
+		}
+		if len(out) != parseOutputBytesLimit {
+			t.Fatalf("expected stdout bounded to %d bytes, got %d bytes", parseOutputBytesLimit, len(out))
+		}
+	})
+
+	t.Run("okExitCode treats the listed exit code as success", func(t *testing.T) {
+		out, err := RunCommand(ctx, []string{"sh", "-c", "echo 'accepted'; exit 42"}, 42)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if strings.TrimSpace(string(out)) != "accepted" {
+			t.Fatalf("unexpected output: %s", string(out))
+		}
+	})
+
+	t.Run("failure with no output has no trailing newline in error", func(t *testing.T) {
+		out, err := RunCommand(ctx, []string{"sh", "-c", "exit 1"})
+		if err == nil {
+			t.Fatalf("expected error, got nil")
+		}
+		if len(out) != 0 {
+			t.Fatalf("expected empty output, got: %s", string(out))
+		}
+		errStr := err.Error()
+		if strings.HasSuffix(errStr, "\n") {
+			t.Fatalf("expected no trailing newline in error, got: %q", errStr)
+		}
+	})
+}
+
+func TestRunCommandReport(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("success returns combined output and no error", func(t *testing.T) {
+		out, err := RunCommandReport(ctx, []string{"sh", "-c", "echo 'report stdout'"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if strings.TrimSpace(string(out)) != "report stdout" {
+			t.Fatalf("unexpected output: %s", string(out))
+		}
+	})
+
+	t.Run("failure returns combined stdout/stderr and an error", func(t *testing.T) {
+		out, err := RunCommandReport(ctx, []string{"sh", "-c", "echo 'report stdout'; echo 'report stderr' >&2; exit 1"})
+		if err == nil {
+			t.Fatalf("expected error, got nil")
+		}
+		if !strings.Contains(string(out), "report stdout") || !strings.Contains(string(out), "report stderr") {
+			t.Fatalf("expected combined output, got: %s", string(out))
+		}
+		// the error itself must also carry the output, since callers often only forward the error.
+		errStr := err.Error()
+		// assert on the suffix, since the command args (included in the error) also contain these strings
+		if !strings.HasSuffix(errStr, "\n"+string(out)) {
+			t.Fatalf("expected error to end with combined output, got: %q", errStr)
+		}
+	})
+
+	t.Run("verbose output is bounded to the tail without an error", func(t *testing.T) {
+		out, err := RunCommandReport(ctx, []string{"sh", "-c", "seq 1 3000000"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(out) > reportOutputBytesLimit {
+			t.Fatalf("expected output bounded to %d bytes, got %d bytes", reportOutputBytesLimit, len(out))
+		}
+		if !strings.HasSuffix(string(out), "3000000") {
+			t.Fatalf("expected tail of output to be retained, got: %s", string(out)[len(out)-100:])
+		}
+	})
+
+	t.Run("okExitCode treats the listed exit code as success", func(t *testing.T) {
+		out, err := RunCommandReport(ctx, []string{"sh", "-c", "echo 'accepted'; exit 42"}, 42)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if strings.TrimSpace(string(out)) != "accepted" {
+			t.Fatalf("unexpected output: %s", string(out))
+		}
+	})
+}
+
+func TestRunCommandDiscardOutput(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("success returns no error", func(t *testing.T) {
+		if err := RunCommandDiscardOutput(ctx, []string{"sh", "-c", "echo 'ignored'; exit 0"}); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("failure returns an error with no output captured", func(t *testing.T) {
+		err := RunCommandDiscardOutput(ctx, []string{"sh", "-c", "v=leaked; echo \"$v-stdout\"; echo \"$v-stderr\" >&2; exit 1"})
+		if err == nil {
+			t.Fatalf("expected error, got nil")
+		}
+		if strings.Contains(err.Error(), "leaked-") {
+			t.Fatalf("expected no output in error, got: %v", err)
+		}
+	})
 }

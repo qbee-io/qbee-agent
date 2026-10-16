@@ -183,7 +183,7 @@ func GetRaucStatus(ctx context.Context) (*RaucStatus, error) {
 	var raucInfo RaucStatus
 	err = json.Unmarshal(raucInfoBytes, &raucInfo)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse RAUC status: %w\n%s", err, raucInfoBytes)
 	}
 	return &raucInfo, nil
 }

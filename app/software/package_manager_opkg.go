@@ -153,7 +153,7 @@ func (opkg *OpkgPackageManager) listAvailableUpdates(ctx context.Context) (map[s
 
 	updateCmd := []string{opkgCmd, "update"}
 
-	if _, err := utils.RunPrivilegedCommand(ctx, updateCmd); err != nil {
+	if err := utils.RunPrivilegedCommandDiscardOutput(ctx, updateCmd); err != nil {
 		return nil, err
 	}
 
@@ -344,7 +344,7 @@ func (opkg *OpkgPackageManager) UpgradeAll(ctx context.Context) (int, []byte, er
 	var output []byte
 
 	for _, cmd := range cmdList {
-		tmpOut, err := utils.RunPrivilegedCommand(ctx, cmd)
+		tmpOut, err := utils.RunPrivilegedCommandReport(ctx, cmd)
 		output = append(output, tmpOut...)
 		if err != nil {
 			return 0, output, fmt.Errorf("error upgrading packages: %w", err)
@@ -368,7 +368,7 @@ func (opkg *OpkgPackageManager) Install(ctx context.Context, pkgName, version st
 
 	defer cache.Delete(opkgPackagesCacheKey)
 
-	return utils.RunPrivilegedCommand(ctx, cmd)
+	return utils.RunPrivilegedCommandReport(ctx, cmd)
 }
 
 // InstallLocal package.
@@ -380,7 +380,7 @@ func (opkg *OpkgPackageManager) InstallLocal(ctx context.Context, pkgFilePath st
 
 	defer cache.Delete(opkgPackagesCacheKey)
 
-	return utils.RunPrivilegedCommand(ctx, cmd)
+	return utils.RunPrivilegedCommandReport(ctx, cmd)
 }
 
 // PackageArchitecture returns the architecture of the package manager

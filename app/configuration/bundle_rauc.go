@@ -137,7 +137,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	}
 
 	raucInstallCmd := []string{"rauc", "install", raucPath}
-	output, err := utils.RunPrivilegedCommand(ctx, raucInstallCmd)
+	output, err := utils.RunPrivilegedCommandReport(ctx, raucInstallCmd)
 
 	if err != nil {
 		ReportError(
@@ -212,7 +212,7 @@ func (r RaucBundle) getRaucBundleInfo(ctx context.Context, url string) (*RaucBun
 	var raucInfoBundle RaucBundleInfo
 	err = json.Unmarshal(raucInfoBytes, &raucInfoBundle)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse RAUC bundle info: %w\n%s", err, raucInfoBytes)
 	}
 	return &raucInfoBundle, nil
 }

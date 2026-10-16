@@ -194,7 +194,7 @@ func (deb *DebianPackageManager) listAvailableUpdates(ctx context.Context) (map[
 	updateCmd := []string{aptGetPath, "update"}
 
 	// update needs to be run with elevated privileges
-	if _, err := utils.RunPrivilegedCommand(ctx, updateCmd); err != nil {
+	if err := utils.RunPrivilegedCommandDiscardOutput(ctx, updateCmd); err != nil {
 		return nil, err
 	}
 
@@ -298,12 +298,12 @@ func (deb *DebianPackageManager) UpgradeAll(ctx context.Context) (int, []byte, e
 		cache.Delete(debianPackagesCacheKey)
 	}()
 
-	upgradeOutput, err := utils.RunCommandOutput(aptUpgradeCmd)
+	upgradeOutput, err := utils.RunCommandForReport(aptUpgradeCmd)
 	if err != nil {
 		return 0, upgradeOutput, err
 	}
 
-	distUpgradeOutput, err := utils.RunCommandOutput(aptDistUpgradeCmd)
+	distUpgradeOutput, err := utils.RunCommandForReport(aptDistUpgradeCmd)
 	if err != nil {
 		return 0, distUpgradeOutput, err
 	}
@@ -340,7 +340,7 @@ func (deb *DebianPackageManager) Install(ctx context.Context, pkgName, version s
 
 	defer cache.Delete(debianPackagesCacheKey)
 
-	return utils.RunCommandOutput(aptCmd)
+	return utils.RunCommandForReport(aptCmd)
 }
 
 // InstallLocal package.
@@ -351,7 +351,7 @@ func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath s
 	defer cache.Delete(debianPackagesCacheKey)
 
 	installCommand := []string{dpkgPath, "-i", pkgFilePath}
-	dpkgOutput, err := utils.RunPrivilegedCommand(ctx, installCommand)
+	dpkgOutput, err := utils.RunPrivilegedCommandReport(ctx, installCommand)
 
 	// dpkg succeeded, return
 	if err == nil {
@@ -369,7 +369,7 @@ func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath s
 
 	aptCmd.Env = []string{"DEBIAN_FRONTEND=noninteractive"}
 
-	aptOutput, err := utils.RunCommandOutput(aptCmd)
+	aptOutput, err := utils.RunCommandForReport(aptCmd)
 	return append(dpkgOutput, aptOutput...), err
 }
 

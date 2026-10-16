@@ -18,20 +18,35 @@ package utils
 
 import (
 	"bytes"
+	"os"
 	"sync"
 )
 
-// TailBuffer keeps a size-limited tail of data in bytes.
+// TailBuffer keeps the last maxBytes of data written to it in a fixed-size ring buffer.
+// The ring is allocated once, so writes never allocate regardless of how much data is written.
+//
+// Layout of the ring:
+//   - Before it wraps (full == false), valid data is ring[:pos] in order.
+//   - After it wraps (full == true), the whole ring is valid. pos points at the oldest byte, which
+//     is also where the next write goes, so the logical order is ring[pos:] followed by ring[:pos].
 type TailBuffer struct {
 	mutex     sync.Mutex
-	buffer    []byte
-	maxBytes  int
+	ring      []byte
+	pos       int  // index of the next byte to write; once full, also the oldest byte
+	full      bool // ring has been filled at least once, so every byte in it is valid
+	truncated bool // some written data has been overwritten (or never fit) and is lost
+	closed    bool // set by Close; further writes are rejected
 }
 
 // NewTailBuffer returns an initialized TailBuffer for maxBytes.
 func NewTailBuffer(maxBytes int) *TailBuffer {
+	// A zero-sized ring is valid and simply discards everything.
+	if maxBytes < 0 {
+		maxBytes = 0
+	}
+
 	return &TailBuffer{
-		maxBytes: maxBytes,
+		ring: make([]byte, maxBytes),
 	}
 }
 
@@ -40,74 +55,109 @@ func (tf *TailBuffer) Write(data []byte) (int, error) {
 	tf.mutex.Lock()
 	defer tf.mutex.Unlock()
 
-	// Append the new data to the buffer
-	tf.buffer = append(tf.buffer, data...)
-
-	// If buffer exceeds maxBytes, trim from the beginning to preserve the tail
-	if len(tf.buffer) > tf.maxBytes {
-		// Keep the last maxBytes, but try to preserve line boundaries
-		excess := len(tf.buffer) - tf.maxBytes
-		tf.buffer = tf.buffer[excess:]
-
-		// Try to find the next newline to avoid cutting in the middle of a line
-		if newlineIdx := bytes.IndexByte(tf.buffer, '\n'); newlineIdx != -1 {
-			tf.buffer = tf.buffer[newlineIdx+1:]
-		}
+	if tf.closed {
+		return 0, os.ErrClosed
 	}
 
+	tf.write(data)
+
+	// Report the full length as written even if part of it was discarded. Returning less would make
+	// callers such as exec.Cmd treat it as a short write and fail the command.
 	return len(data), nil
 }
 
 // Push adds a line to the end of the buffer.
-// This method is kept for compatibility but now works with the byte-based buffer.
 func (tf *TailBuffer) Push(line []byte) {
 	tf.mutex.Lock()
 	defer tf.mutex.Unlock()
 
-	// Add the line with a newline character
-	if len(tf.buffer) > 0 {
-		tf.buffer = append(tf.buffer, '\n')
+	if tf.closed {
+		return
 	}
-	tf.buffer = append(tf.buffer, bytes.TrimSpace(line)...)
 
-	// If buffer exceeds maxBytes, trim from the beginning
-	if len(tf.buffer) > tf.maxBytes {
-		excess := len(tf.buffer) - tf.maxBytes
-		tf.buffer = tf.buffer[excess:]
+	// Separate from the previous line, but don't start an empty buffer with a newline.
+	if tf.pos > 0 || tf.full {
+		tf.write([]byte{'\n'})
+	}
+	tf.write(bytes.TrimSpace(line))
+}
 
-		// Try to find the next newline to avoid cutting in the middle of a line
-		if newlineIdx := bytes.IndexByte(tf.buffer, '\n'); newlineIdx != -1 {
-			tf.buffer = tf.buffer[newlineIdx+1:]
+// write copies data into the ring, overwriting the oldest bytes. Caller must hold the mutex.
+func (tf *TailBuffer) write(data []byte) {
+	size := len(tf.ring)
+	if size == 0 || len(data) == 0 {
+		return
+	}
+
+	// The data alone fills the whole ring, so only its last size bytes survive. Store them in order
+	// starting at index 0, which leaves the ring unwrapped (pos 0, oldest byte at index 0).
+	if len(data) >= size {
+		// Data is lost if this write is bigger than the ring, or if the ring already held anything.
+		if len(data) > size || tf.pos > 0 || tf.full {
+			tf.truncated = true
 		}
+		copy(tf.ring, data[len(data)-size:])
+		tf.pos = 0
+		tf.full = true
+		return
+	}
+
+	// Once the ring is full, any further write overwrites the oldest bytes.
+	if tf.full {
+		tf.truncated = true
+	}
+
+	// Copy as much as fits between pos and the end of the ring, then wrap around and put the rest at
+	// the start. Since len(data) < size, the wrapped part never reaches pos again.
+	n := copy(tf.ring[tf.pos:], data)
+	if n < len(data) {
+		// The write ran past the end of the ring, so the rest overwrites the oldest bytes at the start.
+		tf.truncated = true
+		n += copy(tf.ring, data[n:])
+		tf.full = true
+	}
+
+	// Advance pos, wrapping to 0 when the write ends exactly at the end of the ring.
+	tf.pos = (tf.pos + n) % size
+	if tf.pos == 0 {
+		tf.full = true
 	}
 }
 
-// Close the buffer and return all recorded lines.
-// After calling this method, any writes will result in a panic.
-func (tf *TailBuffer) Close() [][]byte {
+// Close the buffer and return the recorded tail of the data.
+// If data was truncated, the leading partial line is dropped when a line boundary is available.
+// After calling this method, any writes will return os.ErrClosed.
+func (tf *TailBuffer) Close() []byte {
 	tf.mutex.Lock()
 	defer tf.mutex.Unlock()
 
-	if len(tf.buffer) == 0 {
-		return [][]byte{}
+	tf.closed = true
+
+	// Unwrap the ring into logical order (oldest byte first).
+	var output []byte
+	if tf.full && tf.pos > 0 {
+		// Wrapped: the oldest data starts at pos. Do the single copy to stitch the two halves together.
+		output = make([]byte, len(tf.ring))
+		n := copy(output, tf.ring[tf.pos:])
+		copy(output[n:], tf.ring[:tf.pos])
+	} else if tf.full {
+		// Full but pos is 0, so the ring is already in order and can be returned as is.
+		output = tf.ring
+	} else {
+		// Never filled: valid data is everything written so far.
+		output = tf.ring[:tf.pos]
 	}
 
-	// Split the buffer into lines
-	lines := bytes.Split(tf.buffer, []byte{'\n'})
-	
-	// Create result slice with proper capacity
-	result := make([][]byte, 0, len(lines))
-	
-	for _, line := range lines {
-		// Skip empty lines at the end (from trailing newlines)
-		trimmed := bytes.TrimSpace(line)
-		if len(trimmed) > 0 {
-			result = append(result, trimmed)
+	// Drop our reference so the returned slice is owned by the caller and nothing writes to it again.
+	tf.ring = nil
+
+	// If older data was lost, the first line is most likely cut in the middle. Skip to the start of
+	// the next full line. Without any newline there is nothing better to keep, so return the raw tail.
+	if tf.truncated {
+		if newlineIdx := bytes.IndexByte(output, '\n'); newlineIdx != -1 {
+			output = output[newlineIdx+1:]
 		}
 	}
 
-	// Clear the buffer to prevent further use
-	tf.buffer = nil
-
-	return result
+	return output
 }

@@ -317,7 +317,7 @@ func (s Software) restart(ctx context.Context, srv *Service) {
 	}
 
 	var output []byte
-	if output, err = utils.RunPrivilegedCommand(ctx, cmd); err != nil {
+	if output, err = utils.RunPrivilegedCommandReport(ctx, cmd); err != nil {
 		return
 	}
 

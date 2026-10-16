@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"go.qbee.io/agent/app/api"
@@ -533,4 +534,105 @@ func Test_UpgradeNoReboot(t *testing.T) {
 	r.MustExec("rm", "-f", raucStatePath)
 	reports, _ = ExecuteTestConfigInDocker(r, config)
 	assert.Equal(t, reports, expectedReports)
+}
+
+func Test_FailedInstallReportsStdout(t *testing.T) {
+	r := runner.NewRaucRunner(t)
+
+	// Make the target slot unwritable so installation fails during execution
+	r.MustExec("rm", "-f", "/tmp/slot-b.img")
+	r.MustExec("mkdir", "-p", "/tmp/slot-b.img")
+	r.MustExec("chmod", "000", "/tmp/slot-b.img")
+
+	raucBundlePath := "file:///rauc/test-bundle-1.0.0.raucb"
+	destinationPath := filepath.Join(r.GetStateDirectory(), "rauc", "bundle.raucb")
+
+	raucConfig := RaucBundle{
+		RaucBundle:      raucBundlePath,
+		Download:        true,
+		DownloadPath:    destinationPath,
+		RebootCondition: "/bin/false",
+	}
+	raucConfig.Enabled = true
+
+	config := CommittedConfig{
+		Bundles: []string{BundleRauc},
+		BundleData: BundleData{
+			Rauc: &raucConfig,
+		},
+	}
+
+	expectedReports := []string{
+		"[INFO] Successfully downloaded file " + raucBundlePath + " to " + destinationPath,
+		"[ERR] Failed to install RAUC bundle",
+	}
+
+	reports, logs := ExecuteTestConfigInDocker(r, config)
+	assert.Equal(t, reports, expectedReports)
+
+	combinedLogs := strings.Join(logs, "\n")
+	// Stdout should be included in error report (contains LastError and progress)
+	assert.True(t, strings.Contains(combinedLogs, "LastError: Installation error"))
+	// Stderr should also be included
+	assert.True(t, strings.Contains(combinedLogs, "Installing `"+destinationPath+"` failed"))
+}
+
+func Test_FailedInfoReportsStdout(t *testing.T) {
+	r := runner.NewRaucRunner(t)
+
+	badBundlePath := "file:///rauc/bad-bundle.raucb"
+	destinationPath := filepath.Join(r.GetStateDirectory(), "rauc", "bundle.raucb")
+	// make the file world-readable so it's also accessible when running as an unprivileged user
+	r.CreateFileWithPerms("/rauc/bad-bundle.raucb", []byte("not a valid bundle"), 0644)
+
+	raucConfig := RaucBundle{
+		RaucBundle:   badBundlePath,
+		Download:     true,
+		DownloadPath: destinationPath,
+	}
+	raucConfig.Enabled = true
+
+	config := CommittedConfig{
+		Bundles: []string{BundleRauc},
+		BundleData: BundleData{
+			Rauc: &raucConfig,
+		},
+	}
+
+	reports, logs := ExecuteTestConfigInDocker(r, config)
+	expectedReports := []string{
+		"[INFO] Successfully downloaded file " + badBundlePath + " to " + destinationPath,
+		"[ERR] Failed to get RAUC bundle info for '" + badBundlePath + "'",
+	}
+	assert.Equal(t, reports, expectedReports)
+
+	combinedLogs := strings.Join(logs, "\n")
+	assert.True(t, strings.Contains(combinedLogs, "Invalid bundle format"))
+}
+
+func Test_FailedStatusReportsStdout(t *testing.T) {
+	r := runner.NewRaucRunner(t)
+
+	r.MustExec("sh", "-c", "kill $(pidof rauc)")
+
+	raucConfig := RaucBundle{
+		RaucBundle: "/rauc/test-bundle-1.0.0.raucb",
+	}
+	raucConfig.Enabled = true
+
+	config := CommittedConfig{
+		Bundles: []string{BundleRauc},
+		BundleData: BundleData{
+			Rauc: &raucConfig,
+		},
+	}
+
+	reports, logs := ExecuteTestConfigInDocker(r, config)
+	expectedReports := []string{
+		"[ERR] Failed to get RAUC status",
+	}
+	assert.Equal(t, reports, expectedReports)
+
+	combinedLogs := strings.Join(logs, "\n")
+	assert.True(t, strings.Contains(combinedLogs, "rauc status") || strings.Contains(combinedLogs, "D-Bus"))
 }

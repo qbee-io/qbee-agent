@@ -118,7 +118,7 @@ func (w ProcessWatcher) execute(ctx context.Context, runningProcesses map[string
 
 	cmd := []string{getShell(), "-c", resolveParameters(ctx, w.Command)}
 
-	output, err := utils.RunCommand(ctx, cmd)
+	output, err := utils.RunCommandReport(ctx, cmd)
 	if err != nil {
 		ReportError(ctx, err, "Error running command for process %s", w.Name)
 		return err
