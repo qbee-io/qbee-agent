@@ -667,10 +667,29 @@ func writeFileAnchored(path string, data []byte, dirPermission, filePermission o
 		return fmt.Errorf("error writing file %s: %w", path, lerr)
 	}
 
-	file, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|unix.O_NOFOLLOW, filePermission)
+	// Open without O_TRUNC and with O_NONBLOCK so that if the destination was replaced by a FIFO
+	// between the Lstat check above and this open, the open doesn't block waiting for a reader and
+	// doesn't write any data into a pipe before the regular-file check below runs. Only after
+	// confirming the opened descriptor refers to a regular file do we truncate and write to it,
+	// closing the TOCTOU window between the check and the open (CWE-367).
+	file, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|unix.O_NOFOLLOW|unix.O_NONBLOCK, filePermission)
 	if err != nil {
 		return fmt.Errorf("error writing file %s: %w", path, err)
 	}
+
+	if info, serr := file.Stat(); serr != nil {
+		_ = file.Close()
+		return fmt.Errorf("error writing file %s: %w", path, serr)
+	} else if !info.Mode().IsRegular() {
+		_ = file.Close()
+		return fmt.Errorf("error writing file %s: %s is not a regular file", path, name)
+	}
+
+	if truncErr := file.Truncate(0); truncErr != nil {
+		_ = file.Close()
+		return fmt.Errorf("error writing file %s: %w", path, truncErr)
+	}
+
 	_, writeErr := file.Write(data)
 	closeErr := file.Close()
 	if writeErr != nil {

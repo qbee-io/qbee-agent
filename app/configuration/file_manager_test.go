@@ -27,7 +27,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"golang.org/x/sys/unix"
 
@@ -492,6 +494,72 @@ func Test_writeFileAnchored(t *testing.T) {
 		info, statErr := os.Lstat(path)
 		assert.NoError(t, statErr)
 		assert.True(t, info.Mode()&os.ModeNamedPipe != 0)
+	})
+
+	t.Run("does not block or leak data when destination is swapped for a FIFO after the check", func(t *testing.T) {
+		// Regression test for the TOCTOU window between root.Lstat and root.OpenFile: the
+		// destination doesn't exist (or is regular) when checked, but is replaced with a FIFO
+		// right before the open. A vulnerable implementation would either block forever on the
+		// write-only open (no reader) or silently "succeed" by writing the payload into the pipe
+		// (with a reader), instead of rejecting the non-regular destination.
+		path := filepath.Join(t.TempDir(), "state.json")
+
+		stopRacing := make(chan struct{})
+		var wg sync.WaitGroup
+
+		// Racer: continuously toggles the destination between absent and a FIFO with an attached
+		// non-blocking reader, trying to land in the window between the check and the open.
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-stopRacing:
+					return
+				default:
+				}
+
+				_ = os.Remove(path)
+				if unix.Mkfifo(path, 0600) != nil {
+					continue
+				}
+
+				if reader, openErr := os.OpenFile(path, os.O_RDONLY|unix.O_NONBLOCK, 0); openErr == nil {
+					buf := make([]byte, 64)
+					for {
+						n, readErr := reader.Read(buf)
+						if n > 0 {
+							assert.True(t, !bytes.Contains(buf[:n], []byte("attacker")))
+						}
+						if readErr != nil {
+							break
+						}
+					}
+					_ = reader.Close()
+				}
+
+				_ = os.Remove(path)
+			}
+		}()
+
+		done := make(chan error, 1)
+		go func() {
+			var err error
+			for i := 0; i < 2000; i++ {
+				err = writeFileAnchored(path, []byte("attacker"), dirPerm, filePerm)
+			}
+			done <- err
+		}()
+
+		select {
+		case <-done:
+			// completed without blocking; the final call's error depends on the race outcome.
+		case <-time.After(10 * time.Second):
+			t.Fatal("writeFileAnchored blocked when destination was raced to a FIFO between check and open")
+		}
+
+		close(stopRacing)
+		wg.Wait()
 	})
 }
 
