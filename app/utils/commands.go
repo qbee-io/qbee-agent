@@ -192,7 +192,7 @@ func runCommandForReport(command *exec.Cmd, okExitCode []int) ([]byte, error) {
 	command.Stderr = tailBuffer
 
 	err := command.Run()
-	output := bytes.Join(tailBuffer.Close(), []byte("\n"))
+	output := bytes.TrimSpace(tailBuffer.Close())
 
 	if err == nil || isOkExitCode(err, okExitCodes) {
 		return output, nil
@@ -213,13 +213,30 @@ func RunCommandForReport(command *exec.Cmd, okExitCode ...int) ([]byte, error) {
 	return runCommandForReport(command, okExitCode)
 }
 
-// RunCommandForCheck runs a command for its exit status only, discarding stdout and stderr without
-// allocating any buffer for them. Use this when only the exit code matters, e.g. conditions.
-func RunCommandForCheck(ctx context.Context, cmd []string) error {
-	command := NewCommand(ctx, cmd)
+// RunCommandDiscardOutput runs a command for its exit status only, discarding stdout and stderr
+// without allocating any buffer for them. Use this when only the exit code matters, e.g. conditions
+// or package index refreshes.
+func RunCommandDiscardOutput(ctx context.Context, cmd []string) error {
+	return runCommandDiscardOutput(NewCommand(ctx, cmd))
+}
+
+// RunPrivilegedCommandDiscardOutput runs a command with the configured elevation command for its
+// exit status only. See RunCommandDiscardOutput.
+func RunPrivilegedCommandDiscardOutput(ctx context.Context, cmd []string) error {
+	command, err := NewPrivilegedCommand(ctx, cmd)
+	if err != nil {
+		return err
+	}
+	return runCommandDiscardOutput(command)
+}
+
+func runCommandDiscardOutput(command *exec.Cmd) error {
 	command.Stdout = io.Discard
 	command.Stderr = io.Discard
-	return command.Run()
+	if err := command.Run(); err != nil {
+		return fmt.Errorf("error running command %v: %w", command.Args, err)
+	}
+	return nil
 }
 
 // NewCommand creates a new exec.Cmd with the given context and command.

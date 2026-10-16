@@ -162,18 +162,10 @@ func TestRunCommand(t *testing.T) {
 		if strings.TrimSpace(string(out)) != "failed stdout" {
 			t.Fatalf("unexpected output: %s", string(out))
 		}
+		// assert on the suffix, since the command args (included in the error) also contain these strings
 		errStr := err.Error()
-		if !strings.Contains(errStr, "failed stdout") {
-			t.Fatalf("expected error to contain stdout, got: %s", errStr)
-		}
-		if !strings.Contains(errStr, "failed stderr") {
-			t.Fatalf("expected error to contain stderr, got: %s", errStr)
-		}
-		// verify stdout precedes stderr in error string
-		stdoutIdx := strings.Index(errStr, "failed stdout")
-		stderrIdx := strings.Index(errStr, "failed stderr")
-		if stdoutIdx >= stderrIdx {
-			t.Fatalf("expected stdout before stderr in error, got: %s", errStr)
+		if !strings.HasSuffix(errStr, "\nfailed stdout\nfailed stderr") {
+			t.Fatalf("expected error to end with stdout followed by stderr, got: %q", errStr)
 		}
 	})
 
@@ -186,8 +178,8 @@ func TestRunCommand(t *testing.T) {
 			t.Fatalf("unexpected output: %s", string(out))
 		}
 		errStr := err.Error()
-		if !strings.Contains(errStr, "only stdout") {
-			t.Fatalf("expected error to contain stdout, got: %s", errStr)
+		if !strings.HasSuffix(errStr, "\nonly stdout") {
+			t.Fatalf("expected error to end with stdout, got: %q", errStr)
 		}
 	})
 
@@ -200,8 +192,8 @@ func TestRunCommand(t *testing.T) {
 			t.Fatalf("expected empty output, got: %s", string(out))
 		}
 		errStr := err.Error()
-		if !strings.Contains(errStr, "only stderr") {
-			t.Fatalf("expected error to contain stderr, got: %s", errStr)
+		if !strings.HasSuffix(errStr, "\nonly stderr") {
+			t.Fatalf("expected error to end with stderr, got: %q", errStr)
 		}
 	})
 
@@ -276,8 +268,9 @@ func TestRunCommandReport(t *testing.T) {
 		}
 		// the error itself must also carry the output, since callers often only forward the error.
 		errStr := err.Error()
-		if !strings.Contains(errStr, "report stdout") || !strings.Contains(errStr, "report stderr") {
-			t.Fatalf("expected error to contain combined output, got: %s", errStr)
+		// assert on the suffix, since the command args (included in the error) also contain these strings
+		if !strings.HasSuffix(errStr, "\n"+string(out)) {
+			t.Fatalf("expected error to end with combined output, got: %q", errStr)
 		}
 	})
 
@@ -305,21 +298,21 @@ func TestRunCommandReport(t *testing.T) {
 	})
 }
 
-func TestRunCommandCheck(t *testing.T) {
+func TestRunCommandDiscardOutput(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("success returns no error", func(t *testing.T) {
-		if err := RunCommandForCheck(ctx, []string{"sh", "-c", "echo 'ignored'; exit 0"}); err != nil {
+		if err := RunCommandDiscardOutput(ctx, []string{"sh", "-c", "echo 'ignored'; exit 0"}); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 
 	t.Run("failure returns an error with no output captured", func(t *testing.T) {
-		err := RunCommandForCheck(ctx, []string{"sh", "-c", "echo 'ignored stdout'; echo 'ignored stderr' >&2; exit 1"})
+		err := RunCommandDiscardOutput(ctx, []string{"sh", "-c", "v=leaked; echo \"$v-stdout\"; echo \"$v-stderr\" >&2; exit 1"})
 		if err == nil {
 			t.Fatalf("expected error, got nil")
 		}
-		if strings.Contains(err.Error(), "ignored") {
+		if strings.Contains(err.Error(), "leaked-") {
 			t.Fatalf("expected no output in error, got: %v", err)
 		}
 	})

@@ -163,7 +163,7 @@ func (rpm *RpmPackageManager) listAvailableUpdates(ctx context.Context) (map[str
 	}
 
 	var exitErr *exec.ExitError
-	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 100 {
+	if errors.Is(err, utils.ErrOutputLimitExceeded) || !errors.As(err, &exitErr) || exitErr.ExitCode() != 100 {
 		return nil, err
 	}
 

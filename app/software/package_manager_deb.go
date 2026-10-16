@@ -194,7 +194,7 @@ func (deb *DebianPackageManager) listAvailableUpdates(ctx context.Context) (map[
 	updateCmd := []string{aptGetPath, "update"}
 
 	// update needs to be run with elevated privileges
-	if _, err := utils.RunPrivilegedCommand(ctx, updateCmd); err != nil {
+	if err := utils.RunPrivilegedCommandDiscardOutput(ctx, updateCmd); err != nil {
 		return nil, err
 	}
 
