@@ -17,7 +17,7 @@
 package utils
 
 import (
-	"reflect"
+	"bytes"
 	"testing"
 )
 
@@ -26,76 +26,97 @@ func TestTailBuffer(t *testing.T) {
 		name          string
 		maxBytes      int
 		chunksToWrite [][]byte
-		wantLines     [][]byte
+		want          []byte
 	}{
 		{
+			name:          "empty",
+			maxBytes:      16,
+			chunksToWrite: nil,
+			want:          []byte{},
+		},
+		{
 			name:     "single line in chunks",
-			maxBytes: 1024, // Changed from maxLines: 1 to reasonable byte limit
+			maxBytes: 1024,
 			chunksToWrite: [][]byte{
 				[]byte("thi"),
 				[]byte("s is one"),
 				[]byte(" line\n"),
 			},
-			wantLines: [][]byte{
-				[]byte("this is one line"),
-			},
+			want: []byte("this is one line\n"),
 		},
 		{
-			name:     "single line without new-line character",
-			maxBytes: 1024, // Changed from maxLines: 1
-			chunksToWrite: [][]byte{
-				[]byte("this is one line"),
-			},
-			wantLines: [][]byte{
-				[]byte("this is one line"),
-			},
+			name:          "single line without new-line character",
+			maxBytes:      1024,
+			chunksToWrite: [][]byte{[]byte("this is one line")},
+			want:          []byte("this is one line"),
 		},
 		{
 			name:     "two lines",
-			maxBytes: 1024, // Changed from maxLines: 2
+			maxBytes: 1024,
 			chunksToWrite: [][]byte{
 				[]byte("this is one line\n"),
 				[]byte("this is another line\n"),
 			},
-			wantLines: [][]byte{
-				[]byte("this is one line"),
-				[]byte("this is another line"),
+			want: []byte("this is one line\nthis is another line\n"),
+		},
+		{
+			name:     "exactly fills the ring without truncation",
+			maxBytes: 10,
+			chunksToWrite: [][]byte{
+				[]byte("abc\n"),
+				[]byte("defgh\n"),
 			},
+			want: []byte("abc\ndefgh\n"),
 		},
 		{
 			name:     "two lines with small byte limit",
-			maxBytes: 25, // Changed from maxLines: 1 - should keep only the tail
+			maxBytes: 25,
 			chunksToWrite: [][]byte{
 				[]byte("this is one line\n"),
 				[]byte("this is another line\n"),
 			},
-			wantLines: [][]byte{
-				[]byte("this is another line"),
-			},
-		},
-		{
-			name:     "trimming spaces from lines",
-			maxBytes: 1024, // Changed from maxLines: 1
-			chunksToWrite: [][]byte{
-				[]byte(" this is one line \r\n"),
-			},
-			wantLines: [][]byte{
-				[]byte("this is one line"),
-			},
+			want: []byte("this is another line\n"),
 		},
 		{
 			name:     "byte limit enforcement",
-			maxBytes: 50, // Small limit to test truncation
+			maxBytes: 50,
 			chunksToWrite: [][]byte{
 				[]byte("this is the first line that is quite long\n"),
 				[]byte("this is the second line\n"),
 				[]byte("this is the third line\n"),
 			},
-			wantLines: [][]byte{
-				// Should only keep the tail that fits in 50 bytes
-				[]byte("this is the second line"),
-				[]byte("this is the third line"),
+			want: []byte("this is the second line\nthis is the third line\n"),
+		},
+		{
+			name:     "single write larger than the ring",
+			maxBytes: 8,
+			chunksToWrite: [][]byte{
+				[]byte("line1\nline2\nline3\n"),
 			},
+			want: []byte("line3\n"),
+		},
+		{
+			name:     "truncated without line boundary keeps raw tail",
+			maxBytes: 4,
+			chunksToWrite: [][]byte{
+				[]byte("abcdef"),
+				[]byte("gh"),
+			},
+			want: []byte("efgh"),
+		},
+		{
+			name:     "many small writes wrapping the ring",
+			maxBytes: 7,
+			chunksToWrite: [][]byte{
+				[]byte("1\n"), []byte("2\n"), []byte("3\n"), []byte("4\n"), []byte("5\n"),
+			},
+			want: []byte("3\n4\n5\n"),
+		},
+		{
+			name:          "zero size buffer",
+			maxBytes:      0,
+			chunksToWrite: [][]byte{[]byte("data")},
+			want:          []byte{},
 		},
 	}
 	for _, tt := range tests {
@@ -103,14 +124,39 @@ func TestTailBuffer(t *testing.T) {
 			tailBuffer := NewTailBuffer(tt.maxBytes)
 
 			for _, chunk := range tt.chunksToWrite {
-				_, _ = tailBuffer.Write(chunk)
+				n, err := tailBuffer.Write(chunk)
+				if err != nil || n != len(chunk) {
+					t.Fatalf("Write() = %d, %v", n, err)
+				}
 			}
 
-			gotLines := tailBuffer.Close()
+			got := tailBuffer.Close()
 
-			if !reflect.DeepEqual(gotLines, tt.wantLines) {
-				t.Errorf("got lines: %s\nwant %s", gotLines, tt.wantLines)
+			if !bytes.Equal(got, tt.want) {
+				t.Errorf("got %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestTailBuffer_WriteAfterClose(t *testing.T) {
+	tailBuffer := NewTailBuffer(16)
+	_ = tailBuffer.Close()
+
+	if _, err := tailBuffer.Write([]byte("data")); err == nil {
+		t.Fatalf("expected error writing to closed buffer")
+	}
+}
+
+func TestTailBuffer_WriteDoesNotAllocate(t *testing.T) {
+	tailBuffer := NewTailBuffer(64)
+	chunk := []byte("some output line that wraps the ring\n")
+
+	allocs := testing.AllocsPerRun(1000, func() {
+		_, _ = tailBuffer.Write(chunk)
+	})
+
+	if allocs != 0 {
+		t.Fatalf("expected Write to not allocate, got %v allocations per run", allocs)
 	}
 }
