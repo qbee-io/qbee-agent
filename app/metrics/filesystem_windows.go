@@ -18,6 +18,8 @@
 
 package metrics
 
+import "context"
+
 // FilesystemValues represents filesystem metric values.
 //
 // Example payload:
@@ -34,6 +36,6 @@ type FilesystemValues struct {
 const fsBlockSize = 1024
 
 // CollectFilesystem returns filesystem metric for each filesystem mounted in read-write mode.
-func CollectFilesystem() ([]Metric, error) {
+func CollectFilesystem(_ context.Context) ([]Metric, error) {
 	return nil, nil
 }

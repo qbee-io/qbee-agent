@@ -23,7 +23,7 @@ var serviceCommand = cmd.Command{
 			Flag:  "true",
 		},
 	},
-	Target: func(opts cmd.Options) error {
+	Target: func(opts cmd.Options, args ...string) error {
 		// Start the service
 		cfg, err := loadConfig(opts)
 		if err != nil {

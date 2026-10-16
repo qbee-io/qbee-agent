@@ -14,29 +14,22 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package configuration
+package utils
 
-import (
-	"context"
-	"strings"
+import "context"
 
-	"go.qbee.io/agent/app/utils"
+type cmdCtxKey int
+
+const (
+	contextKeyElevationCommand cmdCtxKey = iota
 )
 
-// CheckPreCondition checks if the provided pre-condition is met.
-func CheckPreCondition(ctx context.Context, preCondition string) bool {
-	preCondition = resolveParameters(ctx, preCondition)
-
-	preCondition = strings.TrimSpace(preCondition)
-
-	if preCondition == "" {
-		return true
+// GetElevationCommandFromContext retrieves the elevation command from the context
+func GetElevationCommandFromContext(ctx context.Context) ([]string, bool) {
+	elevationCmdFromCtx := ctx.Value(contextKeyElevationCommand)
+	if elevationCmdFromCtx == nil {
+		return nil, false
 	}
-
-	// return with no error when pre-condition fails
-	if _, err := utils.RunCommand(ctx, []string{getShell(), "-c", preCondition}); err != nil {
-		return false
-	}
-
-	return true
+	elevationCmd, ok := elevationCmdFromCtx.([]string)
+	return elevationCmd, ok
 }

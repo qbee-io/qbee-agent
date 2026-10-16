@@ -16,6 +16,11 @@
 
 package configuration
 
+import (
+	"context"
+	"slices"
+)
+
 // Supported configuration bundles.
 const (
 	BundleSettings             = "settings"
@@ -35,6 +40,9 @@ const (
 	BundleRauc                 = "rauc"
 	BundleMetricsMonitor       = "metrics_monitor"
 	BundleDockerCompose        = "docker_compose"
+
+	// used to send an agent report to the DeviceHub on internal events (eg. goroutine budget exhaustion)
+	bundleAgentInternal = "agent_internal"
 )
 
 // CommittedConfig contains the configuration that is committed.
@@ -52,15 +60,39 @@ type CommittedConfig struct {
 	EdgeURL string `json:"edge_url"`
 }
 
-// HasBundle returns true if bundleName is set in the Bundles list.
-func (cc *CommittedConfig) HasBundle(bundleName string) bool {
-	for _, bundle := range cc.Bundles {
-		if bundle == bundleName {
-			return true
-		}
+// SecretsList returns a list of all secret values present in the CommittedConfig.
+func (cc *CommittedConfig) SecretsList(ctx context.Context) []string {
+	var secrets []string
+
+	if cc.BundleData.Parameters != nil {
+		secrets = append(secrets, cc.BundleData.Parameters.SecretsList()...)
 	}
 
-	return false
+	if cc.BundleData.DockerCompose != nil {
+		secrets = append(secrets, cc.BundleData.DockerCompose.SecretsList(ctx)...)
+	}
+
+	if cc.BundleData.DockerContainers != nil {
+		secrets = append(secrets, cc.BundleData.DockerContainers.SecretsList(ctx)...)
+	}
+
+	if cc.BundleData.PodmanContainers != nil {
+		secrets = append(secrets, cc.BundleData.PodmanContainers.SecretsList(ctx)...)
+	}
+
+	// Sort secrets by length in descending order to avoid false-prefix-matching, e.g.:
+	// If secret is "password123", but retrned (unsorted) list is []string{"password", password123"},
+	// the secret would be then redacted as "********123" instead of "************".
+	slices.SortFunc(secrets, func(a, b string) int {
+		return len(b) - len(a)
+	})
+
+	return secrets
+}
+
+// HasBundle returns true if bundleName is set in the Bundles list.
+func (cc *CommittedConfig) HasBundle(bundleName string) bool {
+	return slices.Contains(cc.Bundles, bundleName)
 }
 
 // selectBundleByName returns Bundle by name from the CommittedConfig.

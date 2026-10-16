@@ -24,6 +24,7 @@ import (
 
 	"go.qbee.io/agent/app/agent"
 	"go.qbee.io/agent/app/configuration"
+	"go.qbee.io/agent/app/utils"
 	"go.qbee.io/agent/app/utils/cmd"
 )
 
@@ -54,16 +55,19 @@ var configCommand = cmd.Command{
 			Flag:  "true",
 		},
 	},
-	Target: func(opts cmd.Options) error {
+	Target: func(opts cmd.Options, args ...string) error {
 		dryRun := opts[configDryRunOption] == "true"
 		fromFile := opts[configFromFileOption]
 		reportToConsole := opts[configReportToConsoleOption] == "true"
 
-		ctx := context.Background()
-
 		cfg, err := loadConfig(opts)
 		if err != nil {
 			return err
+		}
+
+		ctx, err := utils.ContextWithElevationCommand(context.Background(), cfg.ElevationCommand)
+		if err != nil {
+			return fmt.Errorf("invalid elevation command: %w", err)
 		}
 
 		var deviceAgent *agent.Agent
@@ -76,10 +80,6 @@ var configCommand = cmd.Command{
 
 		if err != nil {
 			return fmt.Errorf("error initializing the agent: %w", err)
-		}
-
-		if reportToConsole {
-			deviceAgent.Configuration.EnableConsoleReporting()
 		}
 
 		if err != nil {
@@ -100,13 +100,19 @@ var configCommand = cmd.Command{
 				return fmt.Errorf("cannot parse local config file: %w", err)
 			}
 		} else {
-			if configurationData, err = deviceAgent.Configuration.Get(ctx); err != nil {
+			if configurationData, err = deviceAgent.Configuration.Get(ctx, true); err != nil {
 				return err
 			}
 		}
 
 		if dryRun {
 			return json.NewEncoder(os.Stdout).Encode(configurationData)
+		}
+
+		deviceAgent.Configuration.UpdateSettings(configurationData)
+
+		if reportToConsole {
+			deviceAgent.Configuration.EnableConsoleReporting()
 		}
 
 		return deviceAgent.Configuration.Execute(ctx, configurationData)

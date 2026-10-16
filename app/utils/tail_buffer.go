@@ -21,17 +21,17 @@ import (
 	"sync"
 )
 
-// TailBuffer keeps a size-limited tail of lines.
+// TailBuffer keeps a size-limited tail of data in bytes.
 type TailBuffer struct {
-	mutex       sync.Mutex
-	writeBuffer []byte
-	tail        chan []byte
+	mutex     sync.Mutex
+	buffer    []byte
+	maxBytes  int
 }
 
-// NewTailBuffer returns an initialized TailBuffer for maxLines.
-func NewTailBuffer(maxLines int) *TailBuffer {
+// NewTailBuffer returns an initialized TailBuffer for maxBytes.
+func NewTailBuffer(maxBytes int) *TailBuffer {
 	return &TailBuffer{
-		tail: make(chan []byte, maxLines),
+		maxBytes: maxBytes,
 	}
 }
 
@@ -40,52 +40,74 @@ func (tf *TailBuffer) Write(data []byte) (int, error) {
 	tf.mutex.Lock()
 	defer tf.mutex.Unlock()
 
-	tf.writeBuffer = append(tf.writeBuffer, data...)
+	// Append the new data to the buffer
+	tf.buffer = append(tf.buffer, data...)
 
-	// process all new lines
-	for {
-		i := bytes.IndexByte(tf.writeBuffer, '\n')
-		if i < 0 {
-			break
+	// If buffer exceeds maxBytes, trim from the beginning to preserve the tail
+	if len(tf.buffer) > tf.maxBytes {
+		// Keep the last maxBytes, but try to preserve line boundaries
+		excess := len(tf.buffer) - tf.maxBytes
+		tf.buffer = tf.buffer[excess:]
+
+		// Try to find the next newline to avoid cutting in the middle of a line
+		if newlineIdx := bytes.IndexByte(tf.buffer, '\n'); newlineIdx != -1 {
+			tf.buffer = tf.buffer[newlineIdx+1:]
 		}
-
-		// push the line to the buffer
-		tf.Push(tf.writeBuffer[0:i])
-		tf.writeBuffer = tf.writeBuffer[i+1:]
 	}
 
 	return len(data), nil
 }
 
 // Push adds a line to the end of the buffer.
-// If buffer is full, the first line of the buffer gets dropped.
+// This method is kept for compatibility but now works with the byte-based buffer.
 func (tf *TailBuffer) Push(line []byte) {
-	// drop the oldest line from the buffer if full
-	if len(tf.tail) == cap(tf.tail) {
-		<-tf.tail
-	}
+	tf.mutex.Lock()
+	defer tf.mutex.Unlock()
 
-	tf.tail <- bytes.TrimSpace(line)
+	// Add the line with a newline character
+	if len(tf.buffer) > 0 {
+		tf.buffer = append(tf.buffer, '\n')
+	}
+	tf.buffer = append(tf.buffer, bytes.TrimSpace(line)...)
+
+	// If buffer exceeds maxBytes, trim from the beginning
+	if len(tf.buffer) > tf.maxBytes {
+		excess := len(tf.buffer) - tf.maxBytes
+		tf.buffer = tf.buffer[excess:]
+
+		// Try to find the next newline to avoid cutting in the middle of a line
+		if newlineIdx := bytes.IndexByte(tf.buffer, '\n'); newlineIdx != -1 {
+			tf.buffer = tf.buffer[newlineIdx+1:]
+		}
+	}
 }
 
 // Close the buffer and return all recorded lines.
 // After calling this method, any writes will result in a panic.
 func (tf *TailBuffer) Close() [][]byte {
-	// push whatever is in the write buffer to the tail
-	if len(tf.writeBuffer) > 0 {
-		tf.Push(tf.writeBuffer)
-		tf.writeBuffer = nil
+	tf.mutex.Lock()
+	defer tf.mutex.Unlock()
+
+	if len(tf.buffer) == 0 {
+		return [][]byte{}
 	}
 
-	// close the channel
-	close(tf.tail)
-
-	// collect the lines
-	lines := make([][]byte, 0, len(tf.tail))
-
-	for line := range tf.tail {
-		lines = append(lines, line)
+	// Split the buffer into lines
+	lines := bytes.Split(tf.buffer, []byte{'\n'})
+	
+	// Create result slice with proper capacity
+	result := make([][]byte, 0, len(lines))
+	
+	for _, line := range lines {
+		// Skip empty lines at the end (from trailing newlines)
+		trimmed := bytes.TrimSpace(line)
+		if len(trimmed) > 0 {
+			result = append(result, trimmed)
+		}
 	}
 
-	return lines
+	// Clear the buffer to prevent further use
+	tf.buffer = nil
+
+	return result
 }

@@ -14,12 +14,29 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-//go:build windows
+package configuration
 
-package utils
+import (
+	"context"
+	"strings"
 
-// DetermineFileOwner detects uid and gid for the path.
-func DetermineFileOwner(dst string) (int, int, error) {
+	"go.qbee.io/agent/app/utils"
+)
 
-	return 0, 0, nil
+// CheckCondition checks if the provided condition is met (eg. 0 exit code)
+func CheckCondition(ctx context.Context, condition string) bool {
+	condition = resolveParameters(ctx, condition)
+
+	condition = strings.TrimSpace(condition)
+
+	if condition == "" {
+		return true
+	}
+
+	// return with no error when pre-condition fails
+	if _, err := utils.RunCommand(ctx, []string{getShell(), "-c", condition}); err != nil {
+		return false
+	}
+
+	return true
 }

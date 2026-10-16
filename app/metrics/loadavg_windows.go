@@ -18,6 +18,8 @@
 
 package metrics
 
+import "context"
+
 // LoadAverageValues contains load average metrics.
 //
 // Example payload:
@@ -39,6 +41,6 @@ type LoadAverageValues struct {
 }
 
 // CollectLoadAverage metrics.
-func CollectLoadAverage() ([]Metric, error) {
+func CollectLoadAverage(_ context.Context) ([]Metric, error) {
 	return nil, nil
 }

@@ -25,7 +25,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"math/big"
 	"os"
 	"path/filepath"
 
@@ -111,7 +110,13 @@ func (agent *Agent) createPrivateKey() error {
 
 	if agent.cfg.TPMDevice != "" {
 		pemBlock.Type = sealedECPrivateKeyPEMHeader
-		if pemBlock.Bytes, err = agent.SealSecret(privateKey.D.Bytes()); err != nil {
+
+		dBytes, err := privateKey.Bytes()
+		if err != nil {
+			return fmt.Errorf("error getting private key D bytes: %w", err)
+		}
+
+		if pemBlock.Bytes, err = agent.SealSecret(dBytes); err != nil {
 			return err
 		}
 	}
@@ -127,6 +132,8 @@ func (agent *Agent) createPrivateKey() error {
 
 	return nil
 }
+
+const p521ElementLength = 66
 
 // loadPrivateKey loads private key from the config directory.
 func (agent *Agent) loadPrivateKey() error {
@@ -148,14 +155,17 @@ func (agent *Agent) loadPrivateKey() error {
 			return err
 		}
 
-		x, y := elliptic.P521().ScalarBaseMult(dBytes)
-		agent.privateKey = &ecdsa.PrivateKey{
-			D: new(big.Int).SetBytes(dBytes),
-			PublicKey: ecdsa.PublicKey{
-				Curve: elliptic.P521(),
-				X:     x,
-				Y:     y,
-			},
+		// due to previous use of privateKey.D.Bytes()
+		// (which might have returned a shorter byte slice for sealed key),
+		// we need pad the byte slice to ensure it has the correct length for P-521 curve
+		if len(dBytes) < p521ElementLength {
+			padding := make([]byte, p521ElementLength-len(dBytes))
+			dBytes = append(padding, dBytes...)
+		}
+
+		agent.privateKey, err = ecdsa.ParseRawPrivateKey(elliptic.P521(), dBytes)
+		if err != nil {
+			return fmt.Errorf("error parsing sealed private key: %w", err)
 		}
 	} else {
 		if agent.privateKey, err = x509.ParseECPrivateKey(pemBlock.Bytes); err != nil {

@@ -96,7 +96,7 @@ func (m *MetricsMonitorBundle) Execute(ctx context.Context, service *Service) er
 		return nil
 	}
 
-	collectedMetrics := service.metrics.Collect()
+	collectedMetrics := service.metrics.Collect(ctx)
 
 	reports, err := m.EvaluateMonitors(collectedMetrics)
 	if err != nil {
@@ -108,7 +108,7 @@ func (m *MetricsMonitorBundle) Execute(ctx context.Context, service *Service) er
 	}
 
 	for _, report := range reports {
-		addReport(ctx, report.Severity, nil, report.Text)
+		addReport(ctx, report.Severity, nil, "%s", report.Text)
 	}
 	return nil
 }

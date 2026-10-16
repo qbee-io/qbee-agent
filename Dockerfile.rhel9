@@ -1,4 +1,4 @@
-FROM golang:1.23 as builder
+FROM golang:1.26 as builder
 
 ARG version
 ENV VERSION_VAR=go.qbee.io/agent/app.Version
@@ -33,5 +33,10 @@ RUN mkdir /etc/qbee && echo '{}' > /etc/qbee/qbee-agent.json
 COPY --from=builder /usr/bin/qbee-agent /usr/bin/qbee-agent
 
 WORKDIR /app
+
+RUN yum install -y sudo
+RUN adduser --system --home-dir /home/qbee-agent --create-home --shell /usr/sbin/nologin qbee-agent
+COPY package/share/sudoers/99-qbee-agent /etc/sudoers.d/99-qbee-agent
+
 CMD [ "/bin/sh" ]
 

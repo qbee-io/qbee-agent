@@ -18,6 +18,8 @@
 
 package metrics
 
+import "context"
+
 // MemoryValues contains memory metrics.
 //
 // Example payload:
@@ -39,6 +41,6 @@ type MemoryValues struct {
 }
 
 // CollectMemory metrics.
-func CollectMemory() ([]Metric, error) {
+func CollectMemory(_ context.Context) ([]Metric, error) {
 	return nil, nil
 }

@@ -51,6 +51,9 @@ type RaucBundle struct {
 
 	// DownloadPath is the path where the RAUC bundle should be downloaded.
 	DownloadPath string `json:"download_path"`
+
+	// RebootCondition is a condition that must be met before the system is rebooted
+	RebootCondition string `json:"reboot_condition"`
 }
 
 // defaultDownloadPath is the default path where the RAUC bundle is downloaded.
@@ -75,10 +78,10 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	isCompatible := image.IsRaucCompatible(raucVersion)
 	if !isCompatible {
 		ReportError(ctx, nil, "RAUC version '%s' is not compatible with the agent", raucVersion)
-		return err
+		return fmt.Errorf("RAUC version '%s' is not compatible with the agent", raucVersion)
 	}
 
-	if !CheckPreCondition(ctx, r.PreCondition) {
+	if !CheckCondition(ctx, r.PreCondition) {
 		return nil
 	}
 
@@ -86,6 +89,11 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	if err != nil {
 		ReportError(ctx, err, "Failed to get RAUC status")
 		return err
+	}
+
+	if raucStatus.BootPrimary == "" {
+		ReportError(ctx, nil, "RAUC primary boot slot not found")
+		return fmt.Errorf("RAUC primary boot slot not found")
 	}
 
 	r.RaucBundle = resolveParameters(ctx, r.RaucBundle)
@@ -96,7 +104,8 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	}
 
 	// if no errors where return, but raucPath is empty, we can assume that the bundle is already installed
-	// and we can return without doing anything. This only happens for non-streaming installations
+	// (file download) or that we do not have connectivity to the config endpoint (streaming). In these cases
+	// we should return without doing anything
 	if raucPath == "" {
 		return nil
 	}
@@ -105,7 +114,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	if err != nil {
 		ReportError(
 			ctx,
-			strings.ReplaceAll(err.Error(), raucPath, r.RaucBundle),
+			r.redact(err.Error(), raucPath),
 			"Failed to get RAUC bundle info for '%s'", r.RaucBundle,
 		)
 		return err
@@ -128,12 +137,12 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	}
 
 	raucInstallCmd := []string{"rauc", "install", raucPath}
-	output, err := utils.RunCommand(ctx, raucInstallCmd)
+	output, err := utils.RunPrivilegedCommand(ctx, raucInstallCmd)
 
 	if err != nil {
 		ReportError(
 			ctx,
-			strings.ReplaceAll(err.Error(), raucPath, r.RaucBundle),
+			r.redact(err.Error(), raucPath),
 			"Failed to install RAUC bundle",
 		)
 		return err
@@ -141,12 +150,14 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 
 	ReportInfo(
 		ctx,
-		strings.ReplaceAll(string(output), raucPath, r.RaucBundle),
+		r.redact(string(output), raucPath),
 		"RAUC bundle successfully installed '%s'",
 		r.RaucBundle,
 	)
 
-	service.RebootAfterRun(ctx)
+	if CheckCondition(ctx, r.RebootCondition) {
+		service.RebootAfterRun(ctx)
+	}
 	return nil
 }
 
@@ -192,7 +203,7 @@ type RaucBundleInfo struct {
 func (r RaucBundle) getRaucBundleInfo(ctx context.Context, url string) (*RaucBundleInfo, error) {
 
 	raucInfoCmd := []string{"rauc", "info", "--output-format", "json", url}
-	raucInfoBytes, err := utils.RunCommand(ctx, raucInfoCmd)
+	raucInfoBytes, err := utils.RunPrivilegedCommand(ctx, raucInfoCmd)
 
 	if err != nil {
 		return nil, err
@@ -207,11 +218,12 @@ func (r RaucBundle) getRaucBundleInfo(ctx context.Context, url string) (*RaucBun
 }
 
 func shouldInstall(localRaucInfo *image.RaucStatus, remoteBundleData *RaucBundleInfo) (bool, error) {
+
 	if remoteBundleData.Compatible != localRaucInfo.Compatible {
 		return false, fmt.Errorf("RAUC bundle '%s' is not compatible with the system '%s'", remoteBundleData.Compatible, localRaucInfo.Compatible)
 	}
 
-	_, currentSlotData, err := getCurrentSlot(localRaucInfo)
+	_, currentSlotData, err := getPrimarySlot(localRaucInfo)
 	if err != nil {
 		return false, err
 	}
@@ -224,10 +236,10 @@ func shouldInstall(localRaucInfo *image.RaucStatus, remoteBundleData *RaucBundle
 	return true, nil
 }
 
-func getCurrentSlot(localRaucInfo *image.RaucStatus) (string, *image.SlotData, error) {
+func getPrimarySlot(localRaucInfo *image.RaucStatus) (string, *image.SlotData, error) {
 	for _, slot := range localRaucInfo.Slots {
 		for slotName, slotData := range slot {
-			if slotData.Bootname == localRaucInfo.Booted {
+			if slotName == localRaucInfo.BootPrimary {
 				return slotName, &slotData, nil
 			}
 		}
@@ -250,7 +262,7 @@ func (r *RaucBundle) resolveRaucPath(ctx context.Context, service *Service) (str
 }
 
 func downloadRaucBundle(ctx context.Context, service *Service, raucPath, raucDownloadPath string) (string, error) {
-	bundleMetadata, err := service.getFileMetadataFromAPI(ctx, raucPath)
+	bundleMetadata, err := service.getFileMetadata(ctx, raucPath)
 	if err != nil {
 		return "", err
 	}
@@ -309,6 +321,18 @@ func downloadRaucBundle(ctx context.Context, service *Service, raucPath, raucDow
 }
 
 func generateStreamingURL(service *Service, raucBundle string) (string, error) {
+	// do not generate the streaming url if config endpoint is unavailable
+	if service.IsConfigEndpointUnreachable() {
+		return "", nil
+	}
+
 	filePath := path.Join(fileManagerPublicAPIPath, raucBundle)
 	return service.urlSigner.SignURL(filePath)
+}
+
+func (r *RaucBundle) redact(s string, raucPath string) string {
+	if r.Download {
+		return s
+	}
+	return strings.ReplaceAll(s, raucPath, r.RaucBundle)
 }

@@ -18,6 +18,12 @@ package configuration
 
 import (
 	"context"
+	"crypto/tls"
+	"errors"
+	"fmt"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -25,6 +31,7 @@ import (
 
 	"go.qbee.io/agent/app/api"
 	"go.qbee.io/agent/app/utils/assert"
+	"go.qbee.io/agent/app/utils/files"
 )
 
 func TestService_reportsBuffer(t *testing.T) {
@@ -123,7 +130,7 @@ func TestInvalidBytesReportsBuffer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open reports buffer: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	_, _ = f.Write(invalidChars)
 
@@ -164,11 +171,79 @@ func TestService_persistConfig(t *testing.T) {
 	})
 
 	t.Run("load config through public Get method", func(t *testing.T) {
-		committedConfig, err := srv.Get(context.Background())
+		committedConfig, err := srv.Get(context.Background(), false)
 		if err != nil {
 			t.Fatalf("failed to get config: %v", err)
 		}
 
 		assert.Equal(t, committedConfig, cfg)
 	})
+}
+
+func Test_ConfigEndpointBooleanReset(t *testing.T) {
+	apiClient := api.NewClient("localhost", "12345")
+	apiClient.WithTLSConfig(&tls.Config{InsecureSkipVerify: true})
+	srv := New(apiClient, t.TempDir(), "")
+	// reset retry counter to avoid waiting for retries in the test
+	srv.firstRunRetryCounter = 0
+
+	// first attempt to get config should fail and mark the config endpoint as unreachable
+	if _, err := srv.get(t.Context(), false); !errors.As(err, new(api.ConnectionError)) {
+		t.Fatalf("expected connection error, got %v", err)
+	}
+
+	// config endpoint should be marked as unreachable after failed connection attempt
+	if !srv.IsConfigEndpointUnreachable() {
+		t.Fatalf("expected config endpoint to be unreachable")
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc(deviceConfigurationAPIPath, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("{}"))
+	})
+	ts := httptest.NewTLSServer(mux)
+	defer ts.Close()
+
+	srv.api.WithPort(fmt.Sprintf("%d", ts.Listener.Addr().(*net.TCPAddr).Port))
+
+	// this should reset the config endpoint unreachable flag to false and return an empty config without error
+	if _, err := srv.get(t.Context(), false); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// config endpoint should now be reachable
+	if srv.IsConfigEndpointUnreachable() {
+		t.Fatalf("expected config endpoint to be reachable")
+	}
+}
+
+func TestService_ReportExhaustedGoroutineBudget(t *testing.T) {
+	tmpDir := t.TempDir()
+	srv := New(nil, tmpDir, "")
+	srv.currentCommitID = "test-commit-id"
+
+	// Create a mock API client that will fail to send reports
+	// so they get buffered to the reports file
+	mockClient := api.NewClient("localhost", "99999")
+	srv.api = mockClient
+
+	// Simulate exhausted goroutine budget
+	files.SetGoroutineCountForTesting(500)     // maxGoroutines is 500
+	defer files.SetGoroutineCountForTesting(0) // reset after test
+
+	// Call ReportExhaustedGoroutineBudget
+	exhausted, _ := srv.ReportExhaustedGoroutineBudget(context.Background())
+
+	// Verify that it returns true (indicating budget was exhausted)
+	assert.True(t, exhausted)
+
+	// Read the buffered reports
+	reports, readErr := srv.readReportsBuffer()
+	assert.NoError(t, readErr)
+	assert.NotEqual(t, len(reports), 0)
+
+	assert.Equal(t, reports[0].Bundle, bundleAgentInternal)
+	assert.Equal(t, reports[0].Severity, severityCritical)
+	assert.Equal(t, reports[0].Text, "goroutine budget exhausted, skipping agent run")
 }

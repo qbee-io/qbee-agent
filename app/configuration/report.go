@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -92,6 +93,13 @@ func (reporter *Reporter) Redact(value string) string {
 
 // NewReporter returns a new instance of Reporter.
 func NewReporter(commitID string, reportToConsole bool, secrets []string) *Reporter {
+
+	// delete secrets which are empty or consist of whitespace only
+	// otherwise all spaces and empty strings in the log would be replaced with redactedValue
+	secrets = slices.DeleteFunc(secrets, func(secret string) bool {
+		return strings.TrimSpace(secret) == ""
+	})
+
 	return &Reporter{
 		commitID:        commitID,
 		reports:         make([]Report, 0),
@@ -101,18 +109,19 @@ func NewReporter(commitID string, reportToConsole bool, secrets []string) *Repor
 }
 
 const (
-	severityInfo    = "INFO"
-	severityWarning = "WARN"
-	severityError   = "ERR"
+	severityInfo     = "INFO"
+	severityWarning  = "WARN"
+	severityError    = "ERR"
+	severityCritical = "CRIT"
 )
 
 // msgWithLabel returns a message with a label (if provided).
-func msgWithLabel(label, msgFmt string, args ...any) string {
+func msgWithLabel(label, msg string) string {
 	if label == "" {
-		return fmt.Sprintf(msgFmt, args...)
+		return msg
 	}
 
-	return fmt.Sprintf("[%s] %s", label, fmt.Sprintf(msgFmt, args...))
+	return "[" + label + "] " + msg
 }
 
 // ReportInfo adds an info message to the reporter instance set in context.
@@ -133,6 +142,11 @@ func ReportError(ctx context.Context, extraLog any, msgFmt string, args ...any) 
 	}
 
 	addReport(ctx, severityError, extraLog, msgFmt, args...)
+}
+
+// ReportCritical adds a critical message to the reporter instance set in context.
+func ReportCritical(ctx context.Context, extraLog any, msgFmt string, args ...any) {
+	addReport(ctx, severityCritical, extraLog, msgFmt, args...)
 }
 
 const (

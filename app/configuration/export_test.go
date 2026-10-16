@@ -17,6 +17,8 @@
 package configuration
 
 import (
+	"path/filepath"
+	"slices"
 	"strings"
 
 	"go.qbee.io/agent/app/utils/runner"
@@ -29,9 +31,41 @@ func (srv *Service) ResetRebootAfterRun() {
 
 // ExecuteTestConfigInDocker executes provided config inside a docker container and returns reports and logs.
 func ExecuteTestConfigInDocker(r *runner.Runner, config CommittedConfig) ([]string, []string) {
+	// if settings bundle is not set, add it to the config to stop the agent from reporting back to the device hub
+	if !slices.Contains(config.Bundles, BundleSettings) {
+		config.Bundles = append(config.Bundles, BundleSettings)
+
+		config.BundleData.Settings = SettingsBundle{
+			Metadata:      Metadata{Enabled: true},
+			EnableReports: false,
+		}
+	}
+
+	cmd := []string{"qbee-agent", "config", "-r", "-f", "/app/config.json"}
+
 	r.CreateJSON("/app/config.json", config)
 
-	return ParseTestConfigExecuteOutput(r.MustExec("qbee-agent", "config", "-r", "-f", "/app/config.json"))
+	// setup runner for unprivileged user if needed
+	if r.GetUnprivileged() {
+		// set up access to docker socket for unprivileged user if it exists
+		if gidOutput, err := r.Exec("stat", "-c", "%g", "/var/run/docker.sock"); err == nil {
+			gid := strings.TrimSpace(string(gidOutput))
+			r.MustExec("groupadd", "-fg", gid, "docker")
+			r.MustExec("usermod", "-aG", gid, runner.UnprivilegedUser)
+		}
+
+		etcDir := filepath.Join(filepath.Dir(r.GetStateDirectory()), "etc")
+
+		r.MustExec("mkdir", "-p", etcDir)
+		r.CreateFile(filepath.Join(etcDir, "qbee-agent.json"), []byte(`{"elevation_command":["/usr/bin/sudo", "-n"]}`))
+		r.MustExec("chown", "-R", runner.UnprivilegedUser+":"+runner.UnprivilegedUser, etcDir)
+
+		suCmd := "qbee-agent -c " + etcDir + " -s " + r.GetStateDirectory() + " config -r -f /app/config.json"
+		cmd = append([]string{"su", "-s", "/bin/sh", runner.UnprivilegedUser, "-c"}, suCmd)
+		r.MustExec("chmod", "644", "/app/config.json")
+	}
+
+	return ParseTestConfigExecuteOutput(r.MustExec(cmd...))
 }
 
 // ParseTestConfigExecuteOutput parses logs and reports out of the configuration-execute command output.

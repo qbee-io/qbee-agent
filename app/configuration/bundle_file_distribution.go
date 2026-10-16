@@ -75,6 +75,12 @@ type File struct {
 	// Source full file path from the file manager.
 	Source string `json:"source"`
 
+	// Digest (SHA256) of the source file.
+	Digest string `json:"digest"`
+
+	// Size of the source file.
+	Size int64 `json:"size"`
+
 	// Destination defines absolute path of the file in the filesystem.
 	Destination string `json:"destination"`
 
@@ -85,7 +91,7 @@ type File struct {
 // Execute file distribution config on the system.
 func (fd FileDistributionBundle) Execute(ctx context.Context, service *Service) error {
 	for _, fileSet := range fd.FileSets {
-		if !CheckPreCondition(ctx, fileSet.PreCondition) {
+		if !CheckCondition(ctx, fileSet.PreCondition) {
 			continue
 		}
 
@@ -108,9 +114,9 @@ func (fd FileDistributionBundle) Execute(ctx context.Context, service *Service) 
 			var created bool
 
 			if file.IsTemplate {
-				created, err = service.downloadTemplateFile(ctx, fileSet.Label, fileSource, fileDestination, parameters)
+				created, err = service.downloadTemplateFile(ctx, fileSet.Label, fileSource, fileDestination, file, parameters)
 			} else {
-				created, err = service.downloadFile(ctx, fileSet.Label, fileSource, fileDestination)
+				created, err = service.downloadFile(ctx, fileSet.Label, fileSource, fileDestination, file)
 			}
 
 			if err != nil {
@@ -125,11 +131,11 @@ func (fd FileDistributionBundle) Execute(ctx context.Context, service *Service) 
 		if anythingChanged && fileSet.AfterCommand != "" {
 			output, err := RunCommand(ctx, fileSet.AfterCommand)
 			if err != nil {
-				ReportError(ctx, output, msgWithLabel(fileSet.Label, "After command failed: %v", err))
+				ReportError(ctx, output, msgWithLabel(fileSet.Label, "After command failed: %v"), err)
 				return err
 			}
 
-			ReportInfo(ctx, output, msgWithLabel(fileSet.Label, "Successfully executed after command"))
+			ReportInfo(ctx, output, "%s", msgWithLabel(fileSet.Label, "Successfully executed after command"))
 		}
 	}
 

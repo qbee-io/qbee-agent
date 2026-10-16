@@ -69,14 +69,14 @@ func (c Container) execute(ctx context.Context, srv *Service, containerBin strin
 	var err error
 	var needRestart bool
 
-	if !CheckPreCondition(ctx, c.PreCondition) {
+	if !CheckCondition(ctx, c.PreCondition) {
 		// skip container if pre-condition is not met
 		return nil
 	}
 
 	envFilePath := c.localEnvFilePath(srv)
 	if envFilePath != "" {
-		if needRestart, err = srv.downloadFile(ctx, "", c.EnvFile, envFilePath); err != nil {
+		if needRestart, err = srv.downloadFile(ctx, "", c.EnvFile, envFilePath, File{}); err != nil {
 			return err
 		}
 	}
@@ -381,9 +381,6 @@ type RegistryAuth struct {
 	// Password for the Username.
 	Password string `json:"password"`
 
-	// ExecUser defines the user to execute the container as. Podman only.
-	ExecUser string `json:"exec_user,omitempty"`
-
 	user *user.User
 }
 
@@ -450,11 +447,7 @@ func (a RegistryAuth) URL() string {
 
 // userCheck checks if the user exists and sets it to the container.
 func (a *RegistryAuth) userCheck() error {
-	if a.ExecUser == "" {
-		return nil
-	}
-
-	u, err := user.Lookup(a.ExecUser)
+	u, err := user.Current()
 	if err != nil {
 		return err
 	}

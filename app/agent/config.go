@@ -69,6 +69,9 @@ type Config struct {
 
 	// CACert is the path to the CA certificate.
 	CACert string `json:"ca_cert,omitempty"`
+
+	// ElevationCommand is the command to use for privilege elevation.
+	ElevationCommand []string `json:"elevation_command,omitempty"`
 }
 
 // LoadConfig loads config from a provided config file path.

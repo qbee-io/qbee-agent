@@ -54,7 +54,7 @@ func Test_PodmanContainers_Container_Start(t *testing.T) {
 
 	// check that there is a container running with the specified command
 
-	output := r.MustExec("podman", "container", "ls", "--filter", "name="+containerName, "--format", "{{.Command}}")
+	output := r.MustExecUnprivileged("podman", "container", "ls", "--filter", "name="+containerName, "--format", "{{.Command}}")
 	assert.Equal(t, string(output), podmanBundle.Containers[0].Command)
 
 	// running it the second time does nothing, since the correct container is already running
@@ -144,7 +144,7 @@ func Test_PodmanContainers_Container_StartExited(t *testing.T) {
 	assert.Equal(t, reports, expectedReports)
 
 	// check that there is a container running with the specified command
-	output := r.MustExec("podman", "container", "ls", "--filter", "name="+containerName, "--format", "{{.Command}}")
+	output := r.MustExecUnprivileged("podman", "container", "ls", "--filter", "name="+containerName, "--format", "{{.Command}}")
 	assert.Equal(t, string(output), podmanBundle.Containers[0].Command)
 }
 

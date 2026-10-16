@@ -22,7 +22,7 @@ import (
 
 func TestCollectTemperature(t *testing.T) {
 
-	metrics, _ := CollectTemperature()
+	metrics, _ := CollectTemperature(t.Context())
 
 	if len(metrics) == 0 {
 		t.Skip("no temperature metrics available")

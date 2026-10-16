@@ -96,7 +96,7 @@ func Test_Simple_Docker_Compose(t *testing.T) {
 
 	reports, _ := configuration.ExecuteTestConfigInDocker(r, config)
 	expectedReports := []string{
-		"[INFO] Successfully downloaded file file:///docker-compose/compose-nobuild.yml to /var/lib/qbee/app_workdir/cache/docker_compose/project-a/compose.yml",
+		"[INFO] Successfully downloaded file file:///docker-compose/compose-nobuild.yml to " + r.GetStateDirectory() + "/app_workdir/cache/docker_compose/project-a/compose.yml",
 		"[INFO] Started compose project project-a",
 	}
 
@@ -127,7 +127,7 @@ func Test_Simple_Docker_Compose(t *testing.T) {
 
 	reports, _ = configuration.ExecuteTestConfigInDocker(r, config)
 	expectedReports = []string{
-		"[INFO] Successfully downloaded file file:///docker-compose/compose-nobuild.yml to /var/lib/qbee/app_workdir/cache/docker_compose/project-b/compose.yml",
+		"[INFO] Successfully downloaded file file:///docker-compose/compose-nobuild.yml to " + r.GetStateDirectory() + "/app_workdir/cache/docker_compose/project-b/compose.yml",
 		"[INFO] Started compose project project-b",
 	}
 
@@ -165,7 +165,7 @@ func Test_ComposeWithParams(t *testing.T) {
 
 	reports, _ := configuration.ExecuteTestConfigInDocker(r, config)
 	expectedReports := []string{
-		"[INFO] Successfully rendered template file file:///docker-compose/compose-nobuild.yml.template to /var/lib/qbee/app_workdir/cache/docker_compose/project-a/compose.yml",
+		"[INFO] Successfully rendered template file file:///docker-compose/compose-nobuild.yml.template to " + r.GetStateDirectory() + "/app_workdir/cache/docker_compose/project-a/compose.yml",
 		"[INFO] Started compose project project-a",
 	}
 
@@ -203,8 +203,8 @@ func Test_ComposeWithBuildContext(t *testing.T) {
 
 	reports, _ := configuration.ExecuteTestConfigInDocker(r, config)
 	expectedReports := []string{
-		"[INFO] Successfully downloaded file file:///docker-compose/compose-build.yml to /var/lib/qbee/app_workdir/cache/docker_compose/project-a/compose.yml",
-		"[INFO] Successfully downloaded file file:///docker-compose/context.tar.gz to /var/lib/qbee/app_workdir/cache/docker_compose/project-a/_tmp/context.tar.gz",
+		"[INFO] Successfully downloaded file file:///docker-compose/compose-build.yml to " + r.GetStateDirectory() + "/app_workdir/cache/docker_compose/project-a/compose.yml",
+		"[INFO] Successfully downloaded file file:///docker-compose/context.tar.gz to " + r.GetStateDirectory() + "/app_workdir/cache/docker_compose/project-a/_tmp/context.tar.gz",
 		"[INFO] Started compose project project-a",
 	}
 
@@ -237,7 +237,7 @@ func Test_ComposeWithBuildContext(t *testing.T) {
 	reports, _ = configuration.ExecuteTestConfigInDocker(r, config)
 
 	expectedReports = []string{
-		"[INFO] Successfully downloaded file file:///docker-compose/context.tar.bz2 to /var/lib/qbee/app_workdir/cache/docker_compose/project-a/_tmp/context.tar.bz2",
+		"[INFO] Successfully downloaded file file:///docker-compose/context.tar.bz2 to " + r.GetStateDirectory() + "/app_workdir/cache/docker_compose/project-a/_tmp/context.tar.bz2",
 		"[INFO] Started compose project project-a",
 	}
 	assert.Equal(t, reports, expectedReports)
@@ -297,7 +297,7 @@ func Test_ComposeWithSkipRestart(t *testing.T) {
 
 	reports, _ := configuration.ExecuteTestConfigInDocker(r, config)
 	expectedReports := []string{
-		"[INFO] Successfully downloaded file file:///docker-compose/compose-nobuild.yml to /var/lib/qbee/app_workdir/cache/docker_compose/project-a/compose.yml",
+		"[INFO] Successfully downloaded file file:///docker-compose/compose-nobuild.yml to " + r.GetStateDirectory() + "/app_workdir/cache/docker_compose/project-a/compose.yml",
 		"[INFO] Started compose project project-a",
 	}
 	assert.Equal(t, reports, expectedReports)
@@ -345,7 +345,7 @@ func Test_ComposeWithClean(t *testing.T) {
 
 	reports, _ := configuration.ExecuteTestConfigInDocker(r, config)
 	expectedReports := []string{
-		"[INFO] Successfully downloaded file file:///docker-compose/compose-nobuild.yml to /var/lib/qbee/app_workdir/cache/docker_compose/project-a/compose.yml",
+		"[INFO] Successfully downloaded file file:///docker-compose/compose-nobuild.yml to " + r.GetStateDirectory() + "/app_workdir/cache/docker_compose/project-a/compose.yml",
 		"[INFO] Started compose project project-a",
 	}
 	assert.Equal(t, reports, expectedReports)

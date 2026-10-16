@@ -114,7 +114,7 @@ func (cli *Client) Make(request *http.Request, dst any) error {
 		return err
 	}
 
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 
 	if response.StatusCode >= http.StatusBadRequest {
 		return NewError(response.StatusCode, response.Body)
@@ -170,6 +170,11 @@ func (cli *Client) Put(ctx context.Context, path string, src, dst any) error {
 	return cli.request(ctx, http.MethodPut, path, src, dst)
 }
 
+// Patch sends a PATCH request to device hub.
+func (cli *Client) Patch(ctx context.Context, path string, src, dst any) error {
+	return cli.request(ctx, http.MethodPatch, path, src, dst)
+}
+
 // compressRequestBody returns io.Reader with compressed body payload
 func compressRequestBody(body *bytes.Buffer) io.Reader {
 	if body == nil {
@@ -188,4 +193,10 @@ func compressRequestBody(body *bytes.Buffer) io.Reader {
 	}
 
 	return compressedBuffer
+}
+
+// WithPort sets the port for the API client.
+func (cli *Client) WithPort(port string) *Client {
+	cli.port = port
+	return cli
 }

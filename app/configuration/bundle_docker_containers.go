@@ -96,3 +96,16 @@ func (d DockerContainersBundle) Execute(ctx context.Context, service *Service) e
 
 	return nil
 }
+
+// SecretsList returns a list of all secrets.
+func (d DockerContainersBundle) SecretsList(ctx context.Context) []string {
+	var secrets []string
+
+	for _, registry := range d.RegistryAuths {
+		if registry.Password != "" {
+			secrets = append(secrets, resolveParameters(ctx, registry.Password))
+		}
+	}
+
+	return secrets
+}

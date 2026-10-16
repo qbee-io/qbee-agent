@@ -18,6 +18,8 @@
 
 package metrics
 
+import "context"
+
 // TemperatureValues represents temperature metrics
 type TemperatureValues struct {
 	// Temperature in degrees Celsius
@@ -36,6 +38,6 @@ type cpuTemperatures struct {
 const hostTemperatureScale = 1000.0
 
 // CollectTemperature collects temperature metrics from from /sys/class/[hwmon|thermal]
-func CollectTemperature() ([]Metric, error) {
+func CollectTemperature(_ context.Context) ([]Metric, error) {
 	return nil, nil
 }

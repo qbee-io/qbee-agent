@@ -62,7 +62,7 @@ func (srv *Service) acquireLock(lockFileTimeout time.Duration) error {
 	if err != nil {
 		return fmt.Errorf("could not create lock file: %w", err)
 	}
-	defer lockFile.Close()
+	defer func() { _ = lockFile.Close() }()
 
 	lockFileData := fmt.Sprintf("%10d", os.Getpid())
 	if _, err = lockFile.Write([]byte(lockFileData)); err != nil {

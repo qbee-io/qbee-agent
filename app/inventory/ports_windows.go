@@ -18,6 +18,8 @@
 
 package inventory
 
-func CollectPortsInventory() (*Ports, error) {
+import "context"
+
+func CollectPortsInventory(_ context.Context) (*Ports, error) {
 	return nil, nil
 }

@@ -51,7 +51,10 @@ type PackageManager interface {
 	InstallLocal(ctx context.Context, pkgFilePath string) ([]byte, error)
 
 	// PackageArchitecture returns the architecture of the package manager
-	PackageArchitecture() (string, error)
+	PackageArchitecture(ctx context.Context) (string, error)
+
+	// IsSupportedArchitecture returns true if architecture is supported by the system
+	IsSupportedArchitecture(ctx context.Context, arch string) error
 
 	// ParsePackageFile returns a package from a file path.
 	ParsePackageFile(ctx context.Context, filePath string) (*Package, error)

@@ -34,15 +34,18 @@ import (
 const deviceConfigurationAPIPath = "/v1/org/device/auth/config"
 
 // get retrieves currently committed device configuration from the device hub API.
-func (srv *Service) get(ctx context.Context) (*CommittedConfig, error) {
-	cfg, err := srv.getWithRetry(ctx)
+func (srv *Service) get(ctx context.Context, fresh bool) (*CommittedConfig, error) {
+	cfg, err := srv.getWithRetry(ctx, fresh)
+
+	// set a flag if the config endpoint is unreachable to avoid running certain operations
+	// (eg. commands that require network) which would flood the logs with errors
+	srv.configEndpointUnreachable = err != nil
 
 	srv.reportAPIError(ctx, err)
 
 	if err != nil {
 		return nil, err
 	}
-
 	return cfg, nil
 }
 
@@ -51,20 +54,24 @@ const (
 	maxReconnectDelay = 10
 )
 
-func (srv *Service) getWithRetry(ctx context.Context) (*CommittedConfig, error) {
+func (srv *Service) getWithRetry(ctx context.Context, fresh bool) (*CommittedConfig, error) {
+	requestURL := deviceConfigurationAPIPath
+	if fresh {
+		requestURL = fmt.Sprintf("%s?f=1", deviceConfigurationAPIPath)
+	}
 
 	var err error
 	cfg := new(CommittedConfig)
 
 	if srv.firstRunRetryCounter == 0 {
-		err = srv.api.Get(ctx, deviceConfigurationAPIPath, cfg)
+		err = srv.api.Get(ctx, requestURL, cfg)
 		return cfg, err
 	}
 
 	// retry on first run as network might not be ready yet
 	for srv.firstRunRetryCounter > 0 {
 		srv.firstRunRetryCounter--
-		err = srv.api.Get(ctx, deviceConfigurationAPIPath, cfg)
+		err = srv.api.Get(ctx, requestURL, cfg)
 		if err != nil {
 			attempts := defaultFirstRunRetryCounter - srv.firstRunRetryCounter
 			reconnectIn := minReconnectDelay + rand.Int63n(maxReconnectDelay-minReconnectDelay)
@@ -108,7 +115,7 @@ const fileManagerAPIPath = "/v1/org/device/auth/files/%s"
 const fileManagerPublicAPIPath = "/v1/org/device/public/files"
 
 // getFile returns file reader.
-func (srv *Service) getFileFromAPI(ctx context.Context, src string) (io.ReadCloser, error) {
+func (srv *Service) getFileFromAPI(ctx context.Context, src string, offset int64) (io.ReadCloser, error) {
 	path := fmt.Sprintf(fileManagerAPIPath, src)
 
 	request, err := srv.api.NewRequest(ctx, http.MethodGet, path, nil)
@@ -116,9 +123,20 @@ func (srv *Service) getFileFromAPI(ctx context.Context, src string) (io.ReadClos
 		return nil, err
 	}
 
+	expectedStatusCode := http.StatusOK
+	if offset > 0 {
+		request.Header.Set("Range", fmt.Sprintf("bytes=%d-", offset))
+		expectedStatusCode = http.StatusPartialContent
+	}
+
 	var response *http.Response
 	if response, err = srv.api.Do(request); err != nil {
 		return nil, fmt.Errorf("error getting file: %w", err)
+	}
+
+	if response.StatusCode != expectedStatusCode {
+		_ = response.Body.Close()
+		return nil, fmt.Errorf("unexpected status code: %d", response.StatusCode)
 	}
 
 	return response.Body, nil

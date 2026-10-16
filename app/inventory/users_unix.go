@@ -164,7 +164,7 @@ func getUsersFromShadow(filePath string) (map[string]User, error) {
 	})
 	if err != nil {
 		// we should be able to continue on systems without shadow file
-		if errors.Is(err, fs.ErrNotExist) {
+		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, fs.ErrPermission) {
 			return users, nil
 		}
 

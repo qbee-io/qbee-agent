@@ -19,11 +19,11 @@ package configuration
 import (
 	"context"
 	"net/url"
-	"os"
 	"testing"
 
 	"go.qbee.io/agent/app/inventory"
 	"go.qbee.io/agent/app/software"
+	"go.qbee.io/agent/app/utils"
 	"go.qbee.io/agent/app/utils/assert"
 	"go.qbee.io/agent/app/utils/runner"
 )
@@ -46,15 +46,15 @@ func (m *mockURLSigner) SignURL(src string) (string, error) {
 }
 
 func Test_resolveParameters(t *testing.T) {
-	hostname, err := os.Hostname()
+	hostname, err := utils.Hostname()
 	assert.NoError(t, err)
 
-	pkgArch, err := software.DefaultPackageManager.PackageArchitecture()
+	pkgArch, err := software.DefaultPackageManager.PackageArchitecture(t.Context())
 	assert.NoError(t, err)
 
 	pkgType := software.DefaultPackageManager.Type()
 
-	systemInventory, err := inventory.CollectSystemInventory(false)
+	systemInventory, err := inventory.CollectSystemInventory(t.Context(), false)
 	assert.NoError(t, err)
 
 	invSystem := systemInventory.System

@@ -122,7 +122,7 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 	}
 
 	for _, project := range d.Projects {
-		if !CheckPreCondition(ctx, project.PreCondition) {
+		if !CheckCondition(ctx, project.PreCondition) {
 			continue
 		}
 
@@ -177,6 +177,19 @@ func (d DockerComposeBundle) Execute(ctx context.Context, service *Service) erro
 	return nil
 }
 
+// SecretsList returns a list of all secrets.
+func (d DockerComposeBundle) SecretsList(ctx context.Context) []string {
+	var secrets []string
+
+	for _, registry := range d.RegistryAuths {
+		if registry.Password != "" {
+			secrets = append(secrets, resolveParameters(ctx, registry.Password))
+		}
+	}
+
+	return secrets
+}
+
 // projectStatus is a project that is running in the system.
 type projectStatus struct {
 	Name   string `json:"Name"`
@@ -226,9 +239,9 @@ func (c Compose) getComposeFile(ctx context.Context, service *Service) (bool, er
 	parameters := templateParametersMap(c.Parameters)
 
 	if len(parameters) > 0 {
-		return service.downloadTemplateFile(ctx, "", c.File, composeFilePath, parameters)
+		return service.downloadTemplateFile(ctx, "", c.File, composeFilePath, File{}, parameters)
 	}
-	return service.downloadFile(ctx, "", c.File, composeFilePath)
+	return service.downloadFile(ctx, "", c.File, composeFilePath, File{})
 }
 
 func (c Compose) getProjectDirectory(service *Service) string {

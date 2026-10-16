@@ -19,6 +19,7 @@
 package inventory
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -26,7 +27,7 @@ import (
 	"time"
 
 	"go.qbee.io/agent/app/inventory/linux"
-	"go.qbee.io/agent/app/utils"
+	"go.qbee.io/agent/app/utils/files"
 )
 
 // parseSysinfoSyscall populates system info from sysinfo system call.
@@ -53,13 +54,13 @@ func getSysinfo() (*syscall.Sysinfo_t, error) {
 }
 
 // getDefaultNetworkInterface returns a default network interface name.
-func (systemInfo *SystemInfo) getDefaultNetworkInterface() (string, error) {
+func (systemInfo *SystemInfo) getDefaultNetworkInterface(ctx context.Context) (string, error) {
 
 	routeFilePath := filepath.Join(linux.ProcFS, "net", "route")
 
 	defaultInterface := ""
 
-	err := utils.ForLinesInFile(routeFilePath, func(line string) error {
+	err := files.ForLinesInFile(ctx, files.KernelVirtualFSReadTimeout, routeFilePath, func(line string) error {
 		fields := strings.Fields(line)
 		if fields[1] == "Destination" {
 			return nil
@@ -83,13 +84,13 @@ func (systemInfo *SystemInfo) getDefaultNetworkInterface() (string, error) {
 }
 
 // parseCPUInfo parses /proc/cpuinfo for extra details re. CPU.
-func (systemInfo *SystemInfo) parseCPUInfo() error {
+func (systemInfo *SystemInfo) parseCPUInfo(ctx context.Context) error {
 
 	filePath := filepath.Join(linux.ProcFS, "cpuinfo")
 
 	const expectedLineSubstrings = 2
 
-	return utils.ForLinesInFile(filePath, func(line string) error {
+	return files.ForLinesInFile(ctx, files.KernelVirtualFSReadTimeout, filePath, func(line string) error {
 		line = strings.TrimSpace(line)
 
 		substrings := strings.SplitN(line, ":", expectedLineSubstrings)

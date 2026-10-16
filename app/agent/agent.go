@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"go.qbee.io/agent/app/api"
+	"go.qbee.io/agent/app/attributes"
 	"go.qbee.io/agent/app/configuration"
 	"go.qbee.io/agent/app/inventory"
 	"go.qbee.io/agent/app/log"
@@ -57,6 +58,7 @@ type Agent struct {
 	Inventory     *inventory.Service
 	Configuration *configuration.Service
 	Metrics       *metrics.Service
+	Attributes    *attributes.Service
 	remoteAccess  *remoteaccess.Service
 	// disableRemoteAccess is used to disable remote access for RunOnce
 	disableRemoteAccess bool
@@ -118,7 +120,7 @@ func (agent *Agent) Run(ctx context.Context) error {
 			// reset the ticker, so we don't run the update twice (scheduled and manually triggered)
 			agent.loopTicker.Reset(agent.Configuration.RunInterval())
 
-			go agent.RunOnce(ctx, FullRun)
+			go agent.RunOnce(ctx, FullRunFresh)
 		}
 	}
 }
@@ -134,6 +136,9 @@ type RunOnceMode int
 const (
 	// FullRun performs a full run of the agent routines.
 	FullRun RunOnceMode = iota
+
+	// FullRunFresh performs a full run of the agent routines based on a non-cached configuration.
+	FullRunFresh
 
 	// QuickRun performs only essential reporting required by the bootstrap process.
 	QuickRun
@@ -162,7 +167,8 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 
 	log.Debugf("starting agent run")
 
-	configData, err := agent.Configuration.Get(ctx)
+	requestFreshConfig := mode == FullRunFresh
+	configData, err := agent.Configuration.Get(ctx, requestFreshConfig)
 	if err != nil {
 		log.Errorf("failed to get device configuration from the device hub: %v", err)
 		return
@@ -171,13 +177,22 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 	agent.Configuration.UpdateSettings(configData)
 	agent.Configuration.UpdateMetricsMonitorState(configData)
 
-	if mode == FullRun {
-		agent.do(ctx, "check-in", agent.checkIn)
+	// Check if we have enough goroutine budget to run the agent, if not, skip the run.
+	// Do this after we have updated the configuration, so that the device is online.
+	if exhausted, err := agent.Configuration.ReportExhaustedGoroutineBudget(ctx); exhausted {
+		if err != nil {
+			log.Errorf("failed to report goroutine budget: %v", err)
+		}
+		return
+	}
+
+	switch mode {
+	case FullRun, FullRunFresh:
 		agent.do(ctx, "remote-access", agent.doRemoteAccess(configData))
 		agent.do(ctx, "config", agent.doConfig(configData))
 		agent.do(ctx, "metrics", agent.doMetrics)
 		agent.do(ctx, "inventories", agent.doInventories)
-	} else {
+	case QuickRun:
 		agent.do(ctx, "system-inventory", agent.doSystemInventory)
 	}
 }
@@ -199,7 +214,7 @@ func (agent *Agent) doMetrics(ctx context.Context) error {
 		return nil
 	}
 
-	if err := agent.Metrics.Send(ctx, agent.Metrics.Collect()); err != nil {
+	if err := agent.Metrics.Send(ctx, agent.Metrics.Collect(ctx)); err != nil {
 		return fmt.Errorf("failed to send metrics: %w", err)
 	}
 
@@ -238,11 +253,13 @@ func (agent *Agent) RebootSystem(ctx context.Context) {
 		return
 	}
 
-	if output, err := utils.RunCommand(ctx, rebootCmd); err != nil {
+	var output []byte
+	if output, err = utils.RunPrivilegedCommand(ctx, rebootCmd); err != nil {
 		log.Errorf("scheduling system reboot failed: %v", err)
-	} else {
-		log.Infof("scheduling system reboot completed: %s", output)
+		return
 	}
+
+	log.Infof("scheduling system reboot completed: %s", output)
 
 	agent.stop <- true
 }
@@ -297,6 +314,7 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 
 	agent.Inventory = inventory.New(agent.api)
 	agent.Metrics = metrics.New(agent.api)
+	agent.Attributes = attributes.New(agent.api)
 	agent.Configuration = configuration.New(agent.api, appDir, cacheDir).WithURLSigner(agent).WithMetricsService(agent.Metrics)
 	agent.remoteAccess = remoteaccess.New().
 		WithConfigReloadNotifier(agent.update)

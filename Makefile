@@ -26,6 +26,10 @@ docker-image:
 		--build-arg version=2023.01 \
 		-f Dockerfile.openwrt .
 
+	docker build -t rauc:qbee \
+		--build-arg version=2023.01 \
+		-f Dockerfile.rauc .
+
 test-src:
 	go test ./app/...
 
@@ -49,3 +53,10 @@ build-freebsd:
 		-ldflags "-s -w -X $(VERSION_VAR)=$(VERSION) -X $(COMMIT_VAR)=$(COMMIT)" \
 		-trimpath \
 		-o bin/qbee-agent-freebsd-amd64 main.go
+
+THIRDPARTY-LICENSES.md: thirdparty-licenses.md.template go.sum
+	rm -rf ./licenses/
+	docker run --rm -v $(shell pwd):/app -w /app golang:1.26 \
+		go run github.com/google/go-licenses/v2@latest report ./... \
+		--ignore go.qbee.io/agent \
+		--template thirdparty-licenses.md.template > THIRDPARTY-LICENSES.md

@@ -19,6 +19,7 @@
 package inventory
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"regexp"
@@ -38,7 +39,7 @@ const (
 )
 
 // CollectSystemInventory returns populated System inventory based on current system status.
-func CollectSystemInventory(tpmEnabled bool) (*System, error) {
+func CollectSystemInventory(ctx context.Context, tpmEnabled bool) (*System, error) {
 
 	if cachedItem, ok := cache.Get(systemInventoryCacheKey); ok {
 		return cachedItem.(*System), nil
@@ -56,7 +57,7 @@ func CollectSystemInventory(tpmEnabled bool) (*System, error) {
 		return nil, err
 	}
 
-	if err := systemInfo.parseCPUInfo(); err != nil {
+	if err := systemInfo.parseCPUInfo(ctx); err != nil {
 		return nil, err
 	}
 
@@ -68,7 +69,7 @@ func CollectSystemInventory(tpmEnabled bool) (*System, error) {
 		return nil, err
 	}
 
-	if err := systemInfo.gatherNetworkInfo(); err != nil {
+	if err := systemInfo.gatherNetworkInfo(ctx); err != nil {
 		return nil, err
 	}
 
@@ -89,8 +90,8 @@ func CollectSystemInventory(tpmEnabled bool) (*System, error) {
 }
 
 // gatherNetworkInfo gathers system's networking configuration.
-func (systemInfo *SystemInfo) gatherNetworkInfo() error {
-	defaultNetworkInterface, err := systemInfo.getDefaultNetworkInterface()
+func (systemInfo *SystemInfo) gatherNetworkInfo(ctx context.Context) error {
+	defaultNetworkInterface, err := systemInfo.getDefaultNetworkInterface(ctx)
 	if err != nil {
 		return err
 	}

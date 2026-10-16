@@ -18,6 +18,8 @@
 
 package metrics
 
+import "context"
+
 // CPUValues contains CPU metrics.
 //
 // Example payload:
@@ -37,7 +39,7 @@ type CPUValues struct {
 }
 
 // CollectCPU returns CPU metrics.
-func CollectCPU() (*CPUValues, error) {
+func CollectCPU(_ context.Context) (*CPUValues, error) {
 	return nil, nil
 }
 

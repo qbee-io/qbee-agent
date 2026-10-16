@@ -18,6 +18,8 @@
 
 package inventory
 
-func CollectProcessesInventory() (*Processes, error) {
+import "context"
+
+func CollectProcessesInventory(_ context.Context) (*Processes, error) {
 	return nil, nil
 }

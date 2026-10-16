@@ -19,6 +19,7 @@
 package inventory
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"runtime"
@@ -38,7 +39,7 @@ const (
 	systemOS    = "windows"
 )
 
-func CollectSystemInventory(tpmEnabled bool) (*System, error) {
+func CollectSystemInventory(ctx context.Context, tpmEnabled bool) (*System, error) {
 	if cachedItem, ok := cache.Get(systemInventoryCacheKey); ok {
 		return cachedItem.(*System), nil
 	}

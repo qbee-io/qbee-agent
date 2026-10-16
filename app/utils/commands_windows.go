@@ -21,11 +21,31 @@ package utils
 import (
 	"context"
 	"fmt"
+	"os/exec"
 )
 
 // RunCommand runs a command and returns its output.
 func RunCommand(ctx context.Context, cmd []string) ([]byte, error) {
 	return nil, nil
+}
+
+// NewPrivilegedCommand creates a new exec.Cmd. Privilege elevation is not supported on Windows.
+func NewPrivilegedCommand(ctx context.Context, cmd []string) (*exec.Cmd, error) {
+	return exec.CommandContext(ctx, cmd[0], cmd[1:]...), nil
+}
+
+// RunPrivilegedCommand runs a command and returns its output. Privilege elevation is not supported on Windows.
+func RunPrivilegedCommand(ctx context.Context, cmd []string) ([]byte, error) {
+	return RunCommand(ctx, cmd)
+}
+
+// ContextWithElevationCommand returns ctx unchanged, as privilege elevation is not supported on Windows.
+func ContextWithElevationCommand(ctx context.Context, elevationCmd []string) (context.Context, error) {
+	if len(elevationCmd) > 0 {
+		return nil, fmt.Errorf("elevation command is not supported on Windows")
+	}
+
+	return ctx, nil
 }
 
 // GenerateServiceCommand generates a command to start or stop a service.

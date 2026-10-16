@@ -19,6 +19,7 @@
 package inventory
 
 import (
+	"context"
 	"fmt"
 
 	"golang.org/x/sys/unix"
@@ -35,13 +36,13 @@ func (systemInfo *SystemInfo) parseSysinfoSyscall() error {
 	return nil
 }
 
-func (systemInfo *SystemInfo) getDefaultNetworkInterface() (string, error) {
+func (systemInfo *SystemInfo) getDefaultNetworkInterface(ctx context.Context) (string, error) {
 	// not implemented for BSD systems
 	return "", nil
 }
 
 // parseCPUInfo parses /proc/cpuinfo for extra details re. CPU.
-func (systemInfo *SystemInfo) parseCPUInfo() error {
+func (systemInfo *SystemInfo) parseCPUInfo(ctx context.Context) error {
 	// not implemented for BSD systems
 	return nil
 }

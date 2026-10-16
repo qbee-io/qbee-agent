@@ -18,9 +18,11 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 
 	"go.qbee.io/agent/app/agent"
 	"go.qbee.io/agent/app/log"
+	"go.qbee.io/agent/app/utils"
 	"go.qbee.io/agent/app/utils/cmd"
 )
 
@@ -40,14 +42,17 @@ var startCommand = cmd.Command{
 		},
 	},
 
-	Target: func(opts cmd.Options) error {
+	Target: func(opts cmd.Options, args ...string) error {
 		runOnce := opts[startOnceOption] == "true"
-
-		ctx := context.Background()
 
 		cfg, err := loadConfig(opts)
 		if err != nil {
 			return err
+		}
+
+		ctx, err := utils.ContextWithElevationCommand(context.Background(), cfg.ElevationCommand)
+		if err != nil {
+			return fmt.Errorf("invalid elevation command: %w", err)
 		}
 
 		if cfg.BootstrapKey != "" {

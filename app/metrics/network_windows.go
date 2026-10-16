@@ -18,6 +18,8 @@
 
 package metrics
 
+import "context"
+
 // NetworkValues contains network metrics for an interface.
 //
 // Example payload:
@@ -38,7 +40,7 @@ type NetworkValues struct {
 	TXBytes uint64 `json:"tx_bytes"`
 }
 
-func CollectNetwork() ([]Metric, error) {
+func CollectNetwork(_ context.Context) ([]Metric, error) {
 	return nil, nil
 }
 

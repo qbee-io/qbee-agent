@@ -67,7 +67,7 @@ type Package struct {
 
 // Execute package management configuration bundle.
 func (p PackageManagementBundle) Execute(ctx context.Context, service *Service) error {
-	if !CheckPreCondition(ctx, p.PreCondition) {
+	if !CheckCondition(ctx, p.PreCondition) {
 		return nil
 	}
 

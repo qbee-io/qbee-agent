@@ -30,6 +30,7 @@ import (
 	"go.qbee.io/agent/app/api"
 	"go.qbee.io/agent/app/log"
 	"go.qbee.io/agent/app/metrics"
+	"go.qbee.io/agent/app/utils/files"
 )
 
 const defaultAgentInterval = 5 // minutes
@@ -78,6 +79,9 @@ type Service struct {
 
 	// firstRun is true if the agent is running for the first time after startup
 	firstRunRetryCounter int
+
+	// configEndpointUnreachable is true if the config endpoint is unreachable
+	configEndpointUnreachable bool
 }
 
 // New returns a new instance of configuration Service.
@@ -150,7 +154,6 @@ func (srv *Service) EnableConsoleReporting() {
 
 // applyDefaultSettings to the agent.
 func (srv *Service) applyDefaultSettings() {
-	srv.reportToConsole = true
 	srv.reportingEnabled = true
 	srv.metricsEnabled = true
 	srv.softwareInventoryEnabled = true
@@ -208,7 +211,7 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 		srv.connectivityWatchdogThreshold = 0
 	}
 
-	reporter := NewReporter(configData.CommitID, srv.reportToConsole, parametersBundle.SecretsList())
+	reporter := NewReporter(configData.CommitID, srv.reportToConsole, configData.SecretsList(ctxWithParameters))
 
 	for _, bundleName := range configData.Bundles {
 		log.Debugf("starting processing of bundle %s", bundleName)
@@ -326,6 +329,39 @@ func (srv *Service) reportAPIError(ctx context.Context, err error) {
 	}
 }
 
+// ReportExhaustedGoroutineBudget reports when the goroutine budget is exhausted and returns whether the
+// budget was exhausted and any error encountered delivering the report.
+func (srv *Service) ReportExhaustedGoroutineBudget(ctx context.Context) (bool, error) {
+	if !files.GoroutinesExhausted() {
+		return false, nil
+	}
+
+	// since we don't have a reporter defined on this context, we need to create a new one
+	reporter := NewReporter(srv.currentCommitID, srv.reportToConsole, nil)
+	bundleCtx := reporter.BundleContext(ctx, bundleAgentInternal, "")
+
+	ReportCritical(bundleCtx, nil, "goroutine budget exhausted, skipping agent run")
+
+	// send reports immediately as there will be no further configurations executed, thus
+	// no further reports will be generated. If we fail to send the reports, we add them to the buffer.
+	if _, err := srv.sendReports(ctx, reporter.Reports()); err != nil {
+		log.Debugf("failed to send reports to the server: %v, adding to the buffer", err)
+
+		if bufferErr := srv.addReportsToBuffer(reporter.Reports()); bufferErr != nil {
+			log.Errorf("failed to add reports to buffer: %v", bufferErr)
+		}
+
+		return true, err
+	}
+
+	// also flush any existing buffered reports
+	if err := srv.flushReportsBuffer(ctx); err != nil {
+		log.Errorf("failed to flush reports buffer: %v", err)
+	}
+
+	return true, nil
+}
+
 // RunIntervalChangedNotifier returns a channel which will send a new agent interval duration when it changes.
 func (srv *Service) RunIntervalChangedNotifier() <-chan time.Duration {
 	return srv.runIntervalChangeNotifier
@@ -345,7 +381,7 @@ func (srv *Service) addReportsToBuffer(reports []Report) error {
 	if err != nil {
 		return fmt.Errorf("failed to open reports buffer file: %v", err)
 	}
-	defer fp.Close()
+	defer func() { _ = fp.Close() }()
 
 	encoder := json.NewEncoder(fp)
 
@@ -375,7 +411,7 @@ func (srv *Service) readReportsBuffer() ([]Report, error) {
 
 		return nil, fmt.Errorf("failed to open reports buffer file: %v", err)
 	}
-	defer fp.Close()
+	defer func() { _ = fp.Close() }()
 
 	var reports []Report
 	decoder := json.NewDecoder(fp)
@@ -475,8 +511,8 @@ func (srv *Service) flushReportsBuffer(ctx context.Context) error {
 
 // Get returns the agent configuration.
 // If the configuration cannot be retrieved from the API, it will be loaded from the local cache.
-func (srv *Service) Get(ctx context.Context) (*CommittedConfig, error) {
-	cfg, err := srv.get(ctx)
+func (srv *Service) Get(ctx context.Context, fresh bool) (*CommittedConfig, error) {
+	cfg, err := srv.get(ctx, fresh)
 	if err != nil {
 		// if we failed to get config from API, try to load it from local file cache
 		cfg = new(CommittedConfig)
@@ -487,7 +523,6 @@ func (srv *Service) Get(ctx context.Context) (*CommittedConfig, error) {
 		}
 
 		log.Warnf("failed to get config from API: %v", err)
-
 		return cfg, nil
 	}
 
@@ -510,7 +545,7 @@ func (srv *Service) persistConfig(cfg *CommittedConfig) {
 		log.Errorf("failed to open config cache file: %v", err)
 		return
 	}
-	defer fp.Close()
+	defer func() { _ = fp.Close() }()
 
 	if err = json.NewEncoder(fp).Encode(cfg); err != nil {
 		log.Errorf("failed to marshal config: %v", err)
@@ -532,11 +567,16 @@ func (srv *Service) loadConfig(cfg *CommittedConfig) error {
 	if err != nil {
 		return fmt.Errorf("failed to open config cache file: %v", err)
 	}
-	defer fp.Close()
+	defer func() { _ = fp.Close() }()
 
 	if err = json.NewDecoder(fp).Decode(cfg); err != nil {
 		return fmt.Errorf("failed to unmarshal config: %v", err)
 	}
 
 	return nil
+}
+
+// IsConfigEndpointUnreachable returns true if the configuration endpoint is unreachable.
+func (srv *Service) IsConfigEndpointUnreachable() bool {
+	return srv.configEndpointUnreachable
 }

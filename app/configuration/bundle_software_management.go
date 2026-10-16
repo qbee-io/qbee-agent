@@ -60,6 +60,7 @@ type SoftwareManagementBundle struct {
 
 // Execute software management bundle on the system.
 func (s SoftwareManagementBundle) Execute(ctx context.Context, srv *Service) error {
+
 	pkgManager := software.DefaultPackageManager
 
 	if pkgManager == nil {
@@ -133,7 +134,7 @@ func (s Software) serviceName(ctx context.Context, srv *Service) string {
 
 // Execute a Software configuration on the system.
 func (s Software) Execute(ctx context.Context, srv *Service, pkgManager software.PackageManager) error {
-	if !CheckPreCondition(ctx, s.PreCondition) {
+	if !CheckCondition(ctx, s.PreCondition) {
 		return nil
 	}
 
@@ -158,7 +159,8 @@ func (s Software) Execute(ctx context.Context, srv *Service, pkgManager software
 		var created bool
 
 		parameters := templateParametersMap(s.Parameters)
-		created, err = srv.downloadTemplateFile(ctx, "", cfgFile.ConfigTemplate, cfgFile.ConfigLocation, parameters)
+
+		created, err = srv.downloadTemplateFile(ctx, "", cfgFile.ConfigTemplate, cfgFile.ConfigLocation, File{}, parameters)
 		if err != nil {
 			return err
 		}
@@ -186,7 +188,7 @@ func (s Software) installFromFile(ctx context.Context, srv *Service, pkgManager 
 	} else {
 		pkgFileCachePath = filepath.Join(srv.cacheDirectory, SoftwareCacheDirectory, s.Package)
 
-		if _, err := srv.downloadFile(ctx, "", s.Package, pkgFileCachePath); err != nil {
+		if _, err := srv.downloadFile(ctx, "", s.Package, pkgFileCachePath, File{}); err != nil {
 			return false, err
 		}
 	}
@@ -204,7 +206,7 @@ func (s Software) installFromFile(ctx context.Context, srv *Service, pkgManager 
 	}
 
 	// check package architecture
-	if err := pkgManager.IsSupportedArchitecture(pkgInfo.Architecture); err != nil {
+	if err := pkgManager.IsSupportedArchitecture(ctx, pkgInfo.Architecture); err != nil {
 		ReportError(ctx, err, "Unable to determine supported architecture for package %s", pkgInfo.Name)
 		return false, err
 	}
@@ -317,7 +319,7 @@ func (s Software) restart(ctx context.Context, srv *Service) {
 	}
 
 	var output []byte
-	if output, err = utils.RunCommand(ctx, cmd); err != nil {
+	if output, err = utils.RunPrivilegedCommand(ctx, cmd); err != nil {
 		return
 	}
 

@@ -24,6 +24,7 @@ import (
 
 	"go.qbee.io/agent/app/agent"
 	"go.qbee.io/agent/app/inventory"
+	"go.qbee.io/agent/app/utils"
 	"go.qbee.io/agent/app/utils/cmd"
 )
 
@@ -49,15 +50,18 @@ var inventoryCommand = cmd.Command{
 			Flag:  "true",
 		},
 	},
-	Target: func(opts cmd.Options) error {
+	Target: func(opts cmd.Options, args ...string) error {
 		inventoryType := inventory.Type(opts[inventoryTypeOption])
 		dryRun := opts[inventoryDryRunOption] == "true"
-
-		ctx := context.Background()
 
 		cfg, err := loadConfig(opts)
 		if err != nil {
 			return err
+		}
+
+		ctx, err := utils.ContextWithElevationCommand(context.Background(), cfg.ElevationCommand)
+		if err != nil {
+			return fmt.Errorf("invalid elevation command: %w", err)
 		}
 
 		var inventoryData any
@@ -65,11 +69,11 @@ var inventoryCommand = cmd.Command{
 		switch inventoryType {
 
 		case inventory.TypeSystem:
-			inventoryData, err = inventory.CollectSystemInventory(cfg.TPMDevice != "")
+			inventoryData, err = inventory.CollectSystemInventory(ctx, cfg.TPMDevice != "")
 		case inventory.TypePorts:
-			inventoryData, err = inventory.CollectPortsInventory()
+			inventoryData, err = inventory.CollectPortsInventory(ctx)
 		case inventory.TypeProcesses:
-			inventoryData, err = inventory.CollectProcessesInventory()
+			inventoryData, err = inventory.CollectProcessesInventory(ctx)
 		case inventory.TypeUsers:
 			inventoryData, err = inventory.CollectUsersInventory()
 		case inventory.TypeSoftware:

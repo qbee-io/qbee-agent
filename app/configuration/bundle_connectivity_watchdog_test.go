@@ -46,7 +46,7 @@ func Test_ConnectivityWatchdog(t *testing.T) {
 	}
 
 	// first attempt shouldn't result in a set reboot flag
-	if _, err := service.Get(ctx); !errors.As(err, new(api.ConnectionError)) {
+	if _, err := service.Get(ctx, false); !errors.As(err, new(api.ConnectionError)) {
 		t.Fatalf("expected connection error, got %t", err)
 	}
 
@@ -55,7 +55,7 @@ func Test_ConnectivityWatchdog(t *testing.T) {
 	}
 
 	// second attempt should result in a set reboot flag
-	if _, err := service.Get(ctx); !errors.As(err, new(api.ConnectionError)) {
+	if _, err := service.Get(ctx, false); !errors.As(err, new(api.ConnectionError)) {
 		t.Fatalf("expected connection error, got %t", err)
 	}
 
@@ -71,7 +71,7 @@ func Test_ConnectivityWatchdog(t *testing.T) {
 	}
 
 	for i := 0; i < 3; i++ {
-		if _, err := service.Get(ctx); !errors.As(err, new(api.ConnectionError)) {
+		if _, err := service.Get(ctx, false); !errors.As(err, new(api.ConnectionError)) {
 			t.Fatalf("expected connection error, got %t", err)
 		}
 	}

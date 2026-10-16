@@ -28,6 +28,10 @@ import (
 func Test_Password(t *testing.T) {
 	r := runner.New(t)
 
+	if r.GetUnprivileged() {
+		t.Skip("Skipping password bundle test for unprivileged user mode.")
+	}
+
 	// assert that root is without a password
 	rootLine := string(r.MustExec("sh", "-c", "cat /etc/shadow | grep 'root:'"))
 	rootFields := strings.Split(rootLine, ":")
