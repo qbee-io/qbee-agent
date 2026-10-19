@@ -18,6 +18,7 @@ package configuration
 
 import (
 	"context"
+	"io"
 	"strings"
 
 	"go.qbee.io/agent/app/utils"
@@ -33,10 +34,17 @@ func CheckCondition(ctx context.Context, condition string) bool {
 		return true
 	}
 
-	// return with no error when pre-condition fails
-	if _, err := utils.RunCommand(ctx, []string{getShell(), "-c", condition}); err != nil {
+	// return false if shell is not resolved
+	shell := getShell()
+	if shell == "" {
 		return false
 	}
 
-	return true
+	checkCmd := utils.NewCommand(ctx, []string{shell, "-c", condition})
+
+	// discard any output, only care about the exit code
+	checkCmd.Stderr = io.Discard
+	checkCmd.Stdout = io.Discard
+
+	return checkCmd.Run() == nil
 }
