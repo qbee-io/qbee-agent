@@ -49,7 +49,7 @@ func TestCheckCondition_OutputIsNotBuffered(t *testing.T) {
 	const outputSize = 64 << 20     // 64 MB
 	const maxAllowedAlloc = 4 << 20 // 4 MB
 
-	condition := fmt.Sprintf("head -c %d /dev/zero; head -c %d /dev/zero >&2; true", outputSize, outputSize)
+	condition := fmt.Sprintf("head -c %d /dev/zero && head -c %d /dev/zero >&2", outputSize, outputSize)
 
 	var before, after runtime.MemStats
 	runtime.GC()
