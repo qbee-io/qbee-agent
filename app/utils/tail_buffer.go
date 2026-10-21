@@ -23,9 +23,9 @@ import (
 
 // TailBuffer keeps a size-limited tail of data in bytes.
 type TailBuffer struct {
-	mutex     sync.Mutex
-	buffer    []byte
-	maxBytes  int
+	mutex    sync.Mutex
+	buffer   []byte
+	maxBytes int
 }
 
 // NewTailBuffer returns an initialized TailBuffer for maxBytes.
@@ -82,31 +82,34 @@ func (tf *TailBuffer) Push(line []byte) {
 	}
 }
 
-// Close the buffer and return all recorded lines.
-// After calling this method, any writes will result in a panic.
-func (tf *TailBuffer) Close() [][]byte {
+// Close the buffer and return the recorded non-empty, trimmed lines joined by '\n'.
+// The result is a single allocation of at most len(buffer) bytes.
+func (tf *TailBuffer) Close() []byte {
 	tf.mutex.Lock()
 	defer tf.mutex.Unlock()
 
-	if len(tf.buffer) == 0 {
-		return [][]byte{}
-	}
+	result := make([]byte, 0, len(tf.buffer))
 
-	// Split the buffer into lines
-	lines := bytes.Split(tf.buffer, []byte{'\n'})
-	
-	// Create result slice with proper capacity
-	result := make([][]byte, 0, len(lines))
-	
-	for _, line := range lines {
-		// Skip empty lines at the end (from trailing newlines)
-		trimmed := bytes.TrimSpace(line)
-		if len(trimmed) > 0 {
-			result = append(result, trimmed)
+	rest := tf.buffer
+	for len(rest) > 0 {
+		line := rest
+		if newlineIdx := bytes.IndexByte(rest, '\n'); newlineIdx != -1 {
+			line, rest = rest[:newlineIdx], rest[newlineIdx+1:]
+		} else {
+			rest = nil
 		}
+
+		line = bytes.TrimSpace(line)
+		if len(line) == 0 {
+			continue
+		}
+
+		if len(result) > 0 {
+			result = append(result, '\n')
+		}
+		result = append(result, line...)
 	}
 
-	// Clear the buffer to prevent further use
 	tf.buffer = nil
 
 	return result

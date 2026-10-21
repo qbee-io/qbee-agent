@@ -19,7 +19,6 @@
 package configuration
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os/exec"
@@ -73,8 +72,7 @@ func RunCommand(ctx context.Context, command string) ([]byte, error) {
 	err := cmd.Run()
 
 	// grab tail of the output
-	outputLines := tailBuffer.Close()
-	output := bytes.Join(outputLines, []byte("\n"))
+	output := tailBuffer.Close()
 
 	return output, err
 }
