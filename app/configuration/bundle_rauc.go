@@ -421,7 +421,7 @@ func downloadRaucBundle(ctx context.Context, service *Service, raucPath, raucDow
 			return "", err
 		}
 
-		if err := os.WriteFile(raucStateFile, stateBytes, 0600); err != nil {
+		if err := writeFileAnchored(raucStateFile, stateBytes, 0700, 0600); err != nil {
 			return "", err
 		}
 	}

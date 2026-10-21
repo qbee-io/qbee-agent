@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -228,13 +227,8 @@ func (c Compose) getResources(ctx context.Context, service *Service) (bool, erro
 
 func (c Compose) getComposeFile(ctx context.Context, service *Service) (bool, error) {
 
-	projectDirectory := c.getProjectDirectory(service)
-	if err := os.MkdirAll(projectDirectory, 0700); err != nil {
-		ReportError(ctx, err, "Cannot create directory for compose project %s", c.Name)
-		return false, err
-	}
-
-	composeFilePath := filepath.Join(projectDirectory, composeFile)
+	// directory for the compose project is created anchored, by downloadFile/downloadTemplateFile below
+	composeFilePath := filepath.Join(c.getProjectDirectory(service), composeFile)
 
 	parameters := templateParametersMap(c.Parameters)
 
@@ -390,13 +384,6 @@ func downloadStateFileCompare(
 		return false, err
 	}
 
-	stateDir := path.Dir(stateFilePath)
-	if _, err := os.Stat(stateDir); os.IsNotExist(err) {
-		if err := os.MkdirAll(stateDir, 0700); err != nil {
-			return false, err
-		}
-	}
-
 	doDownload := false
 	if _, err := os.Stat(stateFilePath); os.IsNotExist(err) {
 		doDownload = true
@@ -426,7 +413,7 @@ func downloadStateFileCompare(
 			return false, err
 		}
 
-		if err := os.WriteFile(stateFilePath, stateBytes, 0600); err != nil {
+		if err := writeFileAnchored(stateFilePath, stateBytes, 0700, 0600); err != nil {
 			return false, err
 		}
 	}

@@ -97,7 +97,7 @@ func (p PasswordBundle) Execute(ctx context.Context, service *Service) error {
 	}
 
 	// changes were made, so we need to write the new shadow file
-	err = os.WriteFile(inventory.ShadowFilePath, []byte(strings.Join(outputLines, "\n")), shadowFileMode)
+	err = writeFileAnchored(inventory.ShadowFilePath, []byte(strings.Join(outputLines, "\n")), 0755, shadowFileMode)
 	if err != nil {
 		ReportError(ctx, err, "Error setting passwords for users.")
 		return err
