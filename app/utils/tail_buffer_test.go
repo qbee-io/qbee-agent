@@ -17,7 +17,9 @@
 package utils
 
 import (
+	"bytes"
 	"reflect"
+	"runtime"
 	"testing"
 )
 
@@ -106,11 +108,43 @@ func TestTailBuffer(t *testing.T) {
 				_, _ = tailBuffer.Write(chunk)
 			}
 
-			gotLines := tailBuffer.Close()
+			got := tailBuffer.Close()
+			want := bytes.Join(tt.wantLines, []byte("\n"))
 
-			if !reflect.DeepEqual(gotLines, tt.wantLines) {
-				t.Errorf("got lines: %s\nwant %s", gotLines, tt.wantLines)
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("got: %q\nwant %q", got, want)
 			}
 		})
+	}
+}
+
+func TestTailBuffer_CloseAllocationsWithOnlyNewlines(t *testing.T) {
+	const maxBytes = 1 << 20 // same as commandOutputBytesLimit
+	const maxAllowedAlloc = 2 * maxBytes
+
+	tb := NewTailBuffer(maxBytes)
+
+	// 32KB chunks match how exec.Cmd feeds a non-file Stdout/Stderr.
+	chunk := bytes.Repeat([]byte{'\n'}, 32<<10)
+	for written := 0; written < 2*maxBytes; written += len(chunk) {
+		_, _ = tb.Write(chunk)
+	}
+	bufferedBytes := len(tb.buffer)
+
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+
+	output := tb.Close()
+
+	runtime.ReadMemStats(&after)
+	allocated := after.TotalAlloc - before.TotalAlloc
+
+	t.Logf("buffered %d bytes, Close allocated %d bytes (%.1fx maxBytes), returned %d bytes",
+		bufferedBytes, allocated, float64(allocated)/maxBytes, len(output))
+
+	if allocated > maxAllowedAlloc {
+		t.Errorf("Close allocated %d bytes for a %d byte buffer, expected at most %d",
+			allocated, bufferedBytes, maxAllowedAlloc)
 	}
 }
