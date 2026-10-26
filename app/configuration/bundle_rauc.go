@@ -99,8 +99,8 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	// Must happen before any early return, or a record from another slot could match again after a fallback.
 	// Eg. a manual fallback to a previous boot slot could leave a stale last-install record that matches the new boot slot.
 	// which would cause the shouldInstall check to incorrectly assume the bundle was already installed.
-	lastInstallFile := path.Join(raucStateDirectory(service), raucInstallStatusFile)
-	if err := discardStaleInstallStatusFile(lastInstallFile, raucStatus.BootPrimary); err != nil {
+	raucInstallStatusFile := path.Join(raucStateDirectory(service), raucInstallStatusFile)
+	if err := discardStaleInstallStatusFile(raucInstallStatusFile, raucStatus.BootPrimary); err != nil {
 		ReportError(ctx, err, "Failed to discard stale RAUC last-install record")
 		return err
 	}
@@ -278,7 +278,7 @@ type raucInstallStatus struct {
 	InstalledBundleInfo RaucBundleInfo `json:"bundle"`
 }
 
-func writeInstallStatusFile(stateDir, lastInstallFile, bootPrimary string, bundleInfo *RaucBundleInfo) error {
+func writeInstallStatusFile(stateDir, raucInstallStatusFile, bootPrimary string, bundleInfo *RaucBundleInfo) error {
 	if err := os.MkdirAll(stateDir, 0700); err != nil {
 		return err
 	}
@@ -288,19 +288,19 @@ func writeInstallStatusFile(stateDir, lastInstallFile, bootPrimary string, bundl
 		return err
 	}
 
-	return os.WriteFile(lastInstallFile, data, 0600)
+	return os.WriteFile(raucInstallStatusFile, data, 0600)
 }
 
-func removeInstallStatusFile(lastInstallFile string) error {
-	if err := os.Remove(lastInstallFile); err != nil && !os.IsNotExist(err) {
+func removeInstallStatusFile(raucInstallStatusFile string) error {
+	if err := os.Remove(raucInstallStatusFile); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove RAUC last-install record: %w", err)
 	}
 	return nil
 }
 
 // readInstallStatusFile returns the last-install record, or nil if it is missing or corrupt.
-func readInstallStatusFile(lastInstallFile string) (*raucInstallStatus, error) {
-	data, err := os.ReadFile(lastInstallFile)
+func readInstallStatusFile(raucInstallStatusFile string) (*raucInstallStatus, error) {
+	data, err := os.ReadFile(raucInstallStatusFile)
 	if os.IsNotExist(err) {
 		return nil, nil
 	}
