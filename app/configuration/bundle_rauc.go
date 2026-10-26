@@ -96,6 +96,15 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return fmt.Errorf("RAUC primary boot slot not found")
 	}
 
+	// Must happen before any early return, or a record from another slot could match again after a fallback.
+	// Eg. a manual fallback to a previous boot slot could leave a stale last-install record that matches the new boot slot.
+	// which would cause the shouldInstall check to incorrectly assume the bundle was already installed.
+	lastInstallFile := path.Join(raucStateDirectory(service), raucInstallStatusFile)
+	if err := discardStaleInstallStatusFile(lastInstallFile, raucStatus.BootPrimary); err != nil {
+		ReportError(ctx, err, "Failed to discard stale RAUC last-install record")
+		return err
+	}
+
 	r.RaucBundle = resolveParameters(ctx, r.RaucBundle)
 	raucPath, err := r.resolveRaucPath(ctx, service)
 	if err != nil {
@@ -162,7 +171,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 
 	// Some bootloader interfaces do not report the new slot as boot primary after install.
 	// This ensures that the last installation record is updated correctly even if the boot primary slot did not change.
-	if err := updateLastInstall(ctx, service, raucStatus, raucBundleInfo); err != nil {
+	if err := updateRaucInstallStatus(ctx, service, raucStatus, raucBundleInfo); err != nil {
 		ReportError(ctx, err, "Failed to update last RAUC bundle installation record")
 		return err
 	}
@@ -170,9 +179,9 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 	return nil
 }
 
-// updateLastInstall records the installed bundle if boot primary did not change after installation,
+// updateRaucInstallStatus records the installed bundle if boot primary did not change after installation,
 // otherwise it removes any previous record.
-func updateLastInstall(
+func updateRaucInstallStatus(
 	ctx context.Context,
 	service *Service,
 	oldStatus *image.RaucStatus,
@@ -184,16 +193,16 @@ func updateLastInstall(
 	}
 
 	stateDir := raucStateDirectory(service)
-	lastInstallFile := path.Join(stateDir, raucLastInstallFile)
+	raucInstallStatusFile := path.Join(stateDir, raucInstallStatusFile)
 
 	if newStatus.BootPrimary == oldStatus.BootPrimary {
-		if err := writeLastInstall(stateDir, lastInstallFile, newStatus.BootPrimary, bundleInfo); err != nil {
+		if err := writeInstallStatusFile(stateDir, raucInstallStatusFile, newStatus.BootPrimary, bundleInfo); err != nil {
 			return fmt.Errorf("failed to record last RAUC bundle installation: %w", err)
 		}
 		return nil
 	}
 
-	return removeLastInstall(lastInstallFile)
+	return removeInstallStatusFile(raucInstallStatusFile)
 }
 
 // RaucImageInfo represents the information about a RAUC image.
@@ -252,29 +261,29 @@ func (r RaucBundle) getRaucBundleInfo(ctx context.Context, url string) (*RaucBun
 	return &raucInfoBundle, nil
 }
 
-// raucLastInstallFile records the last bundle installed while boot primary remained unchanged.
-const raucLastInstallFile = "last_install.json"
+// raucInstallStatusFile records the last bundle installed while boot primary remained unchanged.
+const raucInstallStatusFile = "rauc_install_status.json"
 
 // raucStateDirectory returns the directory where RAUC bundle state is persisted.
 func raucStateDirectory(service *Service) string {
 	return path.Join(service.cacheDirectory, "rauc")
 }
 
-// raucLastInstall is the persisted record of the last bundle installed while boot primary remained unchanged.
-type raucLastInstall struct {
+// raucInstallStatus is the persisted record of the last bundle installed while boot primary remained unchanged.
+type raucInstallStatus struct {
 	// BootPrimary is the boot primary slot at the time of installation.
 	BootPrimary string `json:"boot_primary"`
 
-	// Bundle is the installed bundle info.
-	Bundle *RaucBundleInfo `json:"bundle"`
+	// InstalledBundleInfo is the installed bundle info.
+	InstalledBundleInfo RaucBundleInfo `json:"bundle"`
 }
 
-func writeLastInstall(stateDir, lastInstallFile, bootPrimary string, bundleInfo *RaucBundleInfo) error {
+func writeInstallStatusFile(stateDir, lastInstallFile, bootPrimary string, bundleInfo *RaucBundleInfo) error {
 	if err := os.MkdirAll(stateDir, 0700); err != nil {
 		return err
 	}
 
-	data, err := json.Marshal(raucLastInstall{BootPrimary: bootPrimary, Bundle: bundleInfo})
+	data, err := json.Marshal(raucInstallStatus{BootPrimary: bootPrimary, InstalledBundleInfo: *bundleInfo})
 	if err != nil {
 		return err
 	}
@@ -282,35 +291,48 @@ func writeLastInstall(stateDir, lastInstallFile, bootPrimary string, bundleInfo 
 	return os.WriteFile(lastInstallFile, data, 0600)
 }
 
-func removeLastInstall(lastInstallFile string) error {
+func removeInstallStatusFile(lastInstallFile string) error {
 	if err := os.Remove(lastInstallFile); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove RAUC last-install record: %w", err)
 	}
 	return nil
 }
 
-// getOrDiscardLastInstall returns the last-install record if it is valid for the current boot primary slot.
-// Otherwise, the record is removed from disk and nil is returned.
-func getOrDiscardLastInstall(lastInstallFile, bootPrimary string) (*raucLastInstall, error) {
+// readInstallStatusFile returns the last-install record, or nil if it is missing or corrupt.
+func readInstallStatusFile(lastInstallFile string) (*raucInstallStatus, error) {
 	data, err := os.ReadFile(lastInstallFile)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
 		return nil, err
 	}
 
-	// Remove the last-install record if it is invalid or was written for a different boot primary slot.
-	var lastInstall raucLastInstall
-	if err := json.Unmarshal(data, &lastInstall); err != nil ||
-		lastInstall.Bundle == nil ||
-		lastInstall.BootPrimary != bootPrimary {
-		return nil, removeLastInstall(lastInstallFile)
+	var raucLastInstallStatus raucInstallStatus
+	if err := json.Unmarshal(data, &raucLastInstallStatus); err != nil {
+		return nil, nil
 	}
 
-	return &lastInstall, nil
+	return &raucLastInstallStatus, nil
 }
 
+// discardStaleInstallStatusFile removes the last-install record if it is corrupt or was written for another boot primary slot.
+func discardStaleInstallStatusFile(raucInstallStatusFile, bootPrimary string) error {
+	raucLastInstallStatus, err := readInstallStatusFile(raucInstallStatusFile)
+	if err != nil {
+		return err
+	}
+
+	// we only keep the last-install record if it matches the current boot primary slot, eg.
+	// that the system has not switched to another boot primary slot since the last install.
+	if raucLastInstallStatus != nil && raucLastInstallStatus.BootPrimary == bootPrimary {
+		return nil
+	}
+
+	return removeInstallStatusFile(raucInstallStatusFile)
+}
+
+// shouldInstall determines whether the RAUC bundle should be installed based on the current system state and the last install record (if available).
 func shouldInstall(
 	localRaucInfo *image.RaucStatus,
 	remoteBundleData *RaucBundleInfo,
@@ -326,24 +348,18 @@ func shouldInstall(
 		return false, err
 	}
 
-	// The last-install record is only meaningful while the boot primary slot is the one it was written for.
-	// A stale record must be discarded here, before the "already running" check below, because that check
-	// returns early. If we only discarded it after that check, a record written while booted from slot A would
-	// survive while running from slot B (where the bundle is already active). After a later fallback to slot A,
-	// the leftover record would match boot primary again and wrongly suppress reinstalling the bundle.
-	lastInstallFile := path.Join(raucStateDirectory(service), raucLastInstallFile)
-	lastInstall, err := getOrDiscardLastInstall(lastInstallFile, localRaucInfo.BootPrimary)
-	if err != nil {
-		return false, err
-	}
-
 	// Bundle is already running from the boot primary slot.
 	if remoteBundleData.Hash == currentSlotData.SlotStatus.Bundle.Hash {
 		return false, nil
 	}
 
-	// Bundle was already installed, but the bootloader has not switched boot primary to it yet.
-	if lastInstall != nil && lastInstall.Bundle.Hash == remoteBundleData.Hash {
+	raucInstallStatus, err := readInstallStatusFile(path.Join(raucStateDirectory(service), raucInstallStatusFile))
+	if err != nil {
+		return false, err
+	}
+
+	// Bundle was already installed, but the bootloader does not report it as the current boot primary yet
+	if raucInstallStatus != nil && raucInstallStatus.InstalledBundleInfo.Hash == remoteBundleData.Hash {
 		return false, nil
 	}
 

@@ -149,8 +149,8 @@ func Test_Last_Install(t *testing.T) {
 
 	service := New(nil, "", t.TempDir())
 	stateDir := raucStateDirectory(service)
-	lastInstallFile := filepath.Join(stateDir, raucLastInstallFile)
-	assert.NoError(t, writeLastInstall(stateDir, lastInstallFile, raucStatus.BootPrimary, &bundleInfo))
+	lastInstallFile := filepath.Join(stateDir, raucInstallStatusFile)
+	assert.NoError(t, writeInstallStatusFile(stateDir, lastInstallFile, raucStatus.BootPrimary, &bundleInfo))
 
 	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, service)
 	assert.NoError(t, err)
@@ -175,10 +175,10 @@ func Test_Last_Install_Invalidated_On_Boot_Primary_Change(t *testing.T) {
 
 	service := New(nil, "", t.TempDir())
 	stateDir := raucStateDirectory(service)
-	lastInstallFile := filepath.Join(stateDir, raucLastInstallFile)
+	lastInstallFile := filepath.Join(stateDir, raucInstallStatusFile)
 
 	// bundle installed into B while boot primary remained A
-	assert.NoError(t, writeLastInstall(stateDir, lastInstallFile, statusA.BootPrimary, &bundleInfo))
+	assert.NoError(t, writeInstallStatusFile(stateDir, lastInstallFile, statusA.BootPrimary, &bundleInfo))
 
 	doInstall, err := shouldInstall(&statusA, &bundleInfo, service)
 	assert.NoError(t, err)
@@ -222,7 +222,7 @@ func Test_Last_Install_Invalid_Record(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			service := New(nil, "", t.TempDir())
 			stateDir := raucStateDirectory(service)
-			lastInstallFile := filepath.Join(stateDir, raucLastInstallFile)
+			lastInstallFile := filepath.Join(stateDir, raucInstallStatusFile)
 
 			assert.NoError(t, os.MkdirAll(stateDir, 0700))
 			assert.NoError(t, os.WriteFile(lastInstallFile, []byte(tt.data), 0600))
@@ -645,7 +645,7 @@ func Test_InstallBootPrimaryNotUpdated(t *testing.T) {
 	destinationPath := filepath.Join(r.GetStateDirectory(), "rauc", "bundle.raucb")
 	raucCacheDir := filepath.Join(r.GetStateDirectory(), "app_workdir", "cache", "rauc")
 	raucStatePath := filepath.Join(raucCacheDir, "state.json")
-	lastInstallPath := filepath.Join(raucCacheDir, raucLastInstallFile)
+	lastInstallPath := filepath.Join(raucCacheDir, raucInstallStatusFile)
 
 	raucConfig := RaucBundle{
 		RaucBundle:      raucBundlePath,
@@ -690,4 +690,66 @@ func Test_InstallBootPrimaryNotUpdated(t *testing.T) {
 
 	reports, _ = ExecuteTestConfigInDocker(r, config)
 	assert.Equal(t, reports, expectedReports)
+}
+
+func Test_StaleInstallStatusRemovedAfterManualFallback(t *testing.T) {
+	r := runner.NewRaucRunner(t)
+
+	// makes dummy-bootloader.sh ignore set-primary, so boot primary stays unchanged after install
+	r.MustExec("touch", "/etc/rauc/primary-slot-state-override")
+
+	raucBundlePath := "file:///rauc/test-bundle-1.0.0.raucb"
+	destinationPath := filepath.Join(r.GetStateDirectory(), "rauc", "bundle.raucb")
+	raucCacheDir := filepath.Join(r.GetStateDirectory(), "app_workdir", "cache", "rauc")
+	raucStatePath := filepath.Join(raucCacheDir, "state.json")
+	lastInstallPath := filepath.Join(raucCacheDir, raucInstallStatusFile)
+
+	raucConfig := RaucBundle{
+		RaucBundle:      raucBundlePath,
+		Download:        true,
+		DownloadPath:    destinationPath,
+		RebootCondition: "/bin/false",
+	}
+	raucConfig.Enabled = true
+
+	config := CommittedConfig{
+		Bundles: []string{BundleRauc},
+		BundleData: BundleData{
+			Rauc: &raucConfig,
+		},
+	}
+
+	downloadReport := "[INFO] Successfully downloaded file " + raucBundlePath + " to " + destinationPath
+	installReport := "[INFO] RAUC bundle successfully installed '" + raucBundlePath + "'"
+
+	// bundle is installed into appfs.1 while boot primary remains appfs.0
+	reports, _ := ExecuteTestConfigInDocker(r, config)
+	assert.Equal(t, reports, []string{downloadReport, installReport})
+	r.MustExec("test", "-f", lastInstallPath)
+
+	// manually switch boot primary to appfs.1, which already contains the bundle
+	r.MustExec("sh", "-c", "echo B > /rauc/rauc-active-slot")
+	var raucStatus image.RaucStatus
+	assert.NoError(t, json.Unmarshal(r.MustExec("rauc", "status", "--output-format", "json"), &raucStatus))
+	assert.Equal(t, raucStatus.BootPrimary, "appfs.1")
+
+	// force a re-download so the install decision isn't short-circuited by the download state
+	r.MustExec("rm", "-f", destinationPath, raucStatePath)
+
+	// the bundle should not be re-installed because the boot primary has not changed
+	reports, _ = ExecuteTestConfigInDocker(r, config)
+	assert.Equal(t, reports, []string{downloadReport})
+	r.MustExec("test", "!", "-f", lastInstallPath)
+
+	// manual fallback to appfs.0, which does not contain the bundle
+	r.MustExec("sh", "-c", "echo A > /rauc/rauc-active-slot")
+	assert.NoError(t, json.Unmarshal(r.MustExec("rauc", "status", "--output-format", "json"), &raucStatus))
+	assert.Equal(t, raucStatus.BootPrimary, "appfs.0")
+
+	// remove the downloaded bundle and download state to force re-download and re-installation
+	r.MustExec("rm", "-f", destinationPath, raucStatePath)
+
+	// the bundle should be re-installed because the boot primary has changed and the last install status was discarded
+	reports, _ = ExecuteTestConfigInDocker(r, config)
+	assert.Equal(t, reports, []string{downloadReport, installReport})
 }
