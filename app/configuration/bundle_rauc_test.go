@@ -180,11 +180,13 @@ func Test_Last_Install_Invalidated_On_Boot_Primary_Change(t *testing.T) {
 	// bundle installed into B while boot primary remained A
 	assert.NoError(t, writeInstallStatusFile(stateDir, lastInstallFile, statusA.BootPrimary, &bundleInfo))
 
+	assert.NoError(t, discardStaleInstallStatusFile(lastInstallFile, statusA.BootPrimary))
 	doInstall, err := shouldInstall(&statusA, &bundleInfo, service)
 	assert.NoError(t, err)
 	assert.False(t, doInstall)
 
 	// booted and committed B, which already contains the bundle
+	assert.NoError(t, discardStaleInstallStatusFile(lastInstallFile, statusB.BootPrimary))
 	doInstall, err = shouldInstall(&statusB, &bundleInfo, service)
 	assert.NoError(t, err)
 	assert.False(t, doInstall)
@@ -193,6 +195,7 @@ func Test_Last_Install_Invalidated_On_Boot_Primary_Change(t *testing.T) {
 	assert.True(t, os.IsNotExist(err))
 
 	// rolled back to A, the bundle must be installed again
+	assert.NoError(t, discardStaleInstallStatusFile(lastInstallFile, statusA.BootPrimary))
 	doInstall, err = shouldInstall(&statusA, &bundleInfo, service)
 	assert.NoError(t, err)
 	assert.True(t, doInstall)
@@ -227,6 +230,7 @@ func Test_Last_Install_Invalid_Record(t *testing.T) {
 			assert.NoError(t, os.MkdirAll(stateDir, 0700))
 			assert.NoError(t, os.WriteFile(lastInstallFile, []byte(tt.data), 0600))
 
+			assert.NoError(t, discardStaleInstallStatusFile(lastInstallFile, raucStatus.BootPrimary))
 			doInstall, err := shouldInstall(&raucStatus, &bundleInfo, service)
 			assert.NoError(t, err)
 			assert.True(t, doInstall)

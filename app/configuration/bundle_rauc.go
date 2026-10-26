@@ -325,7 +325,9 @@ func discardStaleInstallStatusFile(raucInstallStatusFile, bootPrimary string) er
 
 	// we only keep the last-install record if it matches the current boot primary slot, eg.
 	// that the system has not switched to another boot primary slot since the last install.
-	if raucLastInstallStatus != nil && raucLastInstallStatus.BootPrimary == bootPrimary {
+	if raucLastInstallStatus != nil &&
+		raucLastInstallStatus.InstalledBundleInfo.Hash != "" &&
+		raucLastInstallStatus.BootPrimary == bootPrimary {
 		return nil
 	}
 
