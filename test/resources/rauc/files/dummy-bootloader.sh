@@ -15,6 +15,13 @@ case "$1" in
     set-primary)
         # RAUC passes the target bootname (A or B) as the second argument
         # We write this new target to our state file
+
+        # if a file is present /etc/rauc/primary-slot-state-override, we skip writing to the state file
+        # to emulate a situation where the primary slot is not updated by a bootloader backend
+        # (eg. tryboot implementation here: https://github.com/Rtone/raspberrypi-firmware-rauc-bootloader-backend/blob/main/bootloader-custom-backend)
+        if [ -f "/etc/rauc/primary-slot-state-override" ]; then
+            exit 0
+        fi
         echo "$2" > "$STATE_FILE"
         exit 0
         ;;

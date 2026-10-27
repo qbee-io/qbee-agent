@@ -132,7 +132,7 @@ func Test_Before_Install(t *testing.T) {
 
 	assert.Equal(t, bundleInfo.Compatible, "qemu86-64 demo platform")
 
-	doInstall, err := shouldInstall(&raucStatus, &bundleInfo)
+	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, "")
 	assert.NoError(t, err)
 	assert.True(t, doInstall)
 }
@@ -152,9 +152,12 @@ func Test_After_Reboot(t *testing.T) {
 
 	assert.Equal(t, bundleInfo.Compatible, "qemu86-64 demo platform")
 
-	doInstall, err := shouldInstall(&raucStatus, &bundleInfo)
+	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, "")
 	assert.NoError(t, err)
 	assert.False(t, doInstall)
+
+	// efi.0 holds the same bundle but is not in the primary slot class, and the booted rootfs.1 is never selected
+	assert.Equal(t, getInstalledSlot(&raucStatus, bundleInfo.Hash), "")
 }
 
 func Test_Incompatible_Bundle(t *testing.T) {
@@ -174,12 +177,115 @@ func Test_Incompatible_Bundle(t *testing.T) {
 
 	bundleInfo.Compatible = "qemu86-64 demo platform 2"
 
-	doInstall, err := shouldInstall(&raucStatus, &bundleInfo)
+	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, "")
 
 	assert.True(t, err != nil)
 	assert.Equal(t, err.Error(), "RAUC bundle 'qemu86-64 demo platform 2' is not compatible with the system 'qemu86-64 demo platform'")
 	assert.False(t, doInstall)
 }
+
+func Test_After_Install_Primary_Not_Updated(t *testing.T) {
+	var raucStatus image.RaucStatus
+	err := json.Unmarshal([]byte(StatusAfterInstallPrimaryNotUpdated), &raucStatus)
+	assert.NoError(t, err)
+	assert.Equal(t, raucStatus.BootPrimary, "rootfs.0")
+
+	var bundleInfo RaucBundleInfo
+	err = json.Unmarshal([]byte(BundleInfo), &bundleInfo)
+	assert.NoError(t, err)
+
+	// bundle installed by this agent process, but boot_primary is not updated until reboot
+	installedSlot := getInstalledSlot(&raucStatus, bundleInfo.Hash)
+	assert.Equal(t, installedSlot, "rootfs.1")
+
+	// unknown boot_primary must not panic
+	assert.Equal(t, getInstalledSlot(&image.RaucStatus{BootPrimary: "missing"}, bundleInfo.Hash), "")
+
+	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, installedSlot)
+	assert.NoError(t, err)
+	assert.False(t, doInstall)
+
+	// nothing installed by this agent process
+	doInstall, err = shouldInstall(&raucStatus, &bundleInfo, "")
+	assert.NoError(t, err)
+	assert.True(t, doInstall)
+
+	// installed slot does not hold the bundle
+	doInstall, err = shouldInstall(&raucStatus, &bundleInfo, "rootfs.0")
+	assert.NoError(t, err)
+	assert.True(t, doInstall)
+
+	// installed slot was overwritten by another bundle after install
+	for _, slot := range raucStatus.Slots {
+		if slotData, ok := slot["rootfs.1"]; ok {
+			slotData.SlotStatus.Bundle.Hash = "0000000000000000000000000000000000000000000000000000000000000000"
+			slot["rootfs.1"] = slotData
+		}
+	}
+	doInstall, err = shouldInstall(&raucStatus, &bundleInfo, installedSlot)
+	assert.NoError(t, err)
+	assert.True(t, doInstall)
+}
+
+// StatusAfterInstallPrimaryNotUpdated emulates a bootloader backend which does not update boot_primary,
+// bundle is installed to rootfs.1 but rootfs.0 is still primary.
+var StatusAfterInstallPrimaryNotUpdated = `
+{
+	"compatible": "qemu86-64 demo platform",
+	"variant": "",
+	"booted": "A",
+	"boot_primary": "rootfs.0",
+	"slots": [
+	  {
+		"rootfs.1": {
+		  "class": "rootfs",
+		  "device": "/dev/sda5",
+		  "type": "ext4",
+		  "bootname": "B",
+		  "state": "inactive",
+		  "parent": null,
+		  "mountpoint": null,
+		  "boot_status": "good",
+		  "slot_status": {
+			"bundle": {
+			  "compatible": "qemu86-64 demo platform",
+			  "version": "1.0",
+			  "description": "qemu-demo-bundle version 1.0-r0",
+			  "build": "20240208072640",
+			  "hash": "c8e058178ea59338ad973da76d36824c3aa859c512dff0deb563ec3f6dcd51d1"
+			},
+			"installed": {
+			  "timestamp": "2024-02-08T14:49:27Z",
+			  "count": 1
+			},
+			"activated": {
+			  "timestamp": "2024-02-08T14:49:27Z",
+			  "count": 1
+			},
+			"status": "ok"
+		  }
+		}
+	  },
+	  {
+		"rootfs.0": {
+		  "class": "rootfs",
+		  "device": "/dev/sda4",
+		  "type": "ext4",
+		  "bootname": "A",
+		  "state": "booted",
+		  "parent": null,
+		  "mountpoint": "/",
+		  "boot_status": "good",
+		  "slot_status": {
+			"bundle": {
+			  "compatible": null
+			}
+		  }
+		}
+	  }
+	]
+  }
+`
 
 var StatusBeforeInstall = `
 {

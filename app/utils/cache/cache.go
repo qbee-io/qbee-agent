@@ -39,7 +39,7 @@ func Get(key string) (any, bool) {
 		return nil, false
 	}
 
-	if cacheItem.expires.Before(time.Now()) {
+	if !cacheItem.expires.IsZero() && cacheItem.expires.Before(time.Now()) {
 		return nil, false
 	}
 
@@ -55,6 +55,14 @@ func Set(key string, data any, ttl time.Duration) {
 		expires: time.Now().Add(ttl),
 		data:    data,
 	}
+}
+
+// SetWithoutExpiry for provided cache key. The item is kept until deleted or the process exits.
+func SetWithoutExpiry(key string, data any) {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	items[key] = item{data: data}
 }
 
 // Delete for provided cache key.

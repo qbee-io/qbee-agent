@@ -26,6 +26,7 @@ import (
 
 	"go.qbee.io/agent/app/image"
 	"go.qbee.io/agent/app/utils"
+	"go.qbee.io/agent/app/utils/cache"
 )
 
 // example payload
@@ -58,6 +59,9 @@ type RaucBundle struct {
 
 // defaultDownloadPath is the default path where the RAUC bundle is downloaded.
 const defaultDownloadPath = "/tmp/bundle.raucb"
+
+// raucInstalledSlotCacheKey holds the name of the slot the last bundle was installed to since agent start.
+const raucInstalledSlotCacheKey = "rauc-installed-slot"
 
 // Execute RAUC bundle configuration on the system.
 func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
@@ -125,7 +129,10 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return err
 	}
 
-	execInstall, err := shouldInstall(raucStatus, raucBundleInfo)
+	cachedSlot, _ := cache.Get(raucInstalledSlotCacheKey)
+	installedSlotName, _ := cachedSlot.(string)
+
+	execInstall, err := shouldInstall(raucStatus, raucBundleInfo, installedSlotName)
 
 	if err != nil {
 		ReportError(ctx, err, "Failed to install RAUC bundle")
@@ -154,6 +161,14 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		"RAUC bundle successfully installed '%s'",
 		r.RaucBundle,
 	)
+
+	statusAfterInstall, err := image.GetRaucStatus(ctx)
+	if err != nil {
+		ReportWarning(ctx, err, "Failed to get RAUC status after install")
+	} else {
+		installedSlotName := getInstalledSlot(statusAfterInstall, raucBundleInfo.Hash)
+		cache.SetWithoutExpiry(raucInstalledSlotCacheKey, installedSlotName)
+	}
 
 	if CheckCondition(ctx, r.RebootCondition) {
 		service.RebootAfterRun(ctx)
@@ -217,34 +232,66 @@ func (r RaucBundle) getRaucBundleInfo(ctx context.Context, url string) (*RaucBun
 	return &raucInfoBundle, nil
 }
 
-func shouldInstall(localRaucInfo *image.RaucStatus, remoteBundleData *RaucBundleInfo) (bool, error) {
+func shouldInstall(localRaucInfo *image.RaucStatus, remoteBundleData *RaucBundleInfo, installedSlotName string) (bool, error) {
 
+	// Check if the bundle is compatible with the system.
 	if remoteBundleData.Compatible != localRaucInfo.Compatible {
 		return false, fmt.Errorf("RAUC bundle '%s' is not compatible with the system '%s'", remoteBundleData.Compatible, localRaucInfo.Compatible)
 	}
 
-	_, currentSlotData, err := getPrimarySlot(localRaucInfo)
-	if err != nil {
-		return false, err
+	// Get the primary slot based on the current boot_primary value.
+	primarySlot := getSlot(localRaucInfo, localRaucInfo.BootPrimary)
+	if primarySlot == nil {
+		return false, fmt.Errorf("no slot found in RAUC info")
 	}
 
-	if remoteBundleData.Hash == currentSlotData.SlotStatus.Bundle.Hash {
+	// Check if the bundle is already installed in the primary slot.
+	if remoteBundleData.Hash == primarySlot.SlotStatus.Bundle.Hash {
 		return false, nil
 	}
 
-	// image is compatible and not installed on currently running slot
+	// Some bootloader backends do not update boot_primary until reboot, so also check the slot installed since agent start.
+	installedSlot := getSlot(localRaucInfo, installedSlotName)
+	if installedSlot != nil && remoteBundleData.Hash == installedSlot.SlotStatus.Bundle.Hash {
+		return false, nil
+	}
+
 	return true, nil
 }
 
-func getPrimarySlot(localRaucInfo *image.RaucStatus) (string, *image.SlotData, error) {
+// getInstalledSlot returns the non-booted slot of the given class holding the bundle with the given hash.
+func getInstalledSlot(localRaucInfo *image.RaucStatus, bundleHash string) string {
+	primarySlot := getSlot(localRaucInfo, localRaucInfo.BootPrimary)
+	if primarySlot == nil {
+		return ""
+	}
+
 	for _, slot := range localRaucInfo.Slots {
 		for slotName, slotData := range slot {
-			if slotName == localRaucInfo.BootPrimary {
-				return slotName, &slotData, nil
+			// skip slots that do not match the class, are booted, or do not have the desired bundle hash
+			if slotData.Class != primarySlot.Class {
+				continue
 			}
+			if slotData.State == "booted" {
+				continue
+			}
+			if slotData.SlotStatus.Bundle.Hash != bundleHash {
+				continue
+			}
+			return slotName
 		}
 	}
-	return "", nil, fmt.Errorf("no slot found in RAUC info")
+	return ""
+}
+
+// getSlot returns the slot with the given name, or nil if not found.
+func getSlot(localRaucInfo *image.RaucStatus, slotName string) *image.SlotData {
+	for _, slot := range localRaucInfo.Slots {
+		if slotData, ok := slot[slotName]; ok {
+			return &slotData
+		}
+	}
+	return nil
 }
 
 func (r *RaucBundle) resolveRaucPath(ctx context.Context, service *Service) (string, error) {
