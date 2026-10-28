@@ -23,6 +23,9 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
+
+	"golang.org/x/sys/unix"
 
 	"go.qbee.io/agent/app/image"
 	"go.qbee.io/agent/app/utils"
@@ -125,8 +128,13 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return err
 	}
 
-	execInstall, err := shouldInstall(raucStatus, raucBundleInfo)
+	bootTime, err := getBootTime()
+	if err != nil {
+		ReportError(ctx, err, "Failed to get system boot time")
+		return err
+	}
 
+	execInstall, err := shouldInstall(raucStatus, raucBundleInfo, bootTime)
 	if err != nil {
 		ReportError(ctx, err, "Failed to install RAUC bundle")
 		return err
@@ -217,8 +225,9 @@ func (r RaucBundle) getRaucBundleInfo(ctx context.Context, url string) (*RaucBun
 	return &raucInfoBundle, nil
 }
 
-func shouldInstall(localRaucInfo *image.RaucStatus, remoteBundleData *RaucBundleInfo) (bool, error) {
+func shouldInstall(localRaucInfo *image.RaucStatus, remoteBundleData *RaucBundleInfo, bootTime time.Time) (bool, error) {
 
+	// Check if the bundle is compatible with the system.
 	if remoteBundleData.Compatible != localRaucInfo.Compatible {
 		return false, fmt.Errorf("RAUC bundle '%s' is not compatible with the system '%s'", remoteBundleData.Compatible, localRaucInfo.Compatible)
 	}
@@ -228,12 +237,63 @@ func shouldInstall(localRaucInfo *image.RaucStatus, remoteBundleData *RaucBundle
 		return false, err
 	}
 
+	// Check if the bundle is already installed in the primary slot.
 	if remoteBundleData.Hash == currentSlotData.SlotStatus.Bundle.Hash {
 		return false, nil
 	}
 
-	// image is compatible and not installed on currently running slot
+	// Some bootloader backends do not update boot_primary until reboot, so also check whether the bundle is
+	// pending activation in a slot installed to since boot.
+	if isBundlePendingActivation(localRaucInfo, currentSlotData.Class, remoteBundleData.Hash, bootTime) {
+		return false, nil
+	}
+
 	return true, nil
+}
+
+// isBundlePendingActivation returns true if any non-booted slot of the given class has been installed to since boot
+// and holds the bundle with the given hash. Slots installed to before boot are not pending activation, since the
+// system has booted in between without activating them.
+func isBundlePendingActivation(localRaucInfo *image.RaucStatus, class, bundleHash string, bootTime time.Time) bool {
+	for _, slot := range localRaucInfo.Slots {
+		for _, slotData := range slot {
+			if slotData.Class != class {
+				continue
+			}
+
+			if slotData.State == "booted" {
+				continue
+			}
+
+			if slotData.SlotStatus.Bundle.Hash != bundleHash {
+				continue
+			}
+
+			if slotInstalledAt(&slotData).After(bootTime) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// slotInstalledAt returns the install timestamp of the slot, or the zero time if the slot has not been installed to.
+func slotInstalledAt(slotData *image.SlotData) time.Time {
+	installedAt, err := time.Parse(time.RFC3339, slotData.SlotStatus.Installed.Timestamp)
+	if err != nil {
+		return time.Time{}
+	}
+	return installedAt
+}
+
+// getBootTime returns the system boot time.
+func getBootTime() (time.Time, error) {
+	var uptime unix.Timespec
+	if err := unix.ClockGettime(unix.CLOCK_BOOTTIME, &uptime); err != nil {
+		return time.Time{}, fmt.Errorf("error getting system uptime: %w", err)
+	}
+
+	return time.Now().Add(-time.Duration(uptime.Nano())), nil
 }
 
 func getPrimarySlot(localRaucInfo *image.RaucStatus) (string, *image.SlotData, error) {
