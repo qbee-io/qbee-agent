@@ -128,9 +128,11 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return err
 	}
 
+	// determine if the bundle should be installed based on the current boot time and RAUC status
 	execInstall, err := shouldInstall(raucStatus, raucBundleInfo, func() (time.Time, error) {
 		return getBootTime(ctx)
 	})
+
 	if err != nil {
 		ReportError(ctx, err, "Failed to install RAUC bundle")
 		return err
