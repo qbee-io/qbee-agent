@@ -22,12 +22,12 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
-	"golang.org/x/sys/unix"
-
 	"go.qbee.io/agent/app/image"
+	"go.qbee.io/agent/app/inventory"
 	"go.qbee.io/agent/app/utils"
 )
 
@@ -128,7 +128,7 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return err
 	}
 
-	bootTime, err := getBootTime()
+	bootTime, err := getBootTime(ctx)
 	if err != nil {
 		ReportError(ctx, err, "Failed to get system boot time")
 		return err
@@ -286,14 +286,19 @@ func slotInstalledAt(slotData *image.SlotData) time.Time {
 	return installedAt
 }
 
-// getBootTime returns the system boot time.
-func getBootTime() (time.Time, error) {
-	var uptime unix.Timespec
-	if err := unix.ClockGettime(unix.CLOCK_BOOTTIME, &uptime); err != nil {
-		return time.Time{}, fmt.Errorf("error getting system uptime: %w", err)
+// getBootTime returns the system boot time from the (cached) system inventory.
+func getBootTime(ctx context.Context) (time.Time, error) {
+	systemInventory, err := inventory.CollectSystemInventory(ctx)
+	if err != nil {
+		return time.Time{}, err
 	}
 
-	return time.Now().Add(-time.Duration(uptime.Nano())), nil
+	bootTime, err := strconv.ParseInt(systemInventory.System.BootTime, 10, 64)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("error parsing boot time '%s': %w", systemInventory.System.BootTime, err)
+	}
+
+	return time.Unix(bootTime, 0), nil
 }
 
 func getPrimarySlot(localRaucInfo *image.RaucStatus) (string, *image.SlotData, error) {
