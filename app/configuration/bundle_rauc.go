@@ -244,7 +244,7 @@ func shouldInstall(localRaucInfo *image.RaucStatus, remoteBundleData *RaucBundle
 
 	// Some bootloader backends do not update boot_primary until reboot, so also check whether the bundle is
 	// pending activation in a slot installed to since boot.
-	if isBundlePendingActivation(localRaucInfo, currentSlotData.Class, remoteBundleData.Hash, bootTime) {
+	if currentSlotData.State == "booted" && isBundlePendingActivation(localRaucInfo, currentSlotData.Class, remoteBundleData.Hash, bootTime) {
 		return false, nil
 	}
 
