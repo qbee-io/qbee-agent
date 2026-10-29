@@ -133,9 +133,29 @@ func Test_Before_Install(t *testing.T) {
 
 	assert.Equal(t, bundleInfo.Compatible, "qemu86-64 demo platform")
 
-	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, time.Now())
+	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, noBootTime(t))
 	assert.NoError(t, err)
 	assert.True(t, doInstall)
+}
+
+// fixedBootTime returns a boot time resolver for the given boot time.
+func fixedBootTime(bootTime time.Time) func() (time.Time, error) {
+	return func() (time.Time, error) { return bootTime, nil }
+}
+
+// noBootTime returns a boot time resolver which fails the test if called.
+func noBootTime(t *testing.T) func() (time.Time, error) {
+	return func() (time.Time, error) {
+		t.Fatal("boot time should not be resolved")
+		return time.Time{}, nil
+	}
+}
+
+func pendingActivation(t *testing.T, raucStatus *image.RaucStatus, class, hash string, bootTime time.Time) bool {
+	t.Helper()
+	pending, err := isBundlePendingActivation(raucStatus, class, hash, fixedBootTime(bootTime))
+	assert.NoError(t, err)
+	return pending
 }
 
 func Test_After_Reboot(t *testing.T) {
@@ -153,14 +173,14 @@ func Test_After_Reboot(t *testing.T) {
 
 	assert.Equal(t, bundleInfo.Compatible, "qemu86-64 demo platform")
 
-	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, time.Now())
+	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, noBootTime(t))
 	assert.NoError(t, err)
 	assert.False(t, doInstall)
 
 	// efi.0 holds the bundle but is not in the primary slot class, and the booted rootfs.1 is never considered
 	bootTime := time.Date(2024, 2, 8, 14, 0, 0, 0, time.UTC)
-	assert.False(t, isBundlePendingActivation(&raucStatus, "rootfs", bundleInfo.Hash, bootTime))
-	assert.True(t, isBundlePendingActivation(&raucStatus, "efi", bundleInfo.Hash, bootTime))
+	assert.False(t, pendingActivation(t, &raucStatus, "rootfs", bundleInfo.Hash, bootTime))
+	assert.True(t, pendingActivation(t, &raucStatus, "efi", bundleInfo.Hash, bootTime))
 }
 
 func Test_Incompatible_Bundle(t *testing.T) {
@@ -180,7 +200,7 @@ func Test_Incompatible_Bundle(t *testing.T) {
 
 	bundleInfo.Compatible = "qemu86-64 demo platform 2"
 
-	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, time.Now())
+	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, noBootTime(t))
 
 	assert.True(t, err != nil)
 	assert.Equal(t, err.Error(), "RAUC bundle 'qemu86-64 demo platform 2' is not compatible with the system 'qemu86-64 demo platform'")
@@ -201,15 +221,15 @@ func Test_After_Install_Primary_Not_Updated(t *testing.T) {
 
 	// bundle installed to rootfs.1 since boot, but boot_primary is not updated until reboot
 	bootTime := installedAt.Add(-time.Hour)
-	assert.True(t, isBundlePendingActivation(&raucStatus, "rootfs", bundleInfo.Hash, bootTime))
+	assert.True(t, pendingActivation(t, &raucStatus, "rootfs", bundleInfo.Hash, bootTime))
 
-	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, bootTime)
+	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, fixedBootTime(bootTime))
 	assert.NoError(t, err)
 	assert.False(t, doInstall)
 
 	// system rebooted after install without switching boot_primary, so rootfs.1 is available for installation
 	bootTime = installedAt.Add(time.Hour)
-	doInstall, err = shouldInstall(&raucStatus, &bundleInfo, bootTime)
+	doInstall, err = shouldInstall(&raucStatus, &bundleInfo, fixedBootTime(bootTime))
 	assert.NoError(t, err)
 	assert.True(t, doInstall)
 
@@ -220,7 +240,7 @@ func Test_After_Install_Primary_Not_Updated(t *testing.T) {
 			slot["rootfs.1"] = slotData
 		}
 	}
-	doInstall, err = shouldInstall(&raucStatus, &bundleInfo, installedAt.Add(-time.Hour))
+	doInstall, err = shouldInstall(&raucStatus, &bundleInfo, noBootTime(t))
 	assert.NoError(t, err)
 	assert.True(t, doInstall)
 }
@@ -243,15 +263,15 @@ func Test_After_Manual_Fallback(t *testing.T) {
 	assert.True(t, bootTime.After(installedAt))
 
 	// rootfs.1 still holds the bundle, but it was installed before the last boot and is not pending activation
-	assert.False(t, isBundlePendingActivation(&raucStatus, "rootfs", bundleInfo.Hash, bootTime))
+	assert.False(t, pendingActivation(t, &raucStatus, "rootfs", bundleInfo.Hash, bootTime))
 
 	// the bundle is therefore considered for installation again
-	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, bootTime)
+	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, fixedBootTime(bootTime))
 	assert.NoError(t, err)
 	assert.True(t, doInstall)
 
 	// had the system not booted since the install, rootfs.1 would be pending activation and installation is skipped
-	doInstall, err = shouldInstall(&raucStatus, &bundleInfo, installedAt.Add(-time.Hour))
+	doInstall, err = shouldInstall(&raucStatus, &bundleInfo, fixedBootTime(installedAt.Add(-time.Hour)))
 	assert.NoError(t, err)
 	assert.False(t, doInstall)
 }
@@ -279,7 +299,7 @@ func Test_Pending_Activation_Multiple_Slots(t *testing.T) {
 
 	expectInstall := func(bootTime time.Time, expected bool) {
 		t.Helper()
-		doInstall, err := shouldInstall(&raucStatus, &bundleInfo, bootTime)
+		doInstall, err := shouldInstall(&raucStatus, &bundleInfo, fixedBootTime(bootTime))
 		assert.NoError(t, err)
 		assert.Equal(t, doInstall, expected)
 	}
