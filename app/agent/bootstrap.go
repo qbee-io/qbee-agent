@@ -145,7 +145,7 @@ func (agent *Agent) getRawPublicKey() ([]string, error) {
 func (agent *Agent) newBootstrapRequest(ctx context.Context) (*BootstrapRequest, error) {
 	log.Infof("Gathering system information")
 
-	systemInventory, err := inventory.CollectSystemInventory(ctx, agent.IsTPMEnabled())
+	systemInventory, err := inventory.CollectSystemInventory(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error collecting system info: %w", err)
 	}
