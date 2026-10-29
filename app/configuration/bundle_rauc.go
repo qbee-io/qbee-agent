@@ -128,21 +128,9 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return err
 	}
 
-	getBootTime := func() (time.Time, error) {
-		systemInventory, err := inventory.CollectSystemInventory(ctx)
-		if err != nil {
-			return time.Time{}, err
-		}
-
-		bootTime, err := strconv.ParseInt(systemInventory.System.BootTime, 10, 64)
-		if err != nil {
-			return time.Time{}, fmt.Errorf("error parsing boot time '%s': %w", systemInventory.System.BootTime, err)
-		}
-
-		return time.Unix(bootTime, 0), nil
-	}
-
-	execInstall, err := shouldInstall(raucStatus, raucBundleInfo, getBootTime)
+	execInstall, err := shouldInstall(raucStatus, raucBundleInfo, func() (time.Time, error) {
+		return getBootTime(ctx)
+	})
 	if err != nil {
 		ReportError(ctx, err, "Failed to install RAUC bundle")
 		return err
@@ -320,6 +308,21 @@ func slotInstalledAt(slotData *image.SlotData) time.Time {
 		return time.Time{}
 	}
 	return installedAt
+}
+
+// getBootTime returns the system boot time from the system inventory.
+func getBootTime(ctx context.Context) (time.Time, error) {
+	systemInventory, err := inventory.CollectSystemInventory(ctx)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	bootTime, err := strconv.ParseInt(systemInventory.System.BootTime, 10, 64)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("error parsing boot time '%s': %w", systemInventory.System.BootTime, err)
+	}
+
+	return time.Unix(bootTime, 0), nil
 }
 
 func getPrimarySlot(localRaucInfo *image.RaucStatus) (string, *image.SlotData, error) {
