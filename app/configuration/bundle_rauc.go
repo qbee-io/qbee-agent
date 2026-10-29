@@ -258,13 +258,16 @@ func shouldInstall(
 
 // isBundlePendingActivation returns true if any non-booted slot of the given class has been installed to since boot
 // and holds the bundle with the given hash. Slots installed to before boot are not pending activation, since the
-// system has booted in between without activating them. Boot time is only resolved if a candidate slot is found.
+// system has booted in between without activating them.
 func isBundlePendingActivation(
 	localRaucInfo *image.RaucStatus,
 	class, bundleHash string,
 	getBootTime func() (time.Time, error),
 ) (bool, error) {
-	var bootTime *time.Time
+	bootTime, err := getBootTime()
+	if err != nil {
+		return false, err
+	}
 
 	for _, slot := range localRaucInfo.Slots {
 		for _, slotData := range slot {
@@ -280,20 +283,7 @@ func isBundlePendingActivation(
 				continue
 			}
 
-			installedAt := slotInstalledAt(&slotData)
-			if installedAt.IsZero() {
-				continue
-			}
-
-			if bootTime == nil {
-				resolvedBootTime, err := getBootTime()
-				if err != nil {
-					return false, err
-				}
-				bootTime = &resolvedBootTime
-			}
-
-			if installedAt.After(*bootTime) {
+			if slotInstalledAt(&slotData).After(bootTime) {
 				return true, nil
 			}
 		}
