@@ -133,7 +133,7 @@ func Test_Before_Install(t *testing.T) {
 
 	assert.Equal(t, bundleInfo.Compatible, "qemu86-64 demo platform")
 
-	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, noBootTime(t))
+	doInstall, err := shouldInstall(&raucStatus, &bundleInfo, fixedBootTime(time.Now()))
 	assert.NoError(t, err)
 	assert.True(t, doInstall)
 }
@@ -240,7 +240,7 @@ func Test_After_Install_Primary_Not_Updated(t *testing.T) {
 			slot["rootfs.1"] = slotData
 		}
 	}
-	doInstall, err = shouldInstall(&raucStatus, &bundleInfo, noBootTime(t))
+	doInstall, err = shouldInstall(&raucStatus, &bundleInfo, fixedBootTime(installedAt.Add(-time.Hour)))
 	assert.NoError(t, err)
 	assert.True(t, doInstall)
 }
