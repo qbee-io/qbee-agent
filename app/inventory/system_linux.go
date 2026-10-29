@@ -44,15 +44,16 @@ const (
 )
 
 // CollectSystemInventory returns populated System inventory based on current system status.
-func CollectSystemInventory(ctx context.Context, tpmEnabled bool) (*System, error) {
+// The returned value is a copy of the cached inventory, so callers may modify it.
+func CollectSystemInventory(ctx context.Context) (*System, error) {
 
 	if cachedItem, ok := cache.Get(systemInventoryCacheKey); ok {
-		return cachedItem.(*System), nil
+		systemInventory := *cachedItem.(*System)
+		return &systemInventory, nil
 	}
 
 	systemInfo := &SystemInfo{
 		AgentVersion: app.Version,
-		TPMEnabled:   tpmEnabled,
 		Class:        systemClass,
 		OS:           systemOS,
 		VPNIndex:     "1",
@@ -87,11 +88,9 @@ func CollectSystemInventory(ctx context.Context, tpmEnabled bool) (*System, erro
 
 	systemInfo.CPUs = fmt.Sprintf("%d", runtime.NumCPU())
 
-	systemInventory := &System{System: *systemInfo}
+	cache.Set(systemInventoryCacheKey, &System{System: *systemInfo}, systemInventoryCacheTTL)
 
-	cache.Set(systemInventoryCacheKey, systemInventory, systemInventoryCacheTTL)
-
-	return systemInventory, nil
+	return &System{System: *systemInfo}, nil
 }
 
 // getDefaultNetworkInterface returns a default network interface name.

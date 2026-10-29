@@ -61,11 +61,12 @@ func (agent *Agent) doInventories(ctx context.Context) error {
 
 // doSystemInventory collects system inventory and delivers it to the device hub API.
 func (agent *Agent) doSystemInventory(ctx context.Context) error {
-	systemInventory, err := inventory.CollectSystemInventory(ctx, agent.IsTPMEnabled())
+	systemInventory, err := inventory.CollectSystemInventory(ctx)
 	if err != nil {
 		return err
 	}
 
+	systemInventory.System.TPMEnabled = agent.IsTPMEnabled()
 	systemInventory.System.LastConfigCommitID = agent.Configuration.CurrentCommitID()
 	systemInventory.System.LastConfigUpdate = fmt.Sprintf("%d", agent.Configuration.ConfigChangeTimestamp())
 	systemInventory.System.LastPolicyUpdate = systemInventory.System.LastConfigUpdate
