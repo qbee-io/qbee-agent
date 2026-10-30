@@ -22,9 +22,12 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strconv"
 	"strings"
+	"time"
 
 	"go.qbee.io/agent/app/image"
+	"go.qbee.io/agent/app/inventory"
 	"go.qbee.io/agent/app/utils"
 )
 
@@ -125,7 +128,10 @@ func (r RaucBundle) Execute(ctx context.Context, service *Service) error {
 		return err
 	}
 
-	execInstall, err := shouldInstall(raucStatus, raucBundleInfo)
+	// determine if the bundle should be installed based on the current boot time and RAUC status
+	execInstall, err := shouldInstall(raucStatus, raucBundleInfo, func() (time.Time, error) {
+		return getBootTime(ctx)
+	})
 
 	if err != nil {
 		ReportError(ctx, err, "Failed to install RAUC bundle")
@@ -200,6 +206,7 @@ type RaucBundleInfo struct {
 	Images []map[string]RaucImageInfo `json:"images"`
 }
 
+// getRaucBundleInfo retrieves metadata (compatibility, version, hash, etc.) for the RAUC bundle at the given path/URL.
 func (r RaucBundle) getRaucBundleInfo(ctx context.Context, url string) (*RaucBundleInfo, error) {
 
 	raucInfoCmd := []string{"rauc", "info", "--output-format", "json", url}
@@ -217,25 +224,133 @@ func (r RaucBundle) getRaucBundleInfo(ctx context.Context, url string) (*RaucBun
 	return &raucInfoBundle, nil
 }
 
-func shouldInstall(localRaucInfo *image.RaucStatus, remoteBundleData *RaucBundleInfo) (bool, error) {
+// shouldInstall decides whether the given remote RAUC bundle needs to be installed on this system.
+//
+// The decision is made in three stages:
+//  1. Compatibility check - reject bundles that were not built for this system.
+//  2. "Already active" check (isBundleAlreadyActive) - is this exact bundle already running/primary?
+//  3. "Already staged" check (isBundleStagedForNextBoot) - has it already been staged for next boot, i.e.
+//     installed to the other slot since the last boot and just waiting for a reboot to become active?
+//
+// If either of the latter two checks is true, installing again would be redundant.
+func shouldInstall(
+	localRaucInfo *image.RaucStatus,
+	remoteBundleData *RaucBundleInfo,
+	getBootTime func() (time.Time, error),
+) (bool, error) {
 
+	// Check if the bundle is compatible with the system.
 	if remoteBundleData.Compatible != localRaucInfo.Compatible {
 		return false, fmt.Errorf("RAUC bundle '%s' is not compatible with the system '%s'", remoteBundleData.Compatible, localRaucInfo.Compatible)
 	}
 
+	// Resolve the slot RAUC considers primary/booted once, and share it with both checks below.
 	_, currentSlotData, err := getPrimarySlot(localRaucInfo)
 	if err != nil {
 		return false, err
 	}
 
-	if remoteBundleData.Hash == currentSlotData.SlotStatus.Bundle.Hash {
+	// Is this exact bundle already running/primary right now?
+	if isBundleAlreadyActive(currentSlotData, remoteBundleData) {
 		return false, nil
 	}
 
-	// image is compatible and not installed on currently running slot
-	return true, nil
+	// The bundle isn't active, so check if it has already been staged for next boot instead.
+	staged, err := isBundleStagedForNextBoot(localRaucInfo, currentSlotData, remoteBundleData, getBootTime)
+	if err != nil {
+		return false, err
+	}
+
+	// If the bundle is already staged for activation, no new install is needed; otherwise it must be installed.
+	return !staged, nil
 }
 
+// isBundleAlreadyActive reports whether the remote bundle's hash matches the bundle currently running in the
+// primary/booted slot, meaning it is already active and does not need to be (re-)installed.
+func isBundleAlreadyActive(currentSlotData *image.SlotData, remoteBundleData *RaucBundleInfo) bool {
+	return remoteBundleData.Hash == currentSlotData.SlotStatus.Bundle.Hash
+}
+
+// isBundleStagedForNextBoot reports whether the remote bundle has already been installed to a non-booted slot
+// since the last boot, i.e. it is staged and will become active on the next reboot without needing a fresh
+// install. Some bootloader backends do not update boot_primary until reboot, so this check is what catches
+// that case even though the remote bundle isn't in the primary slot yet.
+func isBundleStagedForNextBoot(
+	localRaucInfo *image.RaucStatus,
+	currentSlotData *image.SlotData,
+	remoteBundleData *RaucBundleInfo,
+	getBootTime func() (time.Time, error),
+) (bool, error) {
+	// If the primary slot reported by RAUC isn't actually the one that's booted, we're in an
+	// inconsistent/transitional state and cannot reliably reason about staging - conservatively report
+	// "not staged" so the caller falls back to installing.
+	if currentSlotData.State != "booted" {
+		return false, nil
+	}
+
+	return isBundlePendingActivation(localRaucInfo, currentSlotData.Class, remoteBundleData.Hash, getBootTime)
+}
+
+// isBundlePendingActivation returns true if any non-booted slot of the given class has been installed to since boot
+// and holds the bundle with the given hash. Slots installed to before boot are not pending activation, since the
+// system has booted in between without activating them.
+func isBundlePendingActivation(
+	localRaucInfo *image.RaucStatus,
+	class, bundleHash string,
+	getBootTime func() (time.Time, error),
+) (bool, error) {
+	bootTime, err := getBootTime()
+	if err != nil {
+		return false, err
+	}
+
+	for _, slot := range localRaucInfo.Slots {
+		for _, slotData := range slot {
+			if slotData.Class != class {
+				continue
+			}
+
+			if slotData.State == "booted" {
+				continue
+			}
+
+			if slotData.SlotStatus.Bundle.Hash != bundleHash {
+				continue
+			}
+
+			if slotInstalledAt(&slotData).After(bootTime) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+// slotInstalledAt returns the install timestamp of the slot, or the zero time if the slot has not been installed to.
+func slotInstalledAt(slotData *image.SlotData) time.Time {
+	installedAt, err := time.Parse(time.RFC3339, slotData.SlotStatus.Installed.Timestamp)
+	if err != nil {
+		return time.Time{}
+	}
+	return installedAt
+}
+
+// getBootTime returns the system boot time from the system inventory.
+func getBootTime(ctx context.Context) (time.Time, error) {
+	systemInventory, err := inventory.CollectSystemInventory(ctx)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	bootTime, err := strconv.ParseInt(systemInventory.System.BootTime, 10, 64)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("error parsing boot time '%s': %w", systemInventory.System.BootTime, err)
+	}
+
+	return time.Unix(bootTime, 0), nil
+}
+
+// getPrimarySlot returns the name and data of the slot RAUC currently reports as the primary/boot slot.
 func getPrimarySlot(localRaucInfo *image.RaucStatus) (string, *image.SlotData, error) {
 	for _, slot := range localRaucInfo.Slots {
 		for slotName, slotData := range slot {
@@ -247,6 +362,7 @@ func getPrimarySlot(localRaucInfo *image.RaucStatus) (string, *image.SlotData, e
 	return "", nil, fmt.Errorf("no slot found in RAUC info")
 }
 
+// resolveRaucPath returns a local path or signed streaming URL for the configured RAUC bundle, downloading it first if requested.
 func (r *RaucBundle) resolveRaucPath(ctx context.Context, service *Service) (string, error) {
 
 	if r.Download {
@@ -261,6 +377,8 @@ func (r *RaucBundle) resolveRaucPath(ctx context.Context, service *Service) (str
 	return generateStreamingURL(service, r.RaucBundle)
 }
 
+// downloadRaucBundle downloads the remote RAUC bundle to raucDownloadPath if it isn't already cached there, and
+// returns the local path, or an empty string if the bundle isn't available yet.
 func downloadRaucBundle(ctx context.Context, service *Service, raucPath, raucDownloadPath string) (string, error) {
 	bundleMetadata, err := service.getFileMetadata(ctx, raucPath)
 	if err != nil {
@@ -313,6 +431,8 @@ func downloadRaucBundle(ctx context.Context, service *Service, raucPath, raucDow
 	return raucDownloadPath, nil
 }
 
+// generateStreamingURL returns a signed URL the RAUC bundle can be streamed from, or an empty string if the
+// config endpoint is currently unreachable.
 func generateStreamingURL(service *Service, raucBundle string) (string, error) {
 	// do not generate the streaming url if config endpoint is unavailable
 	if service.IsConfigEndpointUnreachable() {
@@ -323,6 +443,8 @@ func generateStreamingURL(service *Service, raucBundle string) (string, error) {
 	return service.urlSigner.SignURL(filePath)
 }
 
+// redact replaces the resolved local raucPath with the original configured bundle reference in log/error output,
+// so logs don't leak internal download/temp paths.
 func (r *RaucBundle) redact(s string, raucPath string) string {
 	if r.Download {
 		return s
