@@ -73,6 +73,10 @@ jobs:
             install: dpkg -i ./dist/qbee-agent_${{ github.ref_name }}.0_amd64.deb
 
           - image: debian:stable-slim
+            platform: "386"
+            install: dpkg -i ./dist/qbee-agent_${{ github.ref_name }}.0_i386.deb
+
+          - image: debian:stable-slim
             platform: arm64
             install: dpkg -i ./dist/qbee-agent_${{ github.ref_name }}.0_arm64.deb
 

@@ -26,9 +26,10 @@ builds:
       - arm64
       - mips64le
       - riscv64
+      - "386"
 
     goarm:
-      - 7
+      - "7"
 
     mod_timestamp: "{{ .CommitTimestamp }}"
 
@@ -144,5 +145,5 @@ nfpms:
           preremove: package/install-scripts/prerm-deb
 
 release:
-  prerelease: true
+  prerelease: "true"
   make_latest: false
