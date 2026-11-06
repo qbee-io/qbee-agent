@@ -343,23 +343,43 @@ func (srv *Service) ReportExhaustedGoroutineBudget(ctx context.Context) (bool, e
 	ReportCritical(bundleCtx, nil, "goroutine budget exhausted, skipping agent run")
 
 	// send reports immediately as there will be no further configurations executed, thus
-	// no further reports will be generated. If we fail to send the reports, we add them to the buffer.
-	if _, err := srv.sendReports(ctx, reporter.Reports()); err != nil {
+	// no further reports will be generated.
+	return true, srv.deliverReports(ctx, reporter.Reports())
+}
+
+// ReportRemoteAccessError reports a remote access connection error with the error string as extra log.
+func (srv *Service) ReportRemoteAccessError(ctx context.Context, err error) error {
+	if !srv.reportingEnabled {
+		return nil
+	}
+
+	// since we don't have a reporter defined on this context, we need to create a new one
+	reporter := NewReporter(srv.currentCommitID, srv.reportToConsole, nil)
+	bundleCtx := reporter.BundleContext(ctx, bundleAgentInternal, "")
+
+	ReportError(bundleCtx, err, "Remote access connection failed.")
+
+	return srv.deliverReports(ctx, reporter.Reports())
+}
+
+// deliverReports sends reports to the server immediately. If that fails, reports are added to the buffer.
+// On success, any existing buffered reports are flushed as well.
+func (srv *Service) deliverReports(ctx context.Context, reports []Report) error {
+	if _, err := srv.sendReports(ctx, reports); err != nil {
 		log.Debugf("failed to send reports to the server: %v, adding to the buffer", err)
 
-		if bufferErr := srv.addReportsToBuffer(reporter.Reports()); bufferErr != nil {
+		if bufferErr := srv.addReportsToBuffer(reports); bufferErr != nil {
 			log.Errorf("failed to add reports to buffer: %v", bufferErr)
 		}
 
-		return true, err
+		return err
 	}
 
-	// also flush any existing buffered reports
 	if err := srv.flushReportsBuffer(ctx); err != nil {
 		log.Errorf("failed to flush reports buffer: %v", err)
 	}
 
-	return true, nil
+	return nil
 }
 
 // RunIntervalChangedNotifier returns a channel which will send a new agent interval duration when it changes.
