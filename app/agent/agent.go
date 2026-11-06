@@ -239,7 +239,18 @@ func (agent *Agent) doRemoteAccess(cfg *configuration.CommittedConfig) func(ctx 
 			return nil
 		}
 
-		return agent.remoteAccess.UpdateState(ctx, cfg.EdgeURL, cfg.BundleData.Settings.EnableRemoteConsole)
+		if err := agent.remoteAccess.UpdateState(ctx, cfg.EdgeURL, cfg.BundleData.Settings.EnableRemoteConsole); err != nil {
+			return err
+		}
+
+		// report connection issues (at most once per outage) as connection is maintained in the background
+		if connErr := agent.remoteAccess.ConnectionError(); connErr != nil {
+			if err := agent.Configuration.ReportRemoteAccessError(ctx, connErr); err != nil {
+				log.Debugf("failed to deliver remote access error report: %v", err)
+			}
+		}
+
+		return nil
 	}
 }
 

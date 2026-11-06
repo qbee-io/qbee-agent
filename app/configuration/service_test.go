@@ -19,6 +19,7 @@ package configuration
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
@@ -246,4 +247,35 @@ func TestService_ReportExhaustedGoroutineBudget(t *testing.T) {
 	assert.Equal(t, reports[0].Bundle, bundleAgentInternal)
 	assert.Equal(t, reports[0].Severity, severityCritical)
 	assert.Equal(t, reports[0].Text, "goroutine budget exhausted, skipping agent run")
+}
+
+func TestService_ReportRemoteAccessError(t *testing.T) {
+	srv := New(nil, t.TempDir(), "")
+	srv.currentCommitID = "test-commit-id"
+	srv.api = api.NewClient("localhost", "99999")
+
+	t.Run("reporting disabled", func(t *testing.T) {
+		srv.reportingEnabled = false
+		assert.NoError(t, srv.ReportRemoteAccessError(context.Background(), errors.New("dial failed")))
+
+		reports, err := srv.readReportsBuffer()
+		assert.NoError(t, err)
+		assert.Length(t, reports, 0)
+	})
+
+	t.Run("reporting enabled", func(t *testing.T) {
+		srv.reportingEnabled = true
+		if err := srv.ReportRemoteAccessError(context.Background(), errors.New("dial failed")); err == nil {
+			t.Fatalf("expected delivery error, report should be buffered")
+		}
+
+		reports, err := srv.readReportsBuffer()
+		assert.NoError(t, err)
+		assert.Length(t, reports, 1)
+
+		assert.Equal(t, reports[0].Bundle, bundleAgentInternal)
+		assert.Equal(t, reports[0].Severity, severityError)
+		assert.Equal(t, reports[0].Text, "Remote access connection failed.")
+		assert.Equal(t, reports[0].Log, base64.StdEncoding.EncodeToString([]byte("dial failed")))
+	})
 }
