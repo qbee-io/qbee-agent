@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/xtaci/smux"
 	"go.qbee.io/transport"
@@ -38,6 +39,18 @@ type Service struct {
 	client    *transport.DeviceClient
 	tlsConfig *tls.Config
 	mutex     sync.Mutex
+
+	// connErr is the last connection error. It is nil while connected.
+	connErr error
+
+	// connErrReported is set once connErr has been reported and cleared when the connection resumes.
+	connErrReported bool
+
+	// connErrReportedAt is the time when a connection error was last reported.
+	connErrReportedAt time.Time
+
+	// connErrMutex protects the connErr* fields from concurrent access.
+	connErrMutex sync.Mutex
 
 	// consoleMap is a map of all active consoles.
 	consoleMap map[string]*Console
@@ -78,7 +91,9 @@ func (s *Service) ensureInit(edgeURL string) error {
 		WithHandler(transport.MessageTypePTY, s.HandleConsole).
 		WithHandler(transport.MessageTypePTYCommand, s.HandleConsoleCommand).
 		WithHandler(transport.MessageTypeFile, transport.HandleFileTransfer).
-		WithHandler(transport.MessageTypeReload, s.HandleReloadCommand)
+		WithHandler(transport.MessageTypeReload, s.HandleReloadCommand).
+		WithConnectHandler(s.clearConnectionError).
+		WithErrorHandler(s.onConnectionError)
 
 	return nil
 }
@@ -93,6 +108,8 @@ func (s *Service) Stop() error {
 		return nil
 	}
 
+	s.clearConnectionError()
+
 	return s.client.Close()
 }
 
@@ -103,6 +120,7 @@ func (s *Service) UpdateState(ctx context.Context, edgeURL string, enabled bool)
 	}
 
 	if !enabled && s.client.IsRunning() {
+		s.clearConnectionError()
 		return s.client.Close()
 	}
 
@@ -111,6 +129,52 @@ func (s *Service) UpdateState(ctx context.Context, edgeURL string, enabled bool)
 	}
 
 	return nil
+}
+
+// clearConnectionError is called when connection is established or remote access is disabled.
+func (s *Service) clearConnectionError() {
+	s.connErrMutex.Lock()
+	defer s.connErrMutex.Unlock()
+
+	s.connErr = nil
+	s.connErrReported = false
+}
+
+// onConnectionError is called on every failed connection attempt and records the error for reporting.
+func (s *Service) onConnectionError(err error) {
+	s.connErrMutex.Lock()
+	defer s.connErrMutex.Unlock()
+
+	s.connErr = err
+}
+
+// connErrReportInterval is the minimum time between two reported connection errors.
+const connErrReportInterval = time.Minute * 5
+
+// ConnectionError returns the current connection error, but only once per outage and per connErrReportInterval.
+func (s *Service) ConnectionError() error {
+	s.connErrMutex.Lock()
+	defer s.connErrMutex.Unlock()
+
+	// no connection error to report
+	if s.connErr == nil {
+		return nil
+	}
+
+	// connection error has already been reported recently
+	if s.connErrReported {
+		return nil
+	}
+
+	// connection error has not been reported recently, but we need to check the report interval
+	if time.Since(s.connErrReportedAt) < connErrReportInterval {
+		return nil
+	}
+
+	s.connErrReported = true
+	s.connErrReportedAt = time.Now()
+
+	return s.connErr
 }
 
 // WithConfigReloadNotifier registers a channel to be notified when a remote configuration reload is requested.
