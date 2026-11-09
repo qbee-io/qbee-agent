@@ -60,8 +60,8 @@ func TestService_ConnectionErrorAndRecovery(t *testing.T) {
 
 	reported := make(chan error, 10)
 	service := New().
-		WithTLSConfig(&tls.Config{ServerName: "example.com", RootCAs: caCertPool}).
-		WithConnectionErrorReporter(func(_ context.Context, err error) { reported <- err })
+		WithTLSConfig(&tls.Config{ServerName: "example.com", RootCAs: caCertPool})
+	service.SetConnectionErrorReporter(func(_ context.Context, err error) { reported <- err })
 	t.Cleanup(func() { _ = service.Stop() })
 
 	assertNotReported := func() {

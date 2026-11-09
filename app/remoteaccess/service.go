@@ -56,10 +56,12 @@ type Service struct {
 	configReloadNotifierChannel chan bool
 }
 
-// WithConnectionErrorReporter sets a function which is called (at most once per outage) when the connection fails.
-func (s *Service) WithConnectionErrorReporter(reporter func(ctx context.Context, err error)) *Service {
+// SetConnectionErrorReporter sets a function which is called (at most once per outage) when the connection fails.
+func (s *Service) SetConnectionErrorReporter(reporter func(ctx context.Context, err error)) {
+	s.connErrReporter.mutex.Lock()
+	defer s.connErrReporter.mutex.Unlock()
+
 	s.connErrReporter.report = reporter
-	return s
 }
 
 // WithTLSConfig sets the TLS configuration for the remote access service.

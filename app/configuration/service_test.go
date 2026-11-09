@@ -251,12 +251,10 @@ func TestService_ReportExhaustedGoroutineBudget(t *testing.T) {
 
 func TestService_ReportRemoteAccessError(t *testing.T) {
 	srv := New(nil, t.TempDir(), "")
-	srv.currentCommitID = "test-commit-id"
 	srv.api = api.NewClient("localhost", "99999")
 
 	t.Run("reporting disabled", func(t *testing.T) {
-		srv.reportingEnabled = false
-		assert.NoError(t, srv.ReportRemoteAccessError(context.Background(), errors.New("dial failed")))
+		assert.NoError(t, srv.ReportRemoteAccessError(context.Background(), errors.New("dial failed"), false, "test-commit-id"))
 
 		reports, err := srv.readReportsBuffer()
 		assert.NoError(t, err)
@@ -264,8 +262,7 @@ func TestService_ReportRemoteAccessError(t *testing.T) {
 	})
 
 	t.Run("reporting enabled", func(t *testing.T) {
-		srv.reportingEnabled = true
-		if err := srv.ReportRemoteAccessError(context.Background(), errors.New("dial failed")); err == nil {
+		if err := srv.ReportRemoteAccessError(context.Background(), errors.New("dial failed"), true, "test-commit-id"); err == nil {
 			t.Fatalf("expected delivery error, report should be buffered")
 		}
 

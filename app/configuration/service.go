@@ -126,6 +126,11 @@ func (srv *Service) MetricsEnabled() bool {
 	return srv.metricsEnabled
 }
 
+// ReportingEnabled returns true if reporting is enabled.
+func (srv *Service) ReportingEnabled() bool {
+	return srv.reportingEnabled
+}
+
 // CollectSoftwareInventory returns true if software inventory collection is enabled.
 func (srv *Service) CollectSoftwareInventory() bool {
 	return srv.softwareInventoryEnabled
@@ -352,13 +357,14 @@ func (srv *Service) ReportExhaustedGoroutineBudget(ctx context.Context) (bool, e
 }
 
 // ReportRemoteAccessError reports a remote access connection error with the error string as extra log.
-func (srv *Service) ReportRemoteAccessError(ctx context.Context, err error) error {
-	if !srv.reportingEnabled {
+// reportingEnabled and commitID are passed in, as this is called outside the agent run.
+func (srv *Service) ReportRemoteAccessError(ctx context.Context, err error, reportingEnabled bool, commitID string) error {
+	if !reportingEnabled {
 		return nil
 	}
 
 	// since we don't have a reporter defined on this context, we need to create a new one
-	reporter := NewReporter(srv.currentCommitID, srv.reportToConsole, nil)
+	reporter := NewReporter(commitID, srv.reportToConsole, nil)
 	bundleCtx := reporter.BundleContext(ctx, bundleAgentInternal, "")
 
 	ReportError(bundleCtx, err, "Remote access connection failed.")
