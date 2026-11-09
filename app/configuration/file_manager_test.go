@@ -542,18 +542,18 @@ func Test_writeFileAnchored(t *testing.T) {
 			}
 		}()
 
-		done := make(chan error, 1)
+		done := make(chan struct{})
 		go func() {
-			var err error
+			defer close(done)
 			for i := 0; i < 2000; i++ {
-				err = writeFileAnchored(path, []byte("attacker"), dirPerm, filePerm)
+				// errors depend on the race outcome; only blocking behavior is under test
+				_ = writeFileAnchored(path, []byte("attacker"), dirPerm, filePerm)
 			}
-			done <- err
 		}()
 
 		select {
 		case <-done:
-			// completed without blocking; the final call's error depends on the race outcome.
+			// completed without blocking
 		case <-time.After(10 * time.Second):
 			t.Fatal("writeFileAnchored blocked when destination was raced to a FIFO between check and open")
 		}

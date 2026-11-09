@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0 # this is important, otherwise it won't checkout the full tree (i.e. no previous tags)
 
@@ -31,7 +31,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: 'go.mod'
 
@@ -39,10 +39,10 @@ jobs:
         uses: sigstore/cosign-installer@v3.9.2
 
       - name: Install Syft for SBOM generation
-        uses: anchore/sbom-action/download-syft@v0.20.4
+        uses: anchore/sbom-action/download-syft@v0.24.3
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           version: ~> v2
           args: release --clean
@@ -50,12 +50,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Attest Build Provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-checksums: ./dist/checksums.txt
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: qbee-agent-release
           path: |
@@ -96,10 +96,10 @@ jobs:
 
     steps:
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Download Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: qbee-agent-release
           path: ./dist
