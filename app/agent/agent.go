@@ -239,21 +239,14 @@ func (agent *Agent) doRemoteAccess(cfg *configuration.CommittedConfig) func(ctx 
 			return nil
 		}
 
-		if err := agent.remoteAccess.UpdateState(ctx, cfg.EdgeURL, cfg.BundleData.Settings.EnableRemoteConsole); err != nil {
-			return err
-		}
+		return agent.remoteAccess.UpdateState(ctx, cfg.EdgeURL, cfg.BundleData.Settings.EnableRemoteConsole)
+	}
+}
 
-		// report connection issues (at most once per outage) as connection is maintained in the background
-		connErr := agent.remoteAccess.ConnectionError()
-		if connErr == nil {
-			return nil
-		}
-
-		if err := agent.Configuration.ReportRemoteAccessError(ctx, connErr); err != nil {
-			log.Debugf("failed to deliver remote access error report: %v", err)
-		}
-
-		return nil
+// reportRemoteAccessError reports a remote access connection error to the device hub.
+func (agent *Agent) reportRemoteAccessError(ctx context.Context, connErr error) {
+	if err := agent.Configuration.ReportRemoteAccessError(ctx, connErr); err != nil {
+		log.Debugf("failed to deliver remote access error report: %v", err)
 	}
 }
 
@@ -331,7 +324,8 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 	agent.Attributes = attributes.New(agent.api)
 	agent.Configuration = configuration.New(agent.api, appDir, cacheDir).WithURLSigner(agent).WithMetricsService(agent.Metrics)
 	agent.remoteAccess = remoteaccess.New().
-		WithConfigReloadNotifier(agent.update)
+		WithConfigReloadNotifier(agent.update).
+		WithConnectionErrorReporter(agent.reportRemoteAccessError)
 	agent.loopTicker = time.NewTicker(agent.Configuration.RunInterval())
 	agent.disableRemoteAccess = cfg.DisableRemoteAccess
 

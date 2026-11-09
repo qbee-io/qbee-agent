@@ -25,6 +25,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"go.qbee.io/agent/app/api"
@@ -82,6 +83,9 @@ type Service struct {
 
 	// configEndpointUnreachable is true if the config endpoint is unreachable
 	configEndpointUnreachable bool
+
+	// reportsBufferMutex serializes access to the reports buffer file
+	reportsBufferMutex sync.Mutex
 }
 
 // New returns a new instance of configuration Service.
@@ -395,6 +399,14 @@ const (
 
 // addReportsToBuffer adds reports to the delivery buffer.
 func (srv *Service) addReportsToBuffer(reports []Report) error {
+	srv.reportsBufferMutex.Lock()
+	defer srv.reportsBufferMutex.Unlock()
+
+	return srv.writeReportsToBuffer(reports)
+}
+
+// writeReportsToBuffer appends reports to the delivery buffer. Caller must hold reportsBufferMutex.
+func (srv *Service) writeReportsToBuffer(reports []Report) error {
 	reportsBufferFilePath := filepath.Join(srv.appDirectory, reportsBufferFileName)
 
 	fp, err := os.OpenFile(reportsBufferFilePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, reportsBufferFileMode)
@@ -495,6 +507,9 @@ func (srv *Service) clearReportsBuffer() error {
 
 // flushReportsBuffer attempts to send reports from the delivery buffer.
 func (srv *Service) flushReportsBuffer(ctx context.Context) error {
+	srv.reportsBufferMutex.Lock()
+	defer srv.reportsBufferMutex.Unlock()
+
 	// load all undelivered reports from the buffer
 	reports, err := srv.readReportsBuffer()
 	if err != nil {
@@ -521,7 +536,7 @@ func (srv *Service) flushReportsBuffer(ctx context.Context) error {
 
 	// if we failed to deliver some reports, re-add them to the buffer
 	if deliveryErr != nil {
-		if err = srv.addReportsToBuffer(reports[delivered:]); err != nil {
+		if err = srv.writeReportsToBuffer(reports[delivered:]); err != nil {
 			log.Errorf("failed to re-add reports to buffer: %v", err)
 		}
 	}

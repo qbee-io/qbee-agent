@@ -58,19 +58,39 @@ func TestService_ConnectionErrorAndRecovery(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	service := New().WithTLSConfig(&tls.Config{ServerName: "example.com", RootCAs: caCertPool})
+	reported := make(chan error, 10)
+	service := New().
+		WithTLSConfig(&tls.Config{ServerName: "example.com", RootCAs: caCertPool}).
+		WithConnectionErrorReporter(func(_ context.Context, err error) { reported <- err })
 	t.Cleanup(func() { _ = service.Stop() })
+
+	assertNotReported := func() {
+		t.Helper()
+		select {
+		case err := <-reported:
+			t.Fatalf("unexpected report: %v", err)
+		default:
+		}
+	}
 
 	assert.NoError(t, service.UpdateState(ctx, edge.URL, true))
 
-	// failure gets reported once with the error string
-	var connErr error
+	// failure gets reported once with the error string, without any agent run
+	select {
+	case err := <-reported:
+		assert.Equal(t, err.Error(), "failed to upgrade, got 503")
+	case <-time.After(5 * time.Second):
+		t.Fatalf("connection error was not reported")
+	}
+
+	// subsequent failures within the same outage are not reported
 	assert.EventuallyTrue(t, func() bool {
-		connErr = service.ConnectionError()
-		return connErr != nil
-	}, 5*time.Second)
-	assert.Equal(t, connErr.Error(), "failed to upgrade, got 503")
-	assert.NoError(t, service.ConnectionError())
+		service.connErrReporter.mutex.Lock()
+		defer service.connErrReporter.mutex.Unlock()
+		return service.connErrReporter.reported
+	}, time.Second)
+	time.Sleep(11 * time.Second)
+	assertNotReported()
 
 	// connection resumes and the flag is cleared
 	failing.Store(false)
@@ -82,26 +102,39 @@ func TestService_ConnectionErrorAndRecovery(t *testing.T) {
 	}
 
 	assert.EventuallyTrue(t, func() bool {
-		service.connErrMutex.Lock()
-		defer service.connErrMutex.Unlock()
-		return service.connErr == nil && !service.connErrReported
+		service.connErrReporter.mutex.Lock()
+		defer service.connErrReporter.mutex.Unlock()
+		return !service.connErrReporter.reported
 	}, time.Second)
-	assert.NoError(t, service.ConnectionError())
+
+	// a dropped connection is not reported, even after the report interval has passed
+	service.connErrReporter.mutex.Lock()
+	service.connErrReporter.reportedAt = time.Now().Add(-connErrReportInterval)
+	service.connErrReporter.mutex.Unlock()
+	_ = session.Close()
+	select {
+	case session = <-connected:
+	case <-time.After(15 * time.Second):
+		t.Fatalf("device did not reconnect")
+	}
+	assertNotReported()
 
 	// a new outage within the report interval is not reported
+	service.connErrReporter.mutex.Lock()
+	service.connErrReporter.reportedAt = time.Now()
+	service.connErrReporter.mutex.Unlock()
 	failing.Store(true)
 	_ = session.Close()
-	assert.EventuallyTrue(t, func() bool {
-		service.connErrMutex.Lock()
-		defer service.connErrMutex.Unlock()
-		return service.connErr != nil
-	}, 15*time.Second)
-	assert.NoError(t, service.ConnectionError())
+	time.Sleep(11 * time.Second)
+	assertNotReported()
 
-	// but is reported once the interval has passed
-	service.connErrMutex.Lock()
-	service.connErrReportedAt = time.Now().Add(-connErrReportInterval)
-	service.connErrMutex.Unlock()
-	assert.NotEqual(t, service.ConnectionError(), nil)
-	assert.NoError(t, service.ConnectionError())
+	// but is reported on the next failure once the interval has passed
+	service.connErrReporter.mutex.Lock()
+	service.connErrReporter.reportedAt = time.Now().Add(-connErrReportInterval)
+	service.connErrReporter.mutex.Unlock()
+	select {
+	case <-reported:
+	case <-time.After(15 * time.Second):
+		t.Fatalf("connection error was not reported after the report interval")
+	}
 }
