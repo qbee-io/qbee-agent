@@ -133,7 +133,8 @@ func TestService_ConnectionErrorAndRecovery(t *testing.T) {
 	service.connErrReporter.reportedAt = time.Now().Add(-connErrReportInterval)
 	service.connErrReporter.mutex.Unlock()
 	select {
-	case <-reported:
+	case err := <-reported:
+		assert.Equal(t, err.Error(), "failed to upgrade, got 503")
 	case <-time.After(15 * time.Second):
 		t.Fatalf("connection error was not reported after the report interval")
 	}
