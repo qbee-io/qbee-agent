@@ -244,10 +244,13 @@ func (agent *Agent) doRemoteAccess(cfg *configuration.CommittedConfig) func(ctx 
 		}
 
 		// report connection issues (at most once per outage) as connection is maintained in the background
-		if connErr := agent.remoteAccess.ConnectionError(); connErr != nil {
-			if err := agent.Configuration.ReportRemoteAccessError(ctx, connErr); err != nil {
-				log.Debugf("failed to deliver remote access error report: %v", err)
-			}
+		connErr := agent.remoteAccess.ConnectionError()
+		if connErr == nil {
+			return nil
+		}
+
+		if err := agent.Configuration.ReportRemoteAccessError(ctx, connErr); err != nil {
+			log.Debugf("failed to deliver remote access error report: %v", err)
 		}
 
 		return nil
