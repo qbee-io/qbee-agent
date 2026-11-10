@@ -352,8 +352,23 @@ func (srv *Service) ReportExhaustedGoroutineBudget(ctx context.Context) (bool, e
 	ReportCritical(bundleCtx, nil, "goroutine budget exhausted, skipping agent run")
 
 	// send reports immediately as there will be no further configurations executed, thus
-	// no further reports will be generated.
-	return true, srv.deliverReports(ctx, reporter.Reports())
+	// no further reports will be generated. If we fail to send the reports, we add them to the buffer.
+	if _, err := srv.sendReports(ctx, reporter.Reports()); err != nil {
+		log.Debugf("failed to send reports to the server: %v, adding to the buffer", err)
+
+		if bufferErr := srv.addReportsToBuffer(reporter.Reports()); bufferErr != nil {
+			log.Errorf("failed to add reports to buffer: %v", bufferErr)
+		}
+
+		return true, err
+	}
+
+	// also flush any existing buffered reports
+	if err := srv.flushReportsBuffer(ctx); err != nil {
+		log.Errorf("failed to flush reports buffer: %v", err)
+	}
+
+	return true, nil
 }
 
 // ReportRemoteAccessError reports a remote access connection error with the error string as extra log.
@@ -369,22 +384,19 @@ func (srv *Service) ReportRemoteAccessError(ctx context.Context, err error, repo
 
 	ReportError(bundleCtx, err, "Remote access connection failed.")
 
-	return srv.deliverReports(ctx, reporter.Reports())
-}
-
-// deliverReports sends reports to the server immediately. If that fails, reports are added to the buffer.
-// On success, any existing buffered reports are flushed as well.
-func (srv *Service) deliverReports(ctx context.Context, reports []Report) error {
-	if _, err := srv.sendReports(ctx, reports); err != nil {
+	// send reports immediately, as this is called outside the agent run.
+	// If we fail to send the reports, we add them to the buffer.
+	if _, err := srv.sendReports(ctx, reporter.Reports()); err != nil {
 		log.Debugf("failed to send reports to the server: %v, adding to the buffer", err)
 
-		if bufferErr := srv.addReportsToBuffer(reports); bufferErr != nil {
+		if bufferErr := srv.addReportsToBuffer(reporter.Reports()); bufferErr != nil {
 			log.Errorf("failed to add reports to buffer: %v", bufferErr)
 		}
 
 		return err
 	}
 
+	// also flush any existing buffered reports
 	if err := srv.flushReportsBuffer(ctx); err != nil {
 		log.Errorf("failed to flush reports buffer: %v", err)
 	}
