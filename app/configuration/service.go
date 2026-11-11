@@ -31,6 +31,7 @@ import (
 	"go.qbee.io/agent/app/api"
 	"go.qbee.io/agent/app/log"
 	"go.qbee.io/agent/app/metrics"
+	"go.qbee.io/agent/app/software"
 	"go.qbee.io/agent/app/utils/files"
 )
 
@@ -168,6 +169,7 @@ func (srv *Service) applyDefaultSettings() {
 	srv.softwareInventoryEnabled = true
 	srv.processInventoryEnabled = false
 	srv.runInterval = defaultAgentInterval
+	setPkgCacheTTL(software.DefaultPkgCacheTTL)
 }
 
 // UpdateSettings of the agent based on provided config data.

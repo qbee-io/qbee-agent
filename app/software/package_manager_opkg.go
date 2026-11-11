@@ -50,6 +50,8 @@ const (
 
 // OpkgPackageManager implements PackageManager interface for Opkg based systems (OpenWRT etc.)
 type OpkgPackageManager struct {
+	pkgCacheTTLSetting
+
 	lock sync.Mutex
 }
 
@@ -144,7 +146,7 @@ func (opkg *OpkgPackageManager) ListPackages(ctx context.Context) ([]Package, er
 		}
 	}
 
-	cache.Set(opkgPackagesCacheKey, installedPackages, pkgCacheTTL)
+	cache.Set(opkgPackagesCacheKey, installedPackages, opkg.cacheTTL())
 
 	return installedPackages, nil
 }
@@ -416,7 +418,7 @@ func (opkg *OpkgPackageManager) PackageArchitecture(ctx context.Context) (string
 		return "", fmt.Errorf("error getting package architecture: %w", err)
 	}
 
-	cache.Set(opkgPkgArchCacheKey, arch, pkgCacheTTL)
+	cache.Set(opkgPkgArchCacheKey, arch, DefaultPkgCacheTTL)
 
 	return arch, nil
 }

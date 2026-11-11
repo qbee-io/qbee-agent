@@ -26,7 +26,9 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
+	"go.qbee.io/agent/app/log"
 	"go.qbee.io/agent/app/utils"
 	"go.qbee.io/agent/app/utils/cache"
 )
@@ -45,7 +47,10 @@ const (
 
 // RpmPackageManager implements PackageManager interface for RPM based systems (Fedora, CentOS etc.)
 type RpmPackageManager struct {
-	lock sync.Mutex
+	pkgCacheTTLSetting
+
+	lock             sync.Mutex
+	lastIndexRefresh time.Time
 }
 
 // Type returns type of the package manager.
@@ -107,16 +112,29 @@ func (rpm *RpmPackageManager) ListPackages(ctx context.Context) ([]Package, erro
 		return nil, err
 	}
 
+	// only allow metadata refresh from remote repositories when the refresh interval has passed
+	cacheOnly := time.Since(rpm.lastIndexRefresh) < rpm.cacheTTL()
+
 	var availableUpdates map[string]string
-	availableUpdates, err = rpm.listAvailableUpdates(ctx)
+	availableUpdates, err = rpm.listAvailableUpdates(ctx, cacheOnly)
+	if err != nil && cacheOnly {
+		// local metadata cache might be missing, retry with metadata refresh allowed
+		log.Debugf("error checking updates using local metadata cache: %v", err)
+		cacheOnly = false
+		availableUpdates, err = rpm.listAvailableUpdates(ctx, cacheOnly)
+	}
 	if err != nil {
 		return nil, err
+	}
+
+	if !cacheOnly {
+		rpm.lastIndexRefresh = time.Now()
 	}
 
 	for i, pkg := range installedPackages {
 		installedPackages[i].Update = availableUpdates[pkg.ID()]
 	}
-	cache.Set(rpmPackagesCacheKey, installedPackages, pkgCacheTTL)
+	cache.Set(rpmPackagesCacheKey, installedPackages, rpm.cacheTTL())
 
 	return installedPackages, nil
 }
@@ -145,13 +163,14 @@ func (rpm *RpmPackageManager) parseUpdateAvailableLine(line string) *Package {
 }
 
 // listAvailableUpdates returns a list of available updates.
-func (rpm *RpmPackageManager) listAvailableUpdates(ctx context.Context) (map[string]string, error) {
-	cmd := []string{
-		yumPath,
-		"--quiet",
-		"--assumeyes",
-		"check-update",
+// If cacheOnly is true, only the local metadata cache is used. Otherwise, yum/dnf refreshes
+// the metadata from remote repositories if it's expired according to the repository's metadata_expire setting.
+func (rpm *RpmPackageManager) listAvailableUpdates(ctx context.Context, cacheOnly bool) (map[string]string, error) {
+	cmd := []string{yumPath, "--quiet", "--assumeyes"}
+	if cacheOnly {
+		cmd = append(cmd, "--cacheonly")
 	}
+	cmd = append(cmd, "check-update")
 
 	updates := make(map[string]string)
 
@@ -323,7 +342,7 @@ func (rpm *RpmPackageManager) PackageArchitecture(ctx context.Context) (string, 
 		return "", err
 	}
 
-	cache.Set(rpmPkgArchCacheKey, strings.TrimSpace(string(output)), pkgCacheTTL)
+	cache.Set(rpmPkgArchCacheKey, strings.TrimSpace(string(output)), DefaultPkgCacheTTL)
 
 	return strings.TrimSpace(string(output)), nil
 }

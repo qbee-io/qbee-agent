@@ -28,7 +28,9 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
+	"go.qbee.io/agent/app/log"
 	"go.qbee.io/agent/app/utils"
 	"go.qbee.io/agent/app/utils/cache"
 )
@@ -50,8 +52,11 @@ const (
 
 // DebianPackageManager implements PackageManager interface for Debian-based systems.
 type DebianPackageManager struct {
+	pkgCacheTTLSetting
+
 	supportsAllowDowngradesFlag bool
 	lock                        sync.Mutex
+	lastIndexRefresh            time.Time
 }
 
 // Type returns type of the package manager.
@@ -129,6 +134,13 @@ func (deb *DebianPackageManager) ListPackages(ctx context.Context) ([]Package, e
 		return cachedPackages.([]Package), nil
 	}
 
+	if time.Since(deb.lastIndexRefresh) >= deb.cacheTTL() {
+		if err := deb.refreshIndex(ctx); err != nil {
+			// continue using the local package index
+			log.Warnf("error refreshing package index: %v", err)
+		}
+	}
+
 	installedPackages, err := deb.listInstalledPackages(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error listing installed packages: %w", err)
@@ -144,7 +156,7 @@ func (deb *DebianPackageManager) ListPackages(ctx context.Context) ([]Package, e
 		installedPackages[i].Update = availableUpdates[pkg.ID()]
 	}
 
-	cache.Set(debianPackagesCacheKey, installedPackages, pkgCacheTTL)
+	cache.Set(debianPackagesCacheKey, installedPackages, deb.cacheTTL())
 
 	return installedPackages, nil
 }
@@ -189,15 +201,23 @@ func (deb *DebianPackageManager) listInstalledPackages(ctx context.Context) ([]P
 	return installedPackages, nil
 }
 
-// listAvailableUpdates returns a map of pkgName:arch -> availableUpdateVersion for packages with available updates.
-func (deb *DebianPackageManager) listAvailableUpdates(ctx context.Context) (map[string]string, error) {
+// refreshIndex downloads the package index from remote repositories.
+func (deb *DebianPackageManager) refreshIndex(ctx context.Context) error {
 	updateCmd := []string{aptGetPath, "update"}
 
 	// update needs to be run with elevated privileges
 	if _, err := utils.RunPrivilegedCommand(ctx, updateCmd); err != nil {
-		return nil, err
+		return err
 	}
 
+	deb.lastIndexRefresh = time.Now()
+
+	return nil
+}
+
+// listAvailableUpdates returns a map of pkgName:arch -> availableUpdateVersion for packages with available updates.
+// Only the local package index is used.
+func (deb *DebianPackageManager) listAvailableUpdates(ctx context.Context) (map[string]string, error) {
 	updates := make(map[string]string)
 
 	cmd := []string{aptGetPath, "--just-print", "--with-new-pkgs", "upgrade"}
@@ -283,27 +303,17 @@ func (deb *DebianPackageManager) UpgradeAll(ctx context.Context) (int, []byte, e
 	upgradeCommand := append(aptGetBaseCommand, "upgrade")
 	distUpgradeCommand := append(aptGetBaseCommand, "dist-upgrade")
 
-	aptUpgradeCmd, err := deb.newAptGetCommand(ctx, upgradeCommand)
-	if err != nil {
-		return 0, nil, err
-	}
-
-	aptDistUpgradeCmd, err := deb.newAptGetCommand(ctx, distUpgradeCommand)
-	if err != nil {
-		return 0, nil, err
-	}
-
 	// we are about to change the package database, so clear the cache on return
 	defer func() {
 		cache.Delete(debianPackagesCacheKey)
 	}()
 
-	upgradeOutput, err := utils.RunCommandOutput(aptUpgradeCmd)
+	upgradeOutput, err := deb.runAptGet(ctx, upgradeCommand)
 	if err != nil {
 		return 0, upgradeOutput, err
 	}
 
-	distUpgradeOutput, err := utils.RunCommandOutput(aptDistUpgradeCmd)
+	distUpgradeOutput, err := deb.runAptGet(ctx, distUpgradeCommand)
 	if err != nil {
 		return 0, distUpgradeOutput, err
 	}
@@ -333,14 +343,9 @@ func (deb *DebianPackageManager) Install(ctx context.Context, pkgName, version s
 
 	installCommand := append(aptGetBaseCommand, downgradesFlag, "install", pkgName)
 
-	aptCmd, err := deb.newAptGetCommand(ctx, installCommand)
-	if err != nil {
-		return nil, err
-	}
-
 	defer cache.Delete(debianPackagesCacheKey)
 
-	return utils.RunCommandOutput(aptCmd)
+	return deb.runAptGet(ctx, installCommand)
 }
 
 // InstallLocal package.
@@ -362,14 +367,7 @@ func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath s
 	dpkgOutput = []byte(err.Error())
 	installCommand = append(aptGetBaseCommand, "install")
 
-	aptCmd, err := deb.newAptGetCommand(ctx, installCommand)
-	if err != nil {
-		return dpkgOutput, err
-	}
-
-	aptCmd.Env = []string{"DEBIAN_FRONTEND=noninteractive"}
-
-	aptOutput, err := utils.RunCommandOutput(aptCmd)
+	aptOutput, err := deb.runAptGet(ctx, installCommand)
 	return append(dpkgOutput, aptOutput...), err
 }
 
@@ -387,7 +385,7 @@ func (deb *DebianPackageManager) PackageArchitecture(ctx context.Context) (strin
 		return "", err
 	}
 
-	cache.Set(debianPkgArchCacheKey, strings.TrimSpace(string(output)), pkgCacheTTL)
+	cache.Set(debianPkgArchCacheKey, strings.TrimSpace(string(output)), DefaultPkgCacheTTL)
 
 	return strings.TrimSpace(string(output)), nil
 }
@@ -456,4 +454,52 @@ func (deb *DebianPackageManager) newAptGetCommand(ctx context.Context, cmd []str
 
 	aptCmd.Env = []string{"DEBIAN_FRONTEND=noninteractive"}
 	return aptCmd, nil
+}
+
+// aptOutdatedIndexErrors are apt-get error messages indicating that the local package index is outdated.
+var aptOutdatedIndexErrors = []string{
+	"Unable to locate package",
+	"has no installation candidate",
+	"was not found",
+	"404  Not Found",
+	"404 Not Found",
+}
+
+// isOutdatedIndexError returns true if the apt-get error indicates that the local package index is outdated.
+func isOutdatedIndexError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	for _, msg := range aptOutdatedIndexErrors {
+		if strings.Contains(err.Error(), msg) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// runAptGet runs apt-get command. If the command fails due to an outdated package index,
+// the index is refreshed (at most once per pkgIndexOnDemandRefreshInterval) and the command is retried once.
+func (deb *DebianPackageManager) runAptGet(ctx context.Context, cmd []string) ([]byte, error) {
+	aptCmd, err := deb.newAptGetCommand(ctx, cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	output, err := utils.RunCommandOutput(aptCmd)
+	if !isOutdatedIndexError(err) || time.Since(deb.lastIndexRefresh) < pkgIndexOnDemandRefreshInterval {
+		return output, err
+	}
+
+	if refreshErr := deb.refreshIndex(ctx); refreshErr != nil {
+		return output, fmt.Errorf("%w (package index refresh failed: %v)", err, refreshErr)
+	}
+
+	if aptCmd, err = deb.newAptGetCommand(ctx, cmd); err != nil {
+		return nil, err
+	}
+
+	return utils.RunCommandOutput(aptCmd)
 }

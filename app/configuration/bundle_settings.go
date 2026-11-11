@@ -18,6 +18,8 @@ package configuration
 
 import (
 	"time"
+
+	"go.qbee.io/agent/app/software"
 )
 
 // SettingsBundle defines settings for the agent.
@@ -30,7 +32,8 @@ import (
 //	  "remoteconsole": true,
 //	  "software_inventory": true,
 //	  "process_inventory": true,
-//	  "agentinterval": 10
+//	  "agentinterval": 10,
+//	  "pkg_cache_ttl": 24
 //	}
 type SettingsBundle struct {
 	Metadata
@@ -52,6 +55,11 @@ type SettingsBundle struct {
 
 	// RunInterval defines how often agent reports back to the device hub (in minutes).
 	RunInterval int `json:"agentinterval"`
+
+	// PkgCacheTTL defines how long package information is cached (in hours).
+	// This also controls how often the package index is refreshed from remote repositories.
+	// If not set (or not positive), the default of 24 hours is used.
+	PkgCacheTTL int `json:"pkg_cache_ttl,omitempty"`
 }
 
 // Execute settings config on the system.
@@ -60,6 +68,8 @@ func (s SettingsBundle) Execute(service *Service) {
 	service.metricsEnabled = s.EnableMetrics
 	service.softwareInventoryEnabled = s.EnableSoftwareInventory
 	service.processInventoryEnabled = s.EnableProcessInventory
+
+	setPkgCacheTTL(time.Duration(s.PkgCacheTTL) * time.Hour)
 
 	// Do not accept run interval smaller than the default agent interval.
 	if s.RunInterval < minimumAgentInterval {
@@ -71,4 +81,11 @@ func (s SettingsBundle) Execute(service *Service) {
 	}
 
 	service.runInterval = s.RunInterval
+}
+
+// setPkgCacheTTL sets the package cache TTL of the default package manager (if any).
+func setPkgCacheTTL(ttl time.Duration) {
+	if software.DefaultPackageManager != nil {
+		software.DefaultPackageManager.SetCacheTTL(ttl)
+	}
 }

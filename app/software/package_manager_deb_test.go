@@ -18,6 +18,7 @@ package software
 
 import (
 	"context"
+	"errors"
 	"os/exec"
 	"path/filepath"
 	"reflect"
@@ -110,5 +111,25 @@ func TestParseDebianPackage(t *testing.T) {
 
 	if !reflect.DeepEqual(pkgInfo, expectedPkg) {
 		t.Fatalf("expected %v, got %v", expectedPkg, pkgInfo)
+	}
+}
+
+func TestIsOutdatedIndexError(t *testing.T) {
+	tests := map[string]bool{
+		"E: Unable to locate package qbee-foo":                             true,
+		"E: Package 'qbee-foo' has no installation candidate":              true,
+		"E: Version '1.2.3' for 'qbee-foo' was not found":                  true,
+		"E: Failed to fetch http://deb.debian.org/foo.deb  404  Not Found": true,
+		"E: Could not get lock /var/lib/dpkg/lock-frontend":                false,
+	}
+
+	for msg, want := range tests {
+		if got := isOutdatedIndexError(errors.New(msg)); got != want {
+			t.Errorf("isOutdatedIndexError(%q) = %v, want %v", msg, got, want)
+		}
+	}
+
+	if isOutdatedIndexError(nil) {
+		t.Errorf("isOutdatedIndexError(nil) = true, want false")
 	}
 }

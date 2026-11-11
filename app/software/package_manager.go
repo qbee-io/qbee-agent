@@ -18,6 +18,7 @@ package software
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 )
 
@@ -25,7 +26,14 @@ import (
 // If there are no support package managers available, this will be nil.
 var DefaultPackageManager PackageManager
 
-const pkgCacheTTL = 24 * time.Hour
+// DefaultPkgCacheTTL is the default TTL for cached package information.
+// It also defines how often the package index is refreshed from remote repositories.
+const DefaultPkgCacheTTL = 24 * time.Hour
+
+// pkgIndexOnDemandRefreshInterval limits how often the package index can be refreshed on demand
+// (e.g. when a package to install is not found in the local index).
+const pkgIndexOnDemandRefreshInterval = time.Hour
+
 const pkgCacheKeyPrefix = "packages"
 
 // PackageManagers provides a map of all package managers supported by the agent.
@@ -59,6 +67,11 @@ type PackageManager interface {
 	// IsSupported returns true if package manager is supported by the host system.
 	IsSupported() bool
 
+	// SetCacheTTL sets the TTL for cached package information.
+	// This also defines how often the package index is refreshed from remote repositories.
+	// Non-positive value resets it to DefaultPkgCacheTTL.
+	SetCacheTTL(ttl time.Duration)
+
 	// Busy returns true if package manager is currently busy.
 	Busy() (bool, error)
 
@@ -82,4 +95,30 @@ type PackageManager interface {
 
 	// ParsePackageFile returns a package from a file path.
 	ParsePackageFile(ctx context.Context, filePath string) (*Package, error)
+}
+
+// pkgCacheTTLSetting implements the cache TTL setting of package managers.
+// The TTL is stored atomically, so it can be set without waiting for ongoing package manager operations.
+type pkgCacheTTLSetting struct {
+	ttl atomic.Int64
+}
+
+// SetCacheTTL sets the TTL for cached package information. Non-positive value resets it to DefaultPkgCacheTTL.
+// When pkgCacheTTLSetting is embedded in package manager struct, it satisfies the SetCacheTTL method of
+// the PackageManager interface.
+func (s *pkgCacheTTLSetting) SetCacheTTL(ttl time.Duration) {
+	if ttl <= 0 {
+		ttl = DefaultPkgCacheTTL
+	}
+
+	s.ttl.Store(int64(ttl))
+}
+
+// cacheTTL returns the TTL for cached package information.
+func (s *pkgCacheTTLSetting) cacheTTL() time.Duration {
+	if ttl := time.Duration(s.ttl.Load()); ttl > 0 {
+		return ttl
+	}
+
+	return DefaultPkgCacheTTL
 }
