@@ -26,7 +26,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"time"
 
 	"go.qbee.io/agent/app/log"
 	"go.qbee.io/agent/app/utils"
@@ -47,10 +46,9 @@ const (
 
 // RpmPackageManager implements PackageManager interface for RPM based systems (Fedora, CentOS etc.)
 type RpmPackageManager struct {
-	pkgCacheTTLSetting
+	pkgCacheState
 
-	lock             sync.Mutex
-	lastIndexRefresh time.Time
+	lock sync.Mutex
 }
 
 // Type returns type of the package manager.
@@ -103,7 +101,10 @@ func (rpm *RpmPackageManager) ListPackages(ctx context.Context) ([]Package, erro
 	rpm.lock.Lock()
 	defer rpm.lock.Unlock()
 
-	if cachedPackages, ok := cache.Get(rpmPackagesCacheKey); ok {
+	// only allow metadata refresh from remote repositories when it's due
+	cacheOnly := !rpm.refreshDue()
+
+	if cachedPackages, ok := cache.Get(rpmPackagesCacheKey); ok && cacheOnly {
 		return cachedPackages.([]Package), nil
 	}
 
@@ -112,12 +113,9 @@ func (rpm *RpmPackageManager) ListPackages(ctx context.Context) ([]Package, erro
 		return nil, err
 	}
 
-	// only allow metadata refresh from remote repositories when the refresh interval has passed
-	cacheOnly := time.Since(rpm.lastIndexRefresh) < rpm.cacheTTL()
-
 	var availableUpdates map[string]string
 	availableUpdates, err = rpm.listAvailableUpdates(ctx, cacheOnly)
-	if err != nil && cacheOnly {
+	if err != nil && cacheOnly && rpm.canAttemptRefresh() {
 		// local metadata cache might be missing, retry with metadata refresh allowed
 		log.Debugf("error checking updates using local metadata cache: %v", err)
 		cacheOnly = false
@@ -128,7 +126,7 @@ func (rpm *RpmPackageManager) ListPackages(ctx context.Context) ([]Package, erro
 	}
 
 	if !cacheOnly {
-		rpm.lastIndexRefresh = time.Now()
+		rpm.markRefreshed()
 	}
 
 	for i, pkg := range installedPackages {
@@ -169,6 +167,8 @@ func (rpm *RpmPackageManager) listAvailableUpdates(ctx context.Context, cacheOnl
 	cmd := []string{yumPath, "--quiet", "--assumeyes"}
 	if cacheOnly {
 		cmd = append(cmd, "--cacheonly")
+	} else {
+		rpm.markRefreshAttempt()
 	}
 	cmd = append(cmd, "check-update")
 

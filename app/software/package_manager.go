@@ -30,9 +30,10 @@ var DefaultPackageManager PackageManager
 // It also defines how often the package index is refreshed from remote repositories.
 const DefaultPkgCacheTTL = 24 * time.Hour
 
-// pkgIndexOnDemandRefreshInterval limits how often the package index can be refreshed on demand
-// (e.g. when a package to install is not found in the local index).
-const pkgIndexOnDemandRefreshInterval = time.Hour
+// pkgIndexRetryInterval is the minimum time between package index refresh attempts,
+// used to retry failed refreshes and to limit on-demand refreshes (e.g. when a package to install
+// is not found in the local package index).
+const pkgIndexRetryInterval = time.Hour
 
 const pkgCacheKeyPrefix = "packages"
 
@@ -97,16 +98,23 @@ type PackageManager interface {
 	ParsePackageFile(ctx context.Context, filePath string) (*Package, error)
 }
 
-// pkgCacheTTLSetting implements the cache TTL setting of package managers.
-// The TTL is stored atomically, so it can be set without waiting for ongoing package manager operations.
-type pkgCacheTTLSetting struct {
+// pkgCacheState keeps track of the package cache TTL and package index refreshes.
+// When embedded in a package manager struct, it satisfies the SetCacheTTL method of the PackageManager interface.
+type pkgCacheState struct {
+	// ttl is stored atomically, so it can be set without waiting for ongoing package manager operations.
 	ttl atomic.Int64
+
+	// lastRefresh is the time of the last successful package index refresh.
+	// It must only be accessed while holding the package manager lock.
+	lastRefresh time.Time
+
+	// lastRefreshAttempt is the time of the last package index refresh attempt (successful or not).
+	// It must only be accessed while holding the package manager lock.
+	lastRefreshAttempt time.Time
 }
 
 // SetCacheTTL sets the TTL for cached package information. Non-positive value resets it to DefaultPkgCacheTTL.
-// When pkgCacheTTLSetting is embedded in package manager struct, it satisfies the SetCacheTTL method of
-// the PackageManager interface.
-func (s *pkgCacheTTLSetting) SetCacheTTL(ttl time.Duration) {
+func (s *pkgCacheState) SetCacheTTL(ttl time.Duration) {
 	if ttl <= 0 {
 		ttl = DefaultPkgCacheTTL
 	}
@@ -115,10 +123,31 @@ func (s *pkgCacheTTLSetting) SetCacheTTL(ttl time.Duration) {
 }
 
 // cacheTTL returns the TTL for cached package information.
-func (s *pkgCacheTTLSetting) cacheTTL() time.Duration {
+func (s *pkgCacheState) cacheTTL() time.Duration {
 	if ttl := time.Duration(s.ttl.Load()); ttl > 0 {
 		return ttl
 	}
 
 	return DefaultPkgCacheTTL
+}
+
+// canAttemptRefresh returns true if enough time has passed since the last package index refresh attempt.
+func (s *pkgCacheState) canAttemptRefresh() bool {
+	return time.Since(s.lastRefreshAttempt) >= pkgIndexRetryInterval
+}
+
+// refreshDue returns true if the package index should be refreshed, because the last successful refresh
+// is older than the current cache TTL. Failed refreshes are retried at most once per pkgIndexRetryInterval.
+func (s *pkgCacheState) refreshDue() bool {
+	return time.Since(s.lastRefresh) >= s.cacheTTL() && s.canAttemptRefresh()
+}
+
+// markRefreshAttempt records a package index refresh attempt.
+func (s *pkgCacheState) markRefreshAttempt() {
+	s.lastRefreshAttempt = time.Now()
+}
+
+// markRefreshed records a successful package index refresh.
+func (s *pkgCacheState) markRefreshed() {
+	s.lastRefresh = time.Now()
 }

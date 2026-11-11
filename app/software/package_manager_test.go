@@ -21,8 +21,8 @@ import (
 	"time"
 )
 
-func TestPkgCacheTTLSetting(t *testing.T) {
-	s := new(pkgCacheTTLSetting)
+func TestPkgCacheState_TTL(t *testing.T) {
+	s := new(pkgCacheState)
 
 	if got := s.cacheTTL(); got != DefaultPkgCacheTTL {
 		t.Fatalf("expected default TTL %v, got %v", DefaultPkgCacheTTL, got)
@@ -36,5 +36,39 @@ func TestPkgCacheTTLSetting(t *testing.T) {
 	s.SetCacheTTL(0)
 	if got := s.cacheTTL(); got != DefaultPkgCacheTTL {
 		t.Fatalf("expected default TTL %v after reset, got %v", DefaultPkgCacheTTL, got)
+	}
+}
+
+func TestPkgCacheState_refresh(t *testing.T) {
+	s := new(pkgCacheState)
+
+	if !s.refreshDue() || !s.canAttemptRefresh() {
+		t.Fatalf("expected refresh to be due when never refreshed")
+	}
+
+	// failed refresh is not retried before pkgIndexRetryInterval has passed
+	s.markRefreshAttempt()
+	if s.refreshDue() || s.canAttemptRefresh() {
+		t.Fatalf("expected no refresh right after a failed attempt")
+	}
+
+	s.lastRefreshAttempt = time.Now().Add(-pkgIndexRetryInterval)
+	if !s.refreshDue() || !s.canAttemptRefresh() {
+		t.Fatalf("expected failed refresh to be retried after retry interval")
+	}
+
+	// successful refresh is valid until the cache TTL has passed
+	s.markRefreshAttempt()
+	s.markRefreshed()
+	s.lastRefreshAttempt = time.Now().Add(-2 * time.Hour)
+	s.lastRefresh = s.lastRefreshAttempt
+	if s.refreshDue() {
+		t.Fatalf("expected no refresh due within cache TTL")
+	}
+
+	// reducing the TTL makes the refresh due immediately
+	s.SetCacheTTL(time.Hour)
+	if !s.refreshDue() {
+		t.Fatalf("expected refresh to be due after reducing the TTL")
 	}
 }

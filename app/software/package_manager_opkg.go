@@ -50,7 +50,7 @@ const (
 
 // OpkgPackageManager implements PackageManager interface for Opkg based systems (OpenWRT etc.)
 type OpkgPackageManager struct {
-	pkgCacheTTLSetting
+	pkgCacheState
 
 	lock sync.Mutex
 }
@@ -124,7 +124,8 @@ func (opkg *OpkgPackageManager) ListPackages(ctx context.Context) ([]Package, er
 	opkg.lock.Lock()
 	defer opkg.lock.Unlock()
 
-	if cachedPackages, ok := cache.Get(opkgPackagesCacheKey); ok {
+	// cached packages are only valid until the package index refresh is due according to the current TTL
+	if cachedPackages, ok := cache.Get(opkgPackagesCacheKey); ok && !opkg.refreshDue() {
 		return cachedPackages.([]Package), nil
 	}
 
@@ -155,9 +156,13 @@ func (opkg *OpkgPackageManager) listAvailableUpdates(ctx context.Context) (map[s
 
 	updateCmd := []string{opkgCmd, "update"}
 
+	opkg.markRefreshAttempt()
+
 	if _, err := utils.RunPrivilegedCommand(ctx, updateCmd); err != nil {
 		return nil, err
 	}
+
+	opkg.markRefreshed()
 
 	cmd := []string{opkgCmd, "list-upgradable"}
 	updates := make(map[string]string)

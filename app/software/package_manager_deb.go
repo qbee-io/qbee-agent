@@ -28,7 +28,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	"go.qbee.io/agent/app/log"
 	"go.qbee.io/agent/app/utils"
@@ -52,11 +51,10 @@ const (
 
 // DebianPackageManager implements PackageManager interface for Debian-based systems.
 type DebianPackageManager struct {
-	pkgCacheTTLSetting
+	pkgCacheState
 
 	supportsAllowDowngradesFlag bool
 	lock                        sync.Mutex
-	lastIndexRefresh            time.Time
 }
 
 // Type returns type of the package manager.
@@ -130,11 +128,13 @@ func (deb *DebianPackageManager) ListPackages(ctx context.Context) ([]Package, e
 	deb.lock.Lock()
 	defer deb.lock.Unlock()
 
-	if cachedPackages, ok := cache.Get(debianPackagesCacheKey); ok {
+	refreshDue := deb.refreshDue()
+
+	if cachedPackages, ok := cache.Get(debianPackagesCacheKey); ok && !refreshDue {
 		return cachedPackages.([]Package), nil
 	}
 
-	if time.Since(deb.lastIndexRefresh) >= deb.cacheTTL() {
+	if refreshDue {
 		if err := deb.refreshIndex(ctx); err != nil {
 			// continue using the local package index
 			log.Warnf("error refreshing package index: %v", err)
@@ -201,16 +201,38 @@ func (deb *DebianPackageManager) listInstalledPackages(ctx context.Context) ([]P
 	return installedPackages, nil
 }
 
+// aptUpdateFailures are apt-get update messages indicating that some repositories failed to download.
+// apt-get update exits successfully in those cases and keeps using the old package index files.
+var aptUpdateFailures = []string{
+	"Failed to fetch",
+	"Some index files failed to download",
+}
+
 // refreshIndex downloads the package index from remote repositories.
 func (deb *DebianPackageManager) refreshIndex(ctx context.Context) error {
-	updateCmd := []string{aptGetPath, "update"}
+	deb.markRefreshAttempt()
 
 	// update needs to be run with elevated privileges
-	if _, err := utils.RunPrivilegedCommand(ctx, updateCmd); err != nil {
+	updateCmd, err := utils.NewPrivilegedCommand(ctx, []string{aptGetPath, "update"})
+	if err != nil {
 		return err
 	}
 
-	deb.lastIndexRefresh = time.Now()
+	// force untranslated output, so we can detect failed repository downloads
+	updateCmd.Env = append(os.Environ(), "LC_ALL=C")
+
+	output, err := updateCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("error running %v: %w\n%s", updateCmd.Args, err, output)
+	}
+
+	for _, msg := range aptUpdateFailures {
+		if bytes.Contains(output, []byte(msg)) {
+			return fmt.Errorf("failed to download package index from some repositories:\n%s", output)
+		}
+	}
+
+	deb.markRefreshed()
 
 	return nil
 }
@@ -481,7 +503,7 @@ func isOutdatedIndexError(err error) bool {
 }
 
 // runAptGet runs apt-get command. If the command fails due to an outdated package index,
-// the index is refreshed (at most once per pkgIndexOnDemandRefreshInterval) and the command is retried once.
+// the index is refreshed (at most once per pkgIndexRetryInterval) and the command is retried once.
 func (deb *DebianPackageManager) runAptGet(ctx context.Context, cmd []string) ([]byte, error) {
 	aptCmd, err := deb.newAptGetCommand(ctx, cmd)
 	if err != nil {
@@ -489,7 +511,7 @@ func (deb *DebianPackageManager) runAptGet(ctx context.Context, cmd []string) ([
 	}
 
 	output, err := utils.RunCommandOutput(aptCmd)
-	if !isOutdatedIndexError(err) || time.Since(deb.lastIndexRefresh) < pkgIndexOnDemandRefreshInterval {
+	if !isOutdatedIndexError(err) || !deb.canAttemptRefresh() {
 		return output, err
 	}
 
