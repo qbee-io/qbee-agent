@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/xtaci/smux"
 	"go.qbee.io/transport"
@@ -30,6 +31,9 @@ import (
 func New() *Service {
 	return &Service{
 		consoleMap: make(map[string]*Console),
+		connErrReporter: connectionErrorReporter{
+			report: func(context.Context, error) {},
+		},
 	}
 }
 
@@ -39,6 +43,9 @@ type Service struct {
 	tlsConfig *tls.Config
 	mutex     sync.Mutex
 
+	// connErrReporter reports connection errors to the device hub.
+	connErrReporter connectionErrorReporter
+
 	// consoleMap is a map of all active consoles.
 	consoleMap map[string]*Console
 
@@ -47,6 +54,14 @@ type Service struct {
 
 	// configReloadNotifierChannel is a function that is called when the agent configuration reload is requested remotely.
 	configReloadNotifierChannel chan bool
+}
+
+// SetConnectionErrorReporter sets a function which is called (at most once per outage) when the connection fails.
+func (s *Service) SetConnectionErrorReporter(reporter func(ctx context.Context, err error)) {
+	s.connErrReporter.mutex.Lock()
+	defer s.connErrReporter.mutex.Unlock()
+
+	s.connErrReporter.report = reporter
 }
 
 // WithTLSConfig sets the TLS configuration for the remote access service.
@@ -78,7 +93,9 @@ func (s *Service) ensureInit(edgeURL string) error {
 		WithHandler(transport.MessageTypePTY, s.HandleConsole).
 		WithHandler(transport.MessageTypePTYCommand, s.HandleConsoleCommand).
 		WithHandler(transport.MessageTypeFile, transport.HandleFileTransfer).
-		WithHandler(transport.MessageTypeReload, s.HandleReloadCommand)
+		WithHandler(transport.MessageTypeReload, s.HandleReloadCommand).
+		WithConnectHandler(s.connErrReporter.onConnect).
+		WithErrorHandler(s.connErrReporter.onError)
 
 	return nil
 }
@@ -93,6 +110,8 @@ func (s *Service) Stop() error {
 		return nil
 	}
 
+	s.connErrReporter.clear()
+
 	return s.client.Close()
 }
 
@@ -103,14 +122,92 @@ func (s *Service) UpdateState(ctx context.Context, edgeURL string, enabled bool)
 	}
 
 	if !enabled && s.client.IsRunning() {
+		s.connErrReporter.clear()
 		return s.client.Close()
 	}
 
 	if !s.client.IsRunning() && enabled {
+		s.connErrReporter.setContext(ctx)
 		s.client.Start(ctx)
 	}
 
 	return nil
+}
+
+// connErrReportInterval is the minimum time between two reported connection errors.
+const connErrReportInterval = time.Minute * 5
+
+// connectionErrorReporter reports remote access connection errors once per outage
+// and at most once per connErrReportInterval.
+type connectionErrorReporter struct {
+	mutex sync.Mutex
+
+	// ctx is the context passed to report.
+	ctx context.Context
+
+	// report is called asynchronously to report a connection error.
+	report func(ctx context.Context, err error)
+
+	// reported is set once an error has been reported and cleared when the connection resumes.
+	reported bool
+
+	// reportedAt is the time when a connection error was last reported.
+	reportedAt time.Time
+
+	// connected is set while a connection is established.
+	connected bool
+}
+
+// setContext sets the context passed to report.
+func (r *connectionErrorReporter) setContext(ctx context.Context) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	r.ctx = ctx
+}
+
+// onConnect is called when connection is established.
+func (r *connectionErrorReporter) onConnect() {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	r.reported = false
+	r.connected = true
+}
+
+// clear is called when remote access is disabled.
+func (r *connectionErrorReporter) clear() {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	r.reported = false
+	r.connected = false
+}
+
+// onError is called on every failed connection attempt and when an established connection is lost.
+func (r *connectionErrorReporter) onError(err error) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	// dropped connections (e.g. edge redeployments) are not reported, only failures to connect
+	if r.connected {
+		r.connected = false
+		return
+	}
+
+	if r.reported {
+		return
+	}
+
+	if time.Since(r.reportedAt) < connErrReportInterval {
+		return
+	}
+
+	r.reported = true
+	r.reportedAt = time.Now()
+
+	// the connection loop must not block, so report in the background
+	go r.report(r.ctx, err)
 }
 
 // WithConfigReloadNotifier registers a channel to be notified when a remote configuration reload is requested.

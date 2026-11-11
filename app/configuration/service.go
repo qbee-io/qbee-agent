@@ -25,6 +25,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"go.qbee.io/agent/app/api"
@@ -82,6 +83,9 @@ type Service struct {
 
 	// configEndpointUnreachable is true if the config endpoint is unreachable
 	configEndpointUnreachable bool
+
+	// reportsBufferMutex serializes access to the reports buffer file
+	reportsBufferMutex sync.Mutex
 }
 
 // New returns a new instance of configuration Service.
@@ -120,6 +124,11 @@ func (srv *Service) WithMetricsService(metricsService *metrics.Service) *Service
 // MetricsEnabled returns true if metrics collection is enabled.
 func (srv *Service) MetricsEnabled() bool {
 	return srv.metricsEnabled
+}
+
+// ReportingEnabled returns true if reporting is enabled.
+func (srv *Service) ReportingEnabled() bool {
+	return srv.reportingEnabled
 }
 
 // CollectSoftwareInventory returns true if software inventory collection is enabled.
@@ -362,6 +371,39 @@ func (srv *Service) ReportExhaustedGoroutineBudget(ctx context.Context) (bool, e
 	return true, nil
 }
 
+// ReportRemoteAccessError reports a remote access connection error with the error string as extra log.
+// reportingEnabled and commitID are passed in, as this is called outside the agent run.
+func (srv *Service) ReportRemoteAccessError(ctx context.Context, err error, reportingEnabled bool, commitID string) error {
+	if !reportingEnabled {
+		return nil
+	}
+
+	// since we don't have a reporter defined on this context, we need to create a new one
+	reporter := NewReporter(commitID, srv.reportToConsole, nil)
+	bundleCtx := reporter.BundleContext(ctx, bundleAgentInternal, "")
+
+	ReportError(bundleCtx, err, "Remote access connection failed.")
+
+	// send reports immediately, as this is called outside the agent run.
+	// If we fail to send the reports, we add them to the buffer.
+	if _, err := srv.sendReports(ctx, reporter.Reports()); err != nil {
+		log.Debugf("failed to send reports to the server: %v, adding to the buffer", err)
+
+		if bufferErr := srv.addReportsToBuffer(reporter.Reports()); bufferErr != nil {
+			log.Errorf("failed to add reports to buffer: %v", bufferErr)
+		}
+
+		return err
+	}
+
+	// also flush any existing buffered reports
+	if err := srv.flushReportsBuffer(ctx); err != nil {
+		log.Errorf("failed to flush reports buffer: %v", err)
+	}
+
+	return nil
+}
+
 // RunIntervalChangedNotifier returns a channel which will send a new agent interval duration when it changes.
 func (srv *Service) RunIntervalChangedNotifier() <-chan time.Duration {
 	return srv.runIntervalChangeNotifier
@@ -375,6 +417,14 @@ const (
 
 // addReportsToBuffer adds reports to the delivery buffer.
 func (srv *Service) addReportsToBuffer(reports []Report) error {
+	srv.reportsBufferMutex.Lock()
+	defer srv.reportsBufferMutex.Unlock()
+
+	return srv.writeReportsToBuffer(reports)
+}
+
+// writeReportsToBuffer appends reports to the delivery buffer. Caller must hold reportsBufferMutex.
+func (srv *Service) writeReportsToBuffer(reports []Report) error {
 	reportsBufferFilePath := filepath.Join(srv.appDirectory, reportsBufferFileName)
 
 	fp, err := os.OpenFile(reportsBufferFilePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, reportsBufferFileMode)
@@ -475,6 +525,9 @@ func (srv *Service) clearReportsBuffer() error {
 
 // flushReportsBuffer attempts to send reports from the delivery buffer.
 func (srv *Service) flushReportsBuffer(ctx context.Context) error {
+	srv.reportsBufferMutex.Lock()
+	defer srv.reportsBufferMutex.Unlock()
+
 	// load all undelivered reports from the buffer
 	reports, err := srv.readReportsBuffer()
 	if err != nil {
@@ -501,7 +554,7 @@ func (srv *Service) flushReportsBuffer(ctx context.Context) error {
 
 	// if we failed to deliver some reports, re-add them to the buffer
 	if deliveryErr != nil {
-		if err = srv.addReportsToBuffer(reports[delivered:]); err != nil {
+		if err = srv.writeReportsToBuffer(reports[delivered:]); err != nil {
 			log.Errorf("failed to re-add reports to buffer: %v", err)
 		}
 	}

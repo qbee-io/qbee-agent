@@ -239,6 +239,23 @@ func (agent *Agent) doRemoteAccess(cfg *configuration.CommittedConfig) func(ctx 
 			return nil
 		}
 
+		// capture the current reporting settings and commit ID for use in the connection error reporter.
+		// We capture it here to avoid any agent run changing the reporting settings or commit ID while
+		// the connection error reporter is using them.
+		reportingEnabled := agent.Configuration.ReportingEnabled()
+		commitID := agent.Configuration.CurrentCommitID()
+
+		// initialize the connection error reporter with the captured settings
+		connectionErrorReporter := func(ctx context.Context, connErr error) {
+			err := agent.Configuration.ReportRemoteAccessError(ctx, connErr, reportingEnabled, commitID)
+			if err != nil {
+				log.Debugf("failed to deliver remote access error report: %v", err)
+			}
+		}
+
+		// the reporter runs outside the agent run, so it gets a snapshot of the reporting settings
+		agent.remoteAccess.SetConnectionErrorReporter(connectionErrorReporter)
+
 		return agent.remoteAccess.UpdateState(ctx, cfg.EdgeURL, cfg.BundleData.Settings.EnableRemoteConsole)
 	}
 }
