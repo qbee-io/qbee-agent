@@ -28,6 +28,14 @@ var DefaultPackageManager PackageManager
 const pkgCacheTTL = 24 * time.Hour
 const pkgCacheKeyPrefix = "packages"
 
+// pkgListCacheKey is the cache key of the package list.
+// It is shared by all package managers, as only one package manager is used on a system.
+const pkgListCacheKey = pkgCacheKeyPrefix + ":list"
+
+// pkgArchCacheKey is the cache key of the package architecture.
+// It is shared by all package managers, as only one package manager is used on a system.
+const pkgArchCacheKey = pkgCacheKeyPrefix + ":arch"
+
 // PackageManagers provides a map of all package managers supported by the agent.
 var PackageManagers = map[PackageManagerType]PackageManager{
 	PackageManagerTypeDebian: new(DebianPackageManager),

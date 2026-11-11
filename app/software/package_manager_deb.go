@@ -37,9 +37,6 @@ import (
 const PackageManagerTypeDebian PackageManagerType = "deb"
 const debianFileSuffix string = ".deb"
 
-var debianPackagesCacheKey = fmt.Sprintf("%s:%s:packages", pkgCacheKeyPrefix, PackageManagerTypeDebian)
-var debianPkgArchCacheKey = fmt.Sprintf("%s:%s:arch", pkgCacheKeyPrefix, PackageManagerTypeDebian)
-
 const (
 	aptGetPath = "/usr/bin/apt-get"
 	dpkgPath   = "/usr/bin/dpkg"
@@ -125,7 +122,7 @@ func (deb *DebianPackageManager) ListPackages(ctx context.Context) ([]Package, e
 	deb.lock.Lock()
 	defer deb.lock.Unlock()
 
-	if cachedPackages, ok := cache.Get(debianPackagesCacheKey); ok {
+	if cachedPackages, ok := cache.Get(pkgListCacheKey); ok {
 		return cachedPackages.([]Package), nil
 	}
 
@@ -144,7 +141,7 @@ func (deb *DebianPackageManager) ListPackages(ctx context.Context) ([]Package, e
 		installedPackages[i].Update = availableUpdates[pkg.ID()]
 	}
 
-	cache.Set(debianPackagesCacheKey, installedPackages, pkgCacheTTL)
+	cache.Set(pkgListCacheKey, installedPackages, pkgCacheTTL)
 
 	return installedPackages, nil
 }
@@ -295,7 +292,7 @@ func (deb *DebianPackageManager) UpgradeAll(ctx context.Context) (int, []byte, e
 
 	// we are about to change the package database, so clear the cache on return
 	defer func() {
-		cache.Delete(debianPackagesCacheKey)
+		cache.Delete(pkgListCacheKey)
 	}()
 
 	upgradeOutput, err := utils.RunCommandOutput(aptUpgradeCmd)
@@ -338,7 +335,7 @@ func (deb *DebianPackageManager) Install(ctx context.Context, pkgName, version s
 		return nil, err
 	}
 
-	defer cache.Delete(debianPackagesCacheKey)
+	defer cache.Delete(pkgListCacheKey)
 
 	return utils.RunCommandOutput(aptCmd)
 }
@@ -348,7 +345,7 @@ func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath s
 	deb.lock.Lock()
 	defer deb.lock.Unlock()
 
-	defer cache.Delete(debianPackagesCacheKey)
+	defer cache.Delete(pkgListCacheKey)
 
 	installCommand := []string{dpkgPath, "-i", pkgFilePath}
 	dpkgOutput, err := utils.RunPrivilegedCommand(ctx, installCommand)
@@ -376,7 +373,7 @@ func (deb *DebianPackageManager) InstallLocal(ctx context.Context, pkgFilePath s
 // PackageArchitecture returns the architecture of the package manager
 func (deb *DebianPackageManager) PackageArchitecture(ctx context.Context) (string, error) {
 
-	if cachedArch, ok := cache.Get(debianPkgArchCacheKey); ok {
+	if cachedArch, ok := cache.Get(pkgArchCacheKey); ok {
 		return cachedArch.(string), nil
 	}
 
@@ -387,7 +384,7 @@ func (deb *DebianPackageManager) PackageArchitecture(ctx context.Context) (strin
 		return "", err
 	}
 
-	cache.Set(debianPkgArchCacheKey, strings.TrimSpace(string(output)), pkgCacheTTL)
+	cache.Set(pkgArchCacheKey, strings.TrimSpace(string(output)), pkgCacheTTL)
 
 	return strings.TrimSpace(string(output)), nil
 }

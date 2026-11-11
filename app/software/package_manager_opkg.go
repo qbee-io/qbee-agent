@@ -39,9 +39,6 @@ import (
 const PackageManagerTypeOpkg PackageManagerType = "opkg"
 const opkgFileSuffix string = ".ipk"
 
-var opkgPackagesCacheKey = fmt.Sprintf("%s:%s:packages", pkgCacheKeyPrefix, PackageManagerTypeOpkg)
-var opkgPkgArchCacheKey = fmt.Sprintf("%s:%s:arch", pkgCacheKeyPrefix, PackageManagerTypeOpkg)
-
 const (
 	opkgLockPath = "/var/lock/opkg.lock"
 	opkgLockMode = 0640
@@ -122,7 +119,7 @@ func (opkg *OpkgPackageManager) ListPackages(ctx context.Context) ([]Package, er
 	opkg.lock.Lock()
 	defer opkg.lock.Unlock()
 
-	if cachedPackages, ok := cache.Get(opkgPackagesCacheKey); ok {
+	if cachedPackages, ok := cache.Get(pkgListCacheKey); ok {
 		return cachedPackages.([]Package), nil
 	}
 
@@ -144,7 +141,7 @@ func (opkg *OpkgPackageManager) ListPackages(ctx context.Context) ([]Package, er
 		}
 	}
 
-	cache.Set(opkgPackagesCacheKey, installedPackages, pkgCacheTTL)
+	cache.Set(pkgListCacheKey, installedPackages, pkgCacheTTL)
 
 	return installedPackages, nil
 }
@@ -351,7 +348,7 @@ func (opkg *OpkgPackageManager) UpgradeAll(ctx context.Context) (int, []byte, er
 		}
 	}
 
-	cache.Delete(opkgPackagesCacheKey)
+	cache.Delete(pkgListCacheKey)
 
 	return len(cmdList), output, nil
 }
@@ -366,7 +363,7 @@ func (opkg *OpkgPackageManager) Install(ctx context.Context, pkgName, version st
 		return nil, fmt.Errorf("installing specific package versions is not supported by opkg")
 	}
 
-	defer cache.Delete(opkgPackagesCacheKey)
+	defer cache.Delete(pkgListCacheKey)
 
 	return utils.RunPrivilegedCommand(ctx, cmd)
 }
@@ -378,14 +375,14 @@ func (opkg *OpkgPackageManager) InstallLocal(ctx context.Context, pkgFilePath st
 
 	cmd := []string{opkgCmd, "install", pkgFilePath}
 
-	defer cache.Delete(opkgPackagesCacheKey)
+	defer cache.Delete(pkgListCacheKey)
 
 	return utils.RunPrivilegedCommand(ctx, cmd)
 }
 
 // PackageArchitecture returns the architecture of the package manager
 func (opkg *OpkgPackageManager) PackageArchitecture(ctx context.Context) (string, error) {
-	if cachedArch, ok := cache.Get(opkgPkgArchCacheKey); ok {
+	if cachedArch, ok := cache.Get(pkgArchCacheKey); ok {
 		return cachedArch.(string), nil
 	}
 
@@ -416,7 +413,7 @@ func (opkg *OpkgPackageManager) PackageArchitecture(ctx context.Context) (string
 		return "", fmt.Errorf("error getting package architecture: %w", err)
 	}
 
-	cache.Set(opkgPkgArchCacheKey, arch, pkgCacheTTL)
+	cache.Set(pkgArchCacheKey, arch, pkgCacheTTL)
 
 	return arch, nil
 }
