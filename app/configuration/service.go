@@ -168,6 +168,7 @@ func (srv *Service) applyDefaultSettings() {
 	srv.softwareInventoryEnabled = true
 	srv.processInventoryEnabled = false
 	srv.runInterval = defaultAgentInterval
+	setPkgCacheTTL(0)
 }
 
 // UpdateSettings of the agent based on provided config data.

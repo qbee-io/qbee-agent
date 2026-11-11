@@ -42,6 +42,8 @@ const (
 
 // RpmPackageManager implements PackageManager interface for RPM based systems (Fedora, CentOS etc.)
 type RpmPackageManager struct {
+	pkgListCacheTTL
+
 	lock sync.Mutex
 }
 
@@ -113,7 +115,7 @@ func (rpm *RpmPackageManager) ListPackages(ctx context.Context) ([]Package, erro
 	for i, pkg := range installedPackages {
 		installedPackages[i].Update = availableUpdates[pkg.ID()]
 	}
-	cache.Set(pkgListCacheKey, installedPackages, pkgCacheTTL)
+	cache.Set(pkgListCacheKey, installedPackages, rpm.cacheTTL())
 
 	return installedPackages, nil
 }
