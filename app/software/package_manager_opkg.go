@@ -47,6 +47,8 @@ const (
 
 // OpkgPackageManager implements PackageManager interface for Opkg based systems (OpenWRT etc.)
 type OpkgPackageManager struct {
+	pkgListCacheTTL
+
 	lock sync.Mutex
 }
 
@@ -141,7 +143,7 @@ func (opkg *OpkgPackageManager) ListPackages(ctx context.Context) ([]Package, er
 		}
 	}
 
-	cache.Set(pkgListCacheKey, installedPackages, pkgCacheTTL)
+	cache.Set(pkgListCacheKey, installedPackages, opkg.cacheTTL())
 
 	return installedPackages, nil
 }

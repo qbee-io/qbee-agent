@@ -18,13 +18,17 @@ package software
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
+
+	"go.qbee.io/agent/app/utils/cache"
 )
 
 // DefaultPackageManager is set to the supporter package manager for the OS.
 // If there are no support package managers available, this will be nil.
 var DefaultPackageManager PackageManager
 
+// pkgCacheTTL is the default TTL for cached package information.
 const pkgCacheTTL = 24 * time.Hour
 const pkgCacheKeyPrefix = "packages"
 
@@ -67,6 +71,10 @@ type PackageManager interface {
 	// IsSupported returns true if package manager is supported by the host system.
 	IsSupported() bool
 
+	// SetCacheTTL sets the TTL of the cached package list. Non-positive value resets it to the default TTL.
+	// The expiry of an already cached package list is adjusted relative to when the list was cached.
+	SetCacheTTL(ttl time.Duration)
+
 	// Busy returns true if package manager is currently busy.
 	Busy() (bool, error)
 
@@ -90,4 +98,32 @@ type PackageManager interface {
 
 	// ParsePackageFile returns a package from a file path.
 	ParsePackageFile(ctx context.Context, filePath string) (*Package, error)
+}
+
+// pkgListCacheTTL holds the package list cache TTL of a package manager instance.
+// When embedded in a package manager struct, it implements the SetCacheTTL method of the PackageManager interface.
+type pkgListCacheTTL struct {
+	// ttl is stored atomically, so it can be changed without waiting for ongoing package manager operations.
+	ttl atomic.Int64
+}
+
+// SetCacheTTL sets the TTL of the cached package list. Non-positive value resets it to the default TTL.
+// The expiry of an already cached package list is adjusted relative to when the list was cached.
+func (c *pkgListCacheTTL) SetCacheTTL(ttl time.Duration) {
+	if ttl <= 0 {
+		ttl = pkgCacheTTL
+	}
+
+	c.ttl.Store(int64(ttl))
+
+	cache.UpdateTTL(pkgListCacheKey, ttl)
+}
+
+// cacheTTL returns the TTL of the cached package list.
+func (c *pkgListCacheTTL) cacheTTL() time.Duration {
+	if ttl := time.Duration(c.ttl.Load()); ttl > 0 {
+		return ttl
+	}
+
+	return pkgCacheTTL
 }

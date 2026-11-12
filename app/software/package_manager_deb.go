@@ -47,6 +47,8 @@ const (
 
 // DebianPackageManager implements PackageManager interface for Debian-based systems.
 type DebianPackageManager struct {
+	pkgListCacheTTL
+
 	supportsAllowDowngradesFlag bool
 	lock                        sync.Mutex
 }
@@ -141,7 +143,7 @@ func (deb *DebianPackageManager) ListPackages(ctx context.Context) ([]Package, e
 		installedPackages[i].Update = availableUpdates[pkg.ID()]
 	}
 
-	cache.Set(pkgListCacheKey, installedPackages, pkgCacheTTL)
+	cache.Set(pkgListCacheKey, installedPackages, deb.cacheTTL())
 
 	return installedPackages, nil
 }
