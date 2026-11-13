@@ -39,6 +39,14 @@ const defaultAgentInterval = 5 // minutes
 const minimumAgentInterval = 5 // minute
 const defaultFirstRunRetryCounter = 5
 
+const (
+	// defaultExecutionTimeout is the time configuration execution may take, unless set in the settings bundle.
+	defaultExecutionTimeout = time.Hour
+
+	// minimumExecutionTimeout is the smallest execution timeout accepted from the settings bundle.
+	minimumExecutionTimeout = 5 * time.Minute
+)
+
 // Service provides configuration management functionality for the agent.
 type Service struct {
 	api *api.Client
@@ -77,6 +85,9 @@ type Service struct {
 	runInterval               int
 	runIntervalChangeNotifier chan time.Duration
 
+	// executionTimeout defines the time limit of the configuration execution
+	executionTimeout atomic.Int64
+
 	// connectivityWatchdogThreshold defines failed API connections threshold at which server will be rebooted
 	// 0 -> disabled
 	connectivityWatchdogThreshold atomic.Int64
@@ -97,7 +108,7 @@ type Service struct {
 
 // New returns a new instance of configuration Service.
 func New(apiClient *api.Client, appDirectory, cacheDirectory string) *Service {
-	return &Service{
+	srv := &Service{
 		api:            apiClient,
 		appDirectory:   appDirectory,
 		cacheDirectory: cacheDirectory,
@@ -108,6 +119,10 @@ func New(apiClient *api.Client, appDirectory, cacheDirectory string) *Service {
 		runIntervalChangeNotifier: make(chan time.Duration, 1),
 		firstRunRetryCounter:      defaultFirstRunRetryCounter,
 	}
+
+	srv.executionTimeout.Store(int64(defaultExecutionTimeout))
+
+	return srv
 }
 
 // WithURLSigner sets the URL signer for the service.
@@ -153,6 +168,24 @@ func (srv *Service) RunInterval() time.Duration {
 	return time.Duration(srv.runInterval) * time.Minute
 }
 
+// ExecutionTimeout returns the time limit of the configuration execution.
+func (srv *Service) ExecutionTimeout() time.Duration {
+	return time.Duration(srv.executionTimeout.Load())
+}
+
+// setExecutionTimeout sets the time limit of the configuration execution.
+// Non-positive value resets it to the default, values below the minimum are raised to the minimum.
+func (srv *Service) setExecutionTimeout(timeout time.Duration) {
+	switch {
+	case timeout <= 0:
+		timeout = defaultExecutionTimeout
+	case timeout < minimumExecutionTimeout:
+		timeout = minimumExecutionTimeout
+	}
+
+	srv.executionTimeout.Store(int64(timeout))
+}
+
 // CurrentCommitID returns currently applied commit ID.
 func (srv *Service) CurrentCommitID() string {
 	srv.commitMutex.RLock()
@@ -181,6 +214,7 @@ func (srv *Service) applyDefaultSettings() {
 	srv.softwareInventoryEnabled.Store(true)
 	srv.processInventoryEnabled.Store(false)
 	srv.runInterval = defaultAgentInterval
+	srv.setExecutionTimeout(0)
 	setPkgCacheTTL(0)
 }
 
@@ -203,11 +237,12 @@ func (srv *Service) UpdateMetricsMonitorState(configData *CommittedConfig) {
 	}
 }
 
-const executeTimeout = time.Hour
-
-// Execute configuration bundles on the system and return true if system should be rebooted.
+// Execute configuration bundles on the system.
+// Execution is limited by the configured execution timeout.
 func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) error {
 	log.Debugf("trying to acquire execution lock")
+
+	executionTimeout := srv.ExecutionTimeout()
 
 	parametersBundle := configData.BundleData.Parameters
 	if parametersBundle == nil {
@@ -215,10 +250,10 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 	}
 	ctxWithParameters := parametersBundle.Context(ctx, srv.urlSigner)
 
-	ctxWithTimeout, cancel := context.WithTimeout(ctxWithParameters, executeTimeout)
+	ctxWithTimeout, cancel := context.WithTimeout(ctxWithParameters, executionTimeout)
 	defer cancel()
 
-	if err := srv.acquireLock(executeTimeout); err != nil {
+	if err := srv.acquireLock(executionTimeout); err != nil {
 		log.Infof("failed to acquire execution lock - %v", err)
 		return nil
 	}
@@ -239,12 +274,15 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 	for _, bundleName := range configData.Bundles {
 		log.Debugf("starting processing of bundle %s", bundleName)
 
-		// Check if context deadline was reached and stop bundles execution if so.
-		if err := ctxWithTimeout.Err(); err != nil {
+		// Stop bundles execution if execution time limit was reached.
+		if ctxWithTimeout.Err() != nil {
+			internalCtx := reporter.BundleContext(ctx, bundleAgentInternal, "")
+			ReportWarning(internalCtx, nil,
+				"Configuration execution exceeded time limit of %s. Remaining bundles will be applied during the next run.",
+				executionTimeout)
 			break
 		}
 
-		// we use srv.UpdateSettings method to execute the settings bundle
 		switch bundleName {
 		case BundleSettings:
 			// we use srv.UpdateSettings method to execute the settings bundle

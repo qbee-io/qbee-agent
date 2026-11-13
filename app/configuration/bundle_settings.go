@@ -33,7 +33,8 @@ import (
 //	  "software_inventory": true,
 //	  "process_inventory": true,
 //	  "agentinterval": 10,
-//	  "pkg_cache_ttl": 24
+//	  "pkg_cache_ttl": 24,
+//	  "execution_timeout": 60
 //	}
 type SettingsBundle struct {
 	Metadata
@@ -59,6 +60,10 @@ type SettingsBundle struct {
 	// PkgCacheTTL defines how long the list of installed packages and available updates is cached (in hours).
 	// If not set (or not positive), the default of 24 hours is used.
 	PkgCacheTTL int `json:"pkg_cache_ttl,omitempty"`
+
+	// ExecutionTimeout defines the time limit of the configuration execution (in minutes).
+	// If not set (or not positive), the default of 60 minutes is used. Values below 5 minutes are raised to 5 minutes.
+	ExecutionTimeout int `json:"execution_timeout,omitempty"`
 }
 
 // Execute settings config on the system.
@@ -69,6 +74,7 @@ func (s SettingsBundle) Execute(service *Service) {
 	service.processInventoryEnabled.Store(s.EnableProcessInventory)
 
 	setPkgCacheTTL(time.Duration(s.PkgCacheTTL) * time.Hour)
+	service.setExecutionTimeout(time.Duration(s.ExecutionTimeout) * time.Minute)
 
 	// Do not accept run interval smaller than the default agent interval.
 	if s.RunInterval < minimumAgentInterval {
