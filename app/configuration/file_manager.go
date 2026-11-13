@@ -269,6 +269,16 @@ func (srv *Service) resumeDownload(ctx context.Context, src string, partialFile 
 		return fmt.Errorf("not enough disk space: need %d bytes plus %d bytes overhead, have %d bytes", remaining, freeDiskOverhead, bytesAvail)
 	}
 
+	// track download progress, so the execution watchdog can tell a slow download from a hanging one
+	monitor := executionMonitorFromContext(ctx)
+	var downloadTransfer *transfer
+	if monitor != nil {
+		if downloadTransfer, err = monitor.startTransfer(src); err != nil {
+			return err
+		}
+		defer monitor.finishTransfer(downloadTransfer)
+	}
+
 	srcFile, err := srv.getFile(ctx, src, offset)
 	if err != nil {
 		return err
@@ -279,9 +289,23 @@ func (srv *Service) resumeDownload(ctx context.Context, src string, partialFile 
 		return err
 	}
 
-	_, err = io.CopyN(partialFile, srcFile, remaining)
+	var srcReader io.Reader = srcFile
+	if downloadTransfer != nil {
+		srcReader = &progressReader{reader: srcFile, transfer: downloadTransfer}
+	}
 
-	return err
+	if _, err = io.CopyN(partialFile, srcReader, remaining); err != nil {
+		return err
+	}
+
+	// When the download finished in overtime, don't let the caller act on the downloaded file
+	// (e.g. install a package or RAUC bundle), as the execution is about to be cancelled.
+	// The complete partial download is kept and installed during the next run.
+	if monitor != nil && monitor.inOvertime() {
+		return fmt.Errorf("download completed after %w, it will be installed during the next run", errExecutionTimeExceeded)
+	}
+
+	return nil
 }
 
 // installPartialDownload sets ownership of the verified partialFile and renames it to dst.

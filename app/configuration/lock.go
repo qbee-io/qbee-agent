@@ -21,6 +21,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"go.qbee.io/agent/app/log"
 )
 
 const lockFileName = "config.lock"
@@ -73,6 +75,14 @@ func (srv *Service) acquireLock(lockFileTimeout time.Duration) error {
 	}
 
 	return nil
+}
+
+// touchLock updates the modification time of the lock file, so it isn't considered expired.
+func (srv *Service) touchLock() {
+	now := time.Now()
+	if err := os.Chtimes(srv.lockFilePath(), now, now); err != nil {
+		log.Warnf("failed to refresh execution lock - %v", err)
+	}
 }
 
 // releaseLock for the configuration execution.

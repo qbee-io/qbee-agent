@@ -270,20 +270,13 @@ func (srv *Service) UpdateMetricsMonitorState(configData *CommittedConfig) {
 }
 
 // Execute configuration bundles on the system.
-// Execution is limited by the configured execution timeout.
+//
+// Execution is limited by the configured execution timeout. When the timeout is reached while file downloads
+// are still making progress, those downloads are allowed to finish, but no further work is started.
 func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) error {
 	log.Debugf("trying to acquire execution lock")
 
 	executionTimeout := srv.ExecutionTimeout()
-
-	parametersBundle := configData.BundleData.Parameters
-	if parametersBundle == nil {
-		parametersBundle = new(ParametersBundle)
-	}
-	ctxWithParameters := parametersBundle.Context(ctx, srv.urlSigner)
-
-	ctxWithTimeout, cancel := context.WithTimeout(ctxWithParameters, executionTimeout)
-	defer cancel()
 
 	if err := srv.acquireLock(executionTimeout); err != nil {
 		log.Infof("failed to acquire execution lock - %v", err)
@@ -301,6 +294,27 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 	srv.activeExecutionTimeout.Store(int64(executionTimeout))
 	defer srv.activeExecutionTimeout.Store(0)
 
+	parametersBundle := configData.BundleData.Parameters
+	if parametersBundle == nil {
+		parametersBundle = new(ParametersBundle)
+	}
+	ctxWithParameters := parametersBundle.Context(ctx, srv.urlSigner)
+
+	monitor := newExecutionMonitor(executionTimeout)
+	// keep the lock fresh while in overtime, so it doesn't expire while we are still running
+	monitor.onOvertimeTick = srv.touchLock
+
+	execCtx, cancel := context.WithCancel(withExecutionMonitor(ctxWithParameters, monitor))
+	watchDone := make(chan struct{})
+	go func() {
+		defer close(watchDone)
+		monitor.watch(execCtx, cancel)
+	}()
+	defer func() {
+		cancel()
+		<-watchDone
+	}()
+
 	// disable connectivity watchdog if not set in the configData
 	if !configData.HasBundle(BundleConnectivityWatchdog) {
 		log.Debugf("connectivity watchdog bundle not found - disabling watchdog")
@@ -313,7 +327,7 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 		log.Debugf("starting processing of bundle %s", bundleName)
 
 		// Stop bundles execution if execution time limit was reached.
-		if ctxWithTimeout.Err() != nil {
+		if execCtx.Err() != nil || monitor.inOvertime() {
 			log.Warnf("configuration execution exceeded time limit of %s - remaining bundles will be applied during "+
 				"the next run", executionTimeout)
 
@@ -345,7 +359,7 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 			continue
 		}
 
-		bundleCtx := reporter.BundleContext(ctxWithTimeout, bundleName, bundle.BundleCommitID())
+		bundleCtx := reporter.BundleContext(execCtx, bundleName, bundle.BundleCommitID())
 
 		log.Debugf("executing bundle %s", bundleName)
 		if err := bundle.Execute(bundleCtx, srv); err != nil {
