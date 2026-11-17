@@ -62,6 +62,18 @@ type Agent struct {
 	remoteAccess  *remoteaccess.Service
 	// disableRemoteAccess is used to disable remote access for RunOnce
 	disableRemoteAccess bool
+
+	// The functions below implement parts of the agent's work. NewWithoutCredentials sets them to their default
+	// implementations, tests replace them, so the agent can be tested without side effects on the system.
+
+	// rebootCommand schedules the system reboot.
+	rebootCommand func(ctx context.Context) ([]byte, error)
+
+	// executeConfig executes the configuration.
+	executeConfig func(ctx context.Context, configData *configuration.CommittedConfig) error
+
+	// collectInventories collects and delivers inventories.
+	collectInventories func(ctx context.Context) error
 }
 
 // Run the main control loop of the agent.
@@ -191,7 +203,7 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 		agent.do(ctx, "remote-access", agent.doRemoteAccess(configData))
 		agent.do(ctx, "config", agent.doConfig(configData))
 		agent.do(ctx, "metrics", agent.doMetrics)
-		agent.do(ctx, "inventories", agent.doInventories)
+		agent.do(ctx, "inventories", agent.collectInventories)
 	case QuickRun:
 		agent.do(ctx, "system-inventory", agent.doSystemInventory)
 	}
@@ -224,7 +236,7 @@ func (agent *Agent) doMetrics(ctx context.Context) error {
 // doConfig returns a function which executes the committed configuration.
 func (agent *Agent) doConfig(configData *configuration.CommittedConfig) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
-		if err := agent.Configuration.Execute(ctx, configData); err != nil {
+		if err := agent.executeConfig(ctx, configData); err != nil {
 			return fmt.Errorf("failed to apply configuration: %w", err)
 		}
 		return nil
@@ -262,16 +274,8 @@ func (agent *Agent) doRemoteAccess(cfg *configuration.CommittedConfig) func(ctx 
 
 // RebootSystem reboots the host system.
 func (agent *Agent) RebootSystem(ctx context.Context) {
-
-	rebootCmd, err := utils.RebootCommand()
-
+	output, err := agent.rebootCommand(ctx)
 	if err != nil {
-		log.Errorf("reboot command not found: %v", err)
-		return
-	}
-
-	var output []byte
-	if output, err = utils.RunPrivilegedCommand(ctx, rebootCmd); err != nil {
 		log.Errorf("scheduling system reboot failed: %v", err)
 		return
 	}
@@ -279,6 +283,16 @@ func (agent *Agent) RebootSystem(ctx context.Context) {
 	log.Infof("scheduling system reboot completed: %s", output)
 
 	agent.stop <- true
+}
+
+// runSystemRebootCommand schedules the system reboot using the system's reboot command.
+func runSystemRebootCommand(ctx context.Context) ([]byte, error) {
+	rebootCmd, err := utils.RebootCommand()
+	if err != nil {
+		return nil, fmt.Errorf("reboot command not found: %w", err)
+	}
+
+	return utils.RunPrivilegedCommand(ctx, rebootCmd)
 }
 
 // Wait for the agent to finish any ongoing processing to finish.
@@ -333,6 +347,9 @@ func NewWithoutCredentials(cfg *Config) (*Agent, error) {
 	agent.Metrics = metrics.New(agent.api)
 	agent.Attributes = attributes.New(agent.api)
 	agent.Configuration = configuration.New(agent.api, appDir, cacheDir).WithURLSigner(agent).WithMetricsService(agent.Metrics)
+	agent.rebootCommand = runSystemRebootCommand
+	agent.executeConfig = agent.Configuration.Execute
+	agent.collectInventories = agent.doInventories
 	agent.remoteAccess = remoteaccess.New().
 		WithConfigReloadNotifier(agent.update)
 	agent.loopTicker = time.NewTicker(agent.Configuration.RunInterval())
