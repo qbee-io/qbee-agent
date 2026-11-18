@@ -41,7 +41,7 @@ func (c ConnectivityWatchdogBundle) Execute(_ context.Context, service *Service)
 		return fmt.Errorf("invalid threshold value")
 	}
 
-	service.connectivityWatchdogThreshold = threshold
+	service.connectivityWatchdogThreshold.Store(int64(threshold))
 
 	return nil
 }
