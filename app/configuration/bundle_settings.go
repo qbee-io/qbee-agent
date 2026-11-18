@@ -63,10 +63,10 @@ type SettingsBundle struct {
 
 // Execute settings config on the system.
 func (s SettingsBundle) Execute(service *Service) {
-	service.reportingEnabled = s.EnableReports
+	service.reportingEnabled.Store(s.EnableReports)
 	service.metricsEnabled = s.EnableMetrics
-	service.softwareInventoryEnabled = s.EnableSoftwareInventory
-	service.processInventoryEnabled = s.EnableProcessInventory
+	service.softwareInventoryEnabled.Store(s.EnableSoftwareInventory)
+	service.processInventoryEnabled.Store(s.EnableProcessInventory)
 
 	setPkgCacheTTL(time.Duration(s.PkgCacheTTL) * time.Hour)
 

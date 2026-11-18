@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.qbee.io/agent/app/api"
@@ -51,6 +52,10 @@ type Service struct {
 	// userCacheDirectory is a directory where the agent stores its non-root user cache data
 	userCacheDirectory string
 
+	// commitMutex guards currentCommitID and configChangeTime, which are written by configuration execution
+	// and read during check-in.
+	commitMutex sync.RWMutex
+
 	// currentCommitID represents commit ID of committed device config currently applied to the system
 	currentCommitID string
 
@@ -60,19 +65,21 @@ type Service struct {
 	// urlSigner is used to sign URLs for the device hub
 	urlSigner URLSigner
 
-	rebootAfterRun           bool
+	// Fields of atomic types are accessed by both check-in and configuration execution, which run concurrently.
+	// Other fields are not accessed by configuration execution.
+	rebootAfterRun           atomic.Bool
 	reportToConsole          bool
-	reportingEnabled         bool
+	reportingEnabled         atomic.Bool
 	metricsEnabled           bool
-	softwareInventoryEnabled bool
-	processInventoryEnabled  bool
+	softwareInventoryEnabled atomic.Bool
+	processInventoryEnabled  atomic.Bool
 
 	runInterval               int
 	runIntervalChangeNotifier chan time.Duration
 
 	// connectivityWatchdogThreshold defines failed API connections threshold at which server will be rebooted
 	// 0 -> disabled
-	connectivityWatchdogThreshold int
+	connectivityWatchdogThreshold atomic.Int64
 	failedConnectionsCount        int
 
 	// metrics service
@@ -82,7 +89,7 @@ type Service struct {
 	firstRunRetryCounter int
 
 	// configEndpointUnreachable is true if the config endpoint is unreachable
-	configEndpointUnreachable bool
+	configEndpointUnreachable atomic.Bool
 
 	// reportsBufferMutex serializes access to the reports buffer file
 	reportsBufferMutex sync.Mutex
@@ -128,17 +135,17 @@ func (srv *Service) MetricsEnabled() bool {
 
 // ReportingEnabled returns true if reporting is enabled.
 func (srv *Service) ReportingEnabled() bool {
-	return srv.reportingEnabled
+	return srv.reportingEnabled.Load()
 }
 
 // CollectSoftwareInventory returns true if software inventory collection is enabled.
 func (srv *Service) CollectSoftwareInventory() bool {
-	return srv.softwareInventoryEnabled
+	return srv.softwareInventoryEnabled.Load()
 }
 
 // CollectProcessInventory returns true if process inventory collection is enabled.
 func (srv *Service) CollectProcessInventory() bool {
-	return srv.processInventoryEnabled
+	return srv.processInventoryEnabled.Load()
 }
 
 // RunInterval returns agent's run interval.
@@ -148,11 +155,17 @@ func (srv *Service) RunInterval() time.Duration {
 
 // CurrentCommitID returns currently applied commit ID.
 func (srv *Service) CurrentCommitID() string {
+	srv.commitMutex.RLock()
+	defer srv.commitMutex.RUnlock()
+
 	return srv.currentCommitID
 }
 
 // ConfigChangeTimestamp returns timestamp when the configuration commit ID changed last time.
 func (srv *Service) ConfigChangeTimestamp() int64 {
+	srv.commitMutex.RLock()
+	defer srv.commitMutex.RUnlock()
+
 	return srv.configChangeTime.Unix()
 }
 
@@ -163,10 +176,10 @@ func (srv *Service) EnableConsoleReporting() {
 
 // applyDefaultSettings to the agent.
 func (srv *Service) applyDefaultSettings() {
-	srv.reportingEnabled = true
+	srv.reportingEnabled.Store(true)
 	srv.metricsEnabled = true
-	srv.softwareInventoryEnabled = true
-	srv.processInventoryEnabled = false
+	srv.softwareInventoryEnabled.Store(true)
+	srv.processInventoryEnabled.Store(false)
 	srv.runInterval = defaultAgentInterval
 	setPkgCacheTTL(0)
 }
@@ -218,7 +231,7 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 	// disable connectivity watchdog if not set in the configData
 	if !configData.HasBundle(BundleConnectivityWatchdog) {
 		log.Debugf("connectivity watchdog bundle not found - disabling watchdog")
-		srv.connectivityWatchdogThreshold = 0
+		srv.connectivityWatchdogThreshold.Store(0)
 	}
 
 	reporter := NewReporter(configData.CommitID, srv.reportToConsole, configData.SecretsList(ctxWithParameters))
@@ -264,13 +277,15 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 	}
 
 	// assign config's commitID as current
+	srv.commitMutex.Lock()
 	if srv.currentCommitID != configData.CommitID {
 		log.Debugf("updating current commit ID to %s", configData.CommitID)
 		srv.currentCommitID = configData.CommitID
 		srv.configChangeTime = time.Now()
 	}
+	srv.commitMutex.Unlock()
 
-	if !srv.reportingEnabled {
+	if !srv.ReportingEnabled() {
 		log.Debugf("reporting is disabled - skipping sending reports")
 		return nil
 	}
@@ -297,22 +312,23 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 
 // RebootAfterRun schedules system reboot after current agent run.
 func (srv *Service) RebootAfterRun(ctx context.Context) {
-	if srv.rebootAfterRun {
+	if !srv.rebootAfterRun.CompareAndSwap(false, true) {
 		return
 	}
 
 	ReportWarning(ctx, nil, "Scheduling system reboot.")
-	srv.rebootAfterRun = true
 }
 
 // ShouldReboot returns true if system should be restarted after agent run.
 func (srv *Service) ShouldReboot() bool {
-	return srv.rebootAfterRun
+	return srv.rebootAfterRun.Load()
 }
 
 // reportAPIError tracks failed API connection attempts, so we can trigger reboot when connectivity watchdog is enabled.
 func (srv *Service) reportAPIError(ctx context.Context, err error) {
-	if srv.connectivityWatchdogThreshold == 0 {
+	// read once, as configuration execution may change it concurrently
+	threshold := srv.connectivityWatchdogThreshold.Load()
+	if threshold == 0 {
 		return
 	}
 
@@ -323,9 +339,9 @@ func (srv *Service) reportAPIError(ctx context.Context, err error) {
 
 	srv.failedConnectionsCount++
 
-	if srv.failedConnectionsCount >= srv.connectivityWatchdogThreshold {
+	if int64(srv.failedConnectionsCount) >= threshold {
 		// since we don't have a reporter defined on this context, we need to create a new one
-		reporter := NewReporter(srv.currentCommitID, srv.reportToConsole, nil)
+		reporter := NewReporter(srv.CurrentCommitID(), srv.reportToConsole, nil)
 		bundleCtx := reporter.BundleContext(ctx, BundleConnectivityWatchdog, "")
 
 		srv.RebootAfterRun(bundleCtx)
@@ -347,7 +363,7 @@ func (srv *Service) ReportExhaustedGoroutineBudget(ctx context.Context) (bool, e
 	}
 
 	// since we don't have a reporter defined on this context, we need to create a new one
-	reporter := NewReporter(srv.currentCommitID, srv.reportToConsole, nil)
+	reporter := NewReporter(srv.CurrentCommitID(), srv.reportToConsole, nil)
 	bundleCtx := reporter.BundleContext(ctx, bundleAgentInternal, "")
 
 	ReportCritical(bundleCtx, nil, "goroutine budget exhausted, skipping agent run")
@@ -632,5 +648,5 @@ func (srv *Service) loadConfig(cfg *CommittedConfig) error {
 
 // IsConfigEndpointUnreachable returns true if the configuration endpoint is unreachable.
 func (srv *Service) IsConfigEndpointUnreachable() bool {
-	return srv.configEndpointUnreachable
+	return srv.configEndpointUnreachable.Load()
 }

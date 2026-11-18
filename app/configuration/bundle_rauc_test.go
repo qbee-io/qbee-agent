@@ -19,7 +19,7 @@ func Test_Should_Generate_Rauc_Path(t *testing.T) {
 	cacheDir := t.TempDir()
 
 	service := New(apiClient, appDir, cacheDir)
-	service.configEndpointUnreachable = false
+	service.configEndpointUnreachable.Store(false)
 	service.WithURLSigner(new(mockURLSigner))
 
 	raucBundle := RaucBundle{
@@ -30,7 +30,7 @@ func Test_Should_Generate_Rauc_Path(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, raucPath != "")
 
-	service.configEndpointUnreachable = true
+	service.configEndpointUnreachable.Store(true)
 	raucPath, err = raucBundle.resolveRaucPath(context.Background(), service)
 	assert.NoError(t, err)
 	assert.True(t, raucPath == "")

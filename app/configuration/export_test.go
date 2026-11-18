@@ -26,7 +26,7 @@ import (
 
 // ResetRebootAfterRun allows to reset internal rebootAfterRun flag from tests.
 func (srv *Service) ResetRebootAfterRun() {
-	srv.rebootAfterRun = false
+	srv.rebootAfterRun.Store(false)
 }
 
 // ExecuteTestConfigInDocker executes provided config inside a docker container and returns reports and logs.

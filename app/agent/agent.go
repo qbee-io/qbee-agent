@@ -26,6 +26,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -54,6 +55,15 @@ type Agent struct {
 	update     chan bool
 	stop       chan bool
 	reboot     chan bool
+
+	// configLock is held during configuration execution and the inventories collection which follows it.
+	// It's separate from lock (held during check-in), so a long-running execution doesn't stop the device
+	// from checking in. Code which needs both must lock configLock first, to avoid deadlocks.
+	configLock sync.Mutex
+
+	// rebootPending is set when a reboot is requested and cleared if the reboot fails.
+	// While set, no further reboot is requested and no new configuration execution is started.
+	rebootPending atomic.Bool
 
 	Inventory     *inventory.Service
 	Configuration *configuration.Service
@@ -109,12 +119,13 @@ func (agent *Agent) Run(ctx context.Context) error {
 			// and return
 			return nil
 		case <-agent.reboot:
-			agent.RebootSystem(ctx)
+			// the reboot waits for configuration execution to finish, so don't block this loop meanwhile
+			go agent.RebootSystem(ctx)
 
 		case <-stopSignalCh:
 			log.Debugf("received interrupt signal")
 
-			agent.stop <- true
+			agent.Stop()
 
 		case newInterval := <-intervalChange:
 			log.Debugf("run interval updated: %s", newInterval)
@@ -138,8 +149,20 @@ func (agent *Agent) Run(ctx context.Context) error {
 }
 
 // Stop the agent.
+//
+// It only requests the stop: the Run loop receives it, waits for ongoing processing to finish and returns.
+// Stop never blocks, so it's safe to call from anywhere, any number of times:
+//   - the stop channel has room for one request. If a request is already queued, sending another would
+//     block until the Run loop receives the first one. The select's default case skips the send instead,
+//     as the queued request will stop the agent anyway.
+//   - the Run loop itself calls Stop (on SIGTERM), and it's the only receiver of the stop channel.
+//     A blocking send there would wait for the loop itself, which would never happen (a deadlock).
+//   - after the Run loop returned, nothing receives from the stop channel anymore.
 func (agent *Agent) Stop() {
-	agent.stop <- true
+	select {
+	case agent.stop <- true:
+	default:
+	}
 }
 
 // RunOnceMode defines the mode of the RunOnce function.
@@ -157,6 +180,10 @@ const (
 )
 
 // RunOnce performs a single run of the agent routines.
+//
+// The check-in (configuration retrieval, remote access and metrics) is done synchronously.
+// Configuration execution and inventories collection are started in the background,
+// unless a previous configuration execution is still in progress.
 func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 	// lock the agent to prevent concurrent runs, but if the lock is already held, skip the run
 	// we do that, so we don't 'accumulate' runs if the agent is slow
@@ -167,10 +194,7 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 	defer func() {
 		agent.lock.Unlock()
 
-		if agent.Configuration.ShouldReboot() {
-			log.Warnf("reboot condition detected, scheduling system reboot")
-			agent.reboot <- true
-		}
+		agent.rebootIfScheduled()
 
 		if err := recover(); err != nil {
 			log.Errorf("fatal agent error: %v", err)
@@ -187,7 +211,6 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 	}
 
 	agent.Configuration.UpdateSettings(configData)
-	agent.Configuration.UpdateMetricsMonitorState(configData)
 
 	// Check if we have enough goroutine budget to run the agent, if not, skip the run.
 	// Do this after we have updated the configuration, so that the device is online.
@@ -201,12 +224,75 @@ func (agent *Agent) RunOnce(ctx context.Context, mode RunOnceMode) {
 	switch mode {
 	case FullRun, FullRunFresh:
 		agent.do(ctx, "remote-access", agent.doRemoteAccess(configData))
-		agent.do(ctx, "config", agent.doConfig(configData))
+		agent.startConfigRun(ctx, configData)
 		agent.do(ctx, "metrics", agent.doMetrics)
-		agent.do(ctx, "inventories", agent.collectInventories)
 	case QuickRun:
 		agent.do(ctx, "system-inventory", agent.doSystemInventory)
 	}
+}
+
+// startConfigRun executes the configuration and collects inventories in the background.
+// If a configuration execution is already in progress, or a reboot is pending, it does nothing.
+func (agent *Agent) startConfigRun(ctx context.Context, configData *configuration.CommittedConfig) {
+	// acquire the lock before starting the goroutine, so Wait() can't miss the execution
+	if !agent.configLock.TryLock() {
+		log.Infof("configuration execution still in progress - skipping")
+		return
+	}
+
+	// don't start work which the pending reboot would interrupt
+	if agent.rebootPending.Load() {
+		agent.configLock.Unlock()
+		log.Infof("system reboot pending - skipping configuration execution")
+		return
+	}
+
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Errorf("fatal configuration execution error: %v", err)
+			}
+
+			// request the reboot (if scheduled) before releasing the lock, so no new execution starts in between
+			agent.rebootIfScheduled()
+			agent.configLock.Unlock()
+		}()
+
+		// Reset metrics monitor state here rather than during check-in, so it can't race with
+		// an execution of an older configuration, which could restore the state after the reset.
+		agent.Configuration.UpdateMetricsMonitorState(configData)
+
+		agent.do(ctx, "config", agent.doConfig(configData))
+
+		// inventories reflect the result of the configuration execution
+		// and may conflict with it (e.g. package manager locks), so collect them afterward
+		agent.do(ctx, "inventories", agent.collectInventories)
+	}()
+}
+
+// rebootIfScheduled requests a system reboot from the Run loop, if one was scheduled and isn't pending already.
+//
+// It's called after every check-in and every configuration execution, as both can schedule a reboot
+// (e.g. connectivity watchdog during check-in, a bundle during configuration execution). They run concurrently,
+// so both may detect the same scheduled reboot. Only the first one requests it.
+func (agent *Agent) rebootIfScheduled() {
+	if !agent.Configuration.ShouldReboot() {
+		return
+	}
+
+	// CompareAndSwap sets rebootPending and returns true only if it wasn't set already. This check-and-set is
+	// a single atomic operation, so two concurrent callers can't both succeed.
+	// rebootPending stays set until RebootSystem fails, so the reboot is requested once, not after every run.
+	// After a failure, it's cleared, so the next run requests the reboot again.
+	if !agent.rebootPending.CompareAndSwap(false, true) {
+		return
+	}
+
+	log.Warnf("reboot condition detected, scheduling system reboot")
+
+	// This never blocks: the channel has room for one request, and it's empty whenever rebootPending
+	// is not set, because the Run loop has already received the previous request.
+	agent.reboot <- true
 }
 
 // do execute a named function and report on errors.
@@ -273,16 +359,23 @@ func (agent *Agent) doRemoteAccess(cfg *configuration.CommittedConfig) func(ctx 
 }
 
 // RebootSystem reboots the host system.
+// It waits for the configuration execution and check-in in progress to finish, so the reboot doesn't interrupt them.
+// No new configuration execution starts meanwhile, as rebootPending is set.
 func (agent *Agent) RebootSystem(ctx context.Context) {
+	agent.Wait()
+
 	output, err := agent.rebootCommand(ctx)
 	if err != nil {
 		log.Errorf("scheduling system reboot failed: %v", err)
+
+		// let the next run request the reboot again
+		agent.rebootPending.Store(false)
 		return
 	}
 
 	log.Infof("scheduling system reboot completed: %s", output)
 
-	agent.stop <- true
+	agent.Stop()
 }
 
 // runSystemRebootCommand schedules the system reboot using the system's reboot command.
@@ -297,6 +390,9 @@ func runSystemRebootCommand(ctx context.Context) ([]byte, error) {
 
 // Wait for the agent to finish any ongoing processing to finish.
 func (agent *Agent) Wait() {
+	agent.configLock.Lock()
+	defer agent.configLock.Unlock()
+
 	agent.lock.Lock()
 	defer agent.lock.Unlock()
 }
