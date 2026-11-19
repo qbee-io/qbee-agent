@@ -19,6 +19,7 @@ package configuration
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -28,7 +29,7 @@ import (
 )
 
 const (
-	// downloadStallTimeout defines for how long a download may receive no data before it is considered hanging.
+	// downloadStallTimeout defines for how long a download may receive no data before it is cancelled as hanging.
 	downloadStallTimeout = 2 * time.Minute
 
 	// executionWatchdogInterval defines how often the execution watchdog checks the execution state.
@@ -39,26 +40,25 @@ const (
 // exceeded its time limit.
 var errExecutionTimeExceeded = errors.New("configuration execution time limit exceeded")
 
+// errDownloadStalled is returned for downloads which were cancelled, because they received no data within the
+// stall timeout.
+var errDownloadStalled = errors.New("download received no data within the stall timeout")
+
 // transfer is a file download in progress.
 type transfer struct {
 	src string
-
-	// lastProgress is the time (in unix nanoseconds) the transfer last received data.
-	lastProgress atomic.Int64
 }
 
 // executionMonitor enforces the time limit of a configuration execution.
 //
-// When the time limit is reached, the execution is cancelled, unless file downloads are still in progress and
-// are not hanging (i.e. received data within the stall timeout). In that case, the execution goes into overtime:
-// no new downloads are started and the execution is cancelled as soon as there are no progressing downloads left.
+// When the time limit is reached, the execution is cancelled, unless file downloads are still in progress.
+// Downloads are cancelled when they receive no data within the stall timeout (see stallWatch), so a download in
+// progress is not hanging. In that case, the execution goes into overtime: no new downloads are started and
+// the execution is cancelled as soon as there are no downloads in progress left.
 type executionMonitor struct {
 	timeout       time.Duration
 	stallTimeout  time.Duration
 	checkInterval time.Duration
-
-	// onOvertimeTick is called on every watchdog check during overtime.
-	onOvertimeTick func()
 
 	overtime atomic.Bool
 
@@ -92,7 +92,6 @@ func (m *executionMonitor) startTransfer(src string) (*transfer, error) {
 	}
 
 	t := &transfer{src: src}
-	t.lastProgress.Store(time.Now().UnixNano())
 	m.transfers[t] = struct{}{}
 
 	return t, nil
@@ -106,15 +105,13 @@ func (m *executionMonitor) finishTransfer(t *transfer) {
 	delete(m.transfers, t)
 }
 
-// progressingTransfer returns a download which received data within the stall timeout (if any).
-func (m *executionMonitor) progressingTransfer(now time.Time) *transfer {
+// activeTransfer returns a download in progress (if any).
+func (m *executionMonitor) activeTransfer() *transfer {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
 	for t := range m.transfers {
-		if now.Sub(time.Unix(0, t.lastProgress.Load())) < m.stallTimeout {
-			return t
-		}
+		return t
 	}
 
 	return nil
@@ -137,7 +134,7 @@ func (m *executionMonitor) watch(ctx context.Context, cancel context.CancelFunc)
 				continue
 			}
 
-			t := m.progressingTransfer(now)
+			t := m.activeTransfer()
 			if t == nil {
 				log.Warnf("configuration execution exceeded time limit of %s - stopping", m.timeout)
 				m.overtime.Store(true)
@@ -148,10 +145,6 @@ func (m *executionMonitor) watch(ctx context.Context, cancel context.CancelFunc)
 			if !m.overtime.Swap(true) {
 				log.Infof("configuration execution exceeded time limit of %s - waiting for download of %s to finish",
 					m.timeout, t.src)
-			}
-
-			if m.onOvertimeTick != nil {
-				m.onOvertimeTick()
 			}
 		}
 	}
@@ -170,17 +163,55 @@ func executionMonitorFromContext(ctx context.Context) *executionMonitor {
 	return m
 }
 
+// stallWatch cancels a download which receives no data within the stall timeout.
+type stallWatch struct {
+	ctx     context.Context
+	cancel  context.CancelCauseFunc
+	timer   *time.Timer
+	timeout time.Duration
+}
+
+// watchStall returns a stall watch, whose context is used for the download.
+// The context is cancelled when the download receives no data within timeout. Call stop when the download is done.
+func watchStall(ctx context.Context, timeout time.Duration) *stallWatch {
+	w := &stallWatch{timeout: timeout}
+	w.ctx, w.cancel = context.WithCancelCause(ctx)
+	w.timer = time.AfterFunc(timeout, func() { w.cancel(errDownloadStalled) })
+
+	return w
+}
+
+// progress records that the download received data.
+func (w *stallWatch) progress() {
+	w.timer.Reset(w.timeout)
+}
+
+// stop the stall watch.
+func (w *stallWatch) stop() {
+	w.timer.Stop()
+	w.cancel(nil)
+}
+
+// wrap returns err, marked as errDownloadStalled if the download was cancelled for receiving no data.
+func (w *stallWatch) wrap(err error) error {
+	if errors.Is(context.Cause(w.ctx), errDownloadStalled) {
+		return fmt.Errorf("%w: %w", errDownloadStalled, err)
+	}
+
+	return err
+}
+
 // progressReader records download progress on every successful read.
 type progressReader struct {
-	reader   io.Reader
-	transfer *transfer
+	reader io.Reader
+	stall  *stallWatch
 }
 
 // Read implements io.Reader.
 func (r *progressReader) Read(p []byte) (int, error) {
 	n, err := r.reader.Read(p)
 	if n > 0 {
-		r.transfer.lastProgress.Store(time.Now().UnixNano())
+		r.stall.progress()
 	}
 
 	return n, err
