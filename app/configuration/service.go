@@ -45,6 +45,10 @@ const (
 
 	// minimumExecutionTimeout is the smallest execution timeout accepted from the settings bundle.
 	minimumExecutionTimeout = 5 * time.Minute
+
+	// maximumExecutionTimeout is the largest execution timeout accepted from the settings bundle.
+	// It also limits how long signed URLs are valid (see Agent.signedURLTTL).
+	maximumExecutionTimeout = 24 * time.Hour
 )
 
 // Service provides configuration management functionality for the agent.
@@ -184,13 +188,20 @@ func (srv *Service) ActiveExecutionTimeout() time.Duration {
 }
 
 // setExecutionTimeout sets the time limit of the configuration execution.
-// Non-positive value resets it to the default, values below the minimum are raised to the minimum.
-func (srv *Service) setExecutionTimeout(timeout time.Duration) {
+// Non-positive value resets it to the default, values outside the allowed range are raised or lowered to it.
+func (srv *Service) setExecutionTimeout(minutes int) {
+	// the value is checked before it's converted to time.Duration, which overflows for very large values
+	var timeout time.Duration
+
 	switch {
-	case timeout <= 0:
+	case minutes <= 0:
 		timeout = defaultExecutionTimeout
-	case timeout < minimumExecutionTimeout:
+	case minutes < int(minimumExecutionTimeout/time.Minute):
 		timeout = minimumExecutionTimeout
+	case minutes > int(maximumExecutionTimeout/time.Minute):
+		timeout = maximumExecutionTimeout
+	default:
+		timeout = time.Duration(minutes) * time.Minute
 	}
 
 	srv.executionTimeout.Store(int64(timeout))

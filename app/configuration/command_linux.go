@@ -51,8 +51,12 @@ func RunCommand(ctx context.Context, command string) ([]byte, error) {
 	}
 
 	// when ctx is cancelled (e.g. the execution time limit is reached), the command is killed with all its
-	// subprocesses, and we don't wait for subprocesses which keep the output open
+	// subprocesses, which also closes the output we wait for
 	cmd := utils.NewCommand(ctx, []string{shell, "-c", command})
+
+	// keep waiting for the output of background subprocesses (e.g. "sleep 2 &") after the shell exits,
+	// otherwise valid commands fail when their subprocesses outlive the shell by more than WaitDelay
+	cmd.WaitDelay = 0
 
 	// append tail buffer to Stdout to collect only most recent bytes
 	tailBuffer := utils.NewTailBuffer(commandOutputBytesLimit)

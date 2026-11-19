@@ -17,6 +17,7 @@
 package configuration
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -26,19 +27,23 @@ import (
 func TestService_setExecutionTimeout(t *testing.T) {
 	tests := []struct {
 		name     string
-		timeout  time.Duration
+		minutes  int
 		expected time.Duration
 	}{
-		{name: "unset", timeout: 0, expected: defaultExecutionTimeout},
-		{name: "negative", timeout: -time.Minute, expected: defaultExecutionTimeout},
-		{name: "below minimum", timeout: time.Minute, expected: minimumExecutionTimeout},
-		{name: "valid", timeout: 3 * time.Hour, expected: 3 * time.Hour},
+		{name: "unset", minutes: 0, expected: defaultExecutionTimeout},
+		{name: "negative", minutes: -1, expected: defaultExecutionTimeout},
+		{name: "negative overflowing as duration", minutes: -153722868, expected: defaultExecutionTimeout},
+		{name: "below minimum", minutes: 1, expected: minimumExecutionTimeout},
+		{name: "valid", minutes: 180, expected: 3 * time.Hour},
+		{name: "maximum", minutes: 1440, expected: 24 * time.Hour},
+		{name: "above maximum", minutes: 1441, expected: maximumExecutionTimeout},
+		{name: "overflowing as duration", minutes: math.MaxInt, expected: maximumExecutionTimeout},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := New(nil, t.TempDir(), "")
-			srv.setExecutionTimeout(tt.timeout)
+			srv.setExecutionTimeout(tt.minutes)
 			assert.Equal(t, srv.ExecutionTimeout(), tt.expected)
 		})
 	}

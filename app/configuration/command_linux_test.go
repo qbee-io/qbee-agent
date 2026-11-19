@@ -37,3 +37,11 @@ func TestRunCommand_CancelKillsSubprocesses(t *testing.T) {
 	assert.True(t, err != nil)
 	assert.True(t, time.Since(start) < 5*time.Second)
 }
+
+func TestRunCommand_WaitsForBackgroundSubprocesses(t *testing.T) {
+	// the background process keeps the command's output open after the shell exits
+	output, err := RunCommand(context.Background(), "(sleep 2; echo done) &")
+
+	assert.NoError(t, err)
+	assert.Equal(t, string(output), "done")
+}

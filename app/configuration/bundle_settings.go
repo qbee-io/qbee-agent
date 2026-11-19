@@ -62,7 +62,8 @@ type SettingsBundle struct {
 	PkgCacheTTL int `json:"pkg_cache_ttl,omitempty"`
 
 	// ExecutionTimeout defines the time limit of the configuration execution (in minutes).
-	// If not set (or not positive), the default of 60 minutes is used. Values below 5 minutes are raised to 5 minutes.
+	// If not set (or not positive), the default of 60 minutes is used. Values below 5 minutes are raised to 5 minutes,
+	// and values above 24 hours (1440 minutes) are lowered to 24 hours.
 	// Note: stopping or restarting the agent service waits for the configuration execution in progress for up to
 	// an hour (TimeoutStopSec of the systemd service). Executions taking longer are cut off then, and the remaining
 	// bundles are applied during the next run.
@@ -77,7 +78,7 @@ func (s SettingsBundle) Execute(service *Service) {
 	service.processInventoryEnabled.Store(s.EnableProcessInventory)
 
 	setPkgCacheTTL(time.Duration(s.PkgCacheTTL) * time.Hour)
-	service.setExecutionTimeout(time.Duration(s.ExecutionTimeout) * time.Minute)
+	service.setExecutionTimeout(s.ExecutionTimeout)
 
 	// Do not accept run interval smaller than the default agent interval.
 	if s.RunInterval < minimumAgentInterval {
