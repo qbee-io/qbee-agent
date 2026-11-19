@@ -63,6 +63,9 @@ type SettingsBundle struct {
 
 	// ExecutionTimeout defines the time limit of the configuration execution (in minutes).
 	// If not set (or not positive), the default of 60 minutes is used. Values below 5 minutes are raised to 5 minutes.
+	// Note: stopping or restarting the agent service waits for the configuration execution in progress for up to
+	// an hour (TimeoutStopSec of the systemd service). Executions taking longer are cut off then, and the remaining
+	// bundles are applied during the next run.
 	ExecutionTimeout int `json:"execution_timeout,omitempty"`
 }
 

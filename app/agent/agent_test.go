@@ -446,6 +446,9 @@ type realExecution struct {
 	source   string
 	dst      string
 	contents []byte
+
+	// executionTimeout is set in the settings bundle (in minutes)
+	executionTimeout int
 }
 
 func newRealExecution(t *testing.T) *realExecution {
@@ -472,9 +475,10 @@ func (r *realExecution) config(t *testing.T, watchdogThreshold string) []byte {
 		BundleData: configuration.BundleData{
 			// reporting is disabled, so only the check-in uses the mocked API
 			Settings: configuration.SettingsBundle{
-				Metadata:      configuration.Metadata{Enabled: true},
-				EnableMetrics: true,
-				RunInterval:   5,
+				Metadata:         configuration.Metadata{Enabled: true},
+				EnableMetrics:    true,
+				RunInterval:      5,
+				ExecutionTimeout: r.executionTimeout,
 			},
 			FileDistribution: &configuration.FileDistributionBundle{
 				Metadata: configuration.Metadata{Enabled: true},

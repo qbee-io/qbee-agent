@@ -88,6 +88,10 @@ type Service struct {
 	// executionTimeout defines the time limit of the configuration execution
 	executionTimeout atomic.Int64
 
+	// activeExecutionTimeout is the time limit of the configuration execution in progress (0 if none).
+	// It may differ from executionTimeout, when settings changed since the execution started.
+	activeExecutionTimeout atomic.Int64
+
 	// connectivityWatchdogThreshold defines failed API connections threshold at which server will be rebooted
 	// 0 -> disabled
 	connectivityWatchdogThreshold atomic.Int64
@@ -171,6 +175,12 @@ func (srv *Service) RunInterval() time.Duration {
 // ExecutionTimeout returns the time limit of the configuration execution.
 func (srv *Service) ExecutionTimeout() time.Duration {
 	return time.Duration(srv.executionTimeout.Load())
+}
+
+// ActiveExecutionTimeout returns the time limit of the configuration execution in progress,
+// or 0 if no configuration execution is in progress.
+func (srv *Service) ActiveExecutionTimeout() time.Duration {
+	return time.Duration(srv.activeExecutionTimeout.Load())
 }
 
 // setExecutionTimeout sets the time limit of the configuration execution.
@@ -263,6 +273,9 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 		}
 	}()
 
+	srv.activeExecutionTimeout.Store(int64(executionTimeout))
+	defer srv.activeExecutionTimeout.Store(0)
+
 	// disable connectivity watchdog if not set in the configData
 	if !configData.HasBundle(BundleConnectivityWatchdog) {
 		log.Debugf("connectivity watchdog bundle not found - disabling watchdog")
@@ -276,6 +289,9 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 
 		// Stop bundles execution if execution time limit was reached.
 		if ctxWithTimeout.Err() != nil {
+			log.Warnf("configuration execution exceeded time limit of %s - remaining bundles will be applied during "+
+				"the next run", executionTimeout)
+
 			internalCtx := reporter.BundleContext(ctx, bundleAgentInternal, "")
 			ReportWarning(internalCtx, nil,
 				"Configuration execution exceeded time limit of %s. Remaining bundles will be applied during the next run.",

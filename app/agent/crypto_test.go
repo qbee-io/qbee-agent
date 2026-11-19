@@ -53,3 +53,28 @@ func TestAgent_signedURLTTL(t *testing.T) {
 		})
 	}
 }
+
+func TestAgent_signedURLTTL_ExecutionInProgress(t *testing.T) {
+	exec := newRealExecution(t)
+	exec.executionTimeout = 180
+
+	a := newCheckInTestAgent(t)
+	a.useRealExecution()
+	a.configResponse = exec.config(t, "")
+
+	// the execution starts with a 3 hour time limit and blocks downloading the file
+	a.checkIn(t)
+	writer := exec.waitForDownload(t)
+
+	// a check-in lowers the time limit while the execution is still in progress
+	a.Configuration.UpdateSettings(&configuration.CommittedConfig{})
+	assert.Equal(t, a.Configuration.ExecutionTimeout(), time.Hour)
+
+	// URLs signed during the execution remain valid for its time limit
+	assert.Equal(t, a.signedURLTTL(), 3*time.Hour)
+
+	exec.finishDownload(t, writer)
+	a.Wait()
+
+	assert.Equal(t, a.signedURLTTL(), time.Hour)
+}
