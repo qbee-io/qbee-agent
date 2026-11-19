@@ -28,7 +28,15 @@ import (
 	"time"
 )
 
-const signedURLTTL = time.Hour
+// minimumSignedURLTTL is the minimum time signed URLs are valid for.
+const minimumSignedURLTTL = time.Hour
+
+// signedURLTTL returns the time signed URLs are valid for.
+// Signed URLs are used during configuration execution (e.g. to stream RAUC bundles, which happens throughout
+// the installation), so they remain valid for as long as the configuration execution may take.
+func (agent *Agent) signedURLTTL() time.Duration {
+	return max(minimumSignedURLTTL, agent.Configuration.ExecutionTimeout())
+}
 
 // SignURL signs the path portion of the given URL with the agent's private key
 // and returns the signed URL string pointing to the device hub.
@@ -51,7 +59,7 @@ func (agent *Agent) SignURL(rawURL string) (string, error) {
 	parsedURL.Scheme = "https"
 	parsedURL.Host = net.JoinHostPort(agent.cfg.DeviceHubServer, agent.cfg.DeviceHubPort)
 
-	expirationTimestamp := time.Now().Add(signedURLTTL).Unix()
+	expirationTimestamp := time.Now().Add(agent.signedURLTTL()).Unix()
 
 	strToSign := fmt.Sprintf("%s%s%d", parsedURL.Path, orgID, expirationTimestamp)
 
