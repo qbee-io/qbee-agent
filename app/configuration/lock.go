@@ -27,6 +27,15 @@ import (
 
 const lockFileName = "config.lock"
 
+const (
+	// lockRefreshInterval defines how often the lock file is refreshed while configuration is executed.
+	lockRefreshInterval = 30 * time.Second
+
+	// lockStaleTimeout defines after how long without a refresh the lock file is considered stale,
+	// i.e. left behind by a process which isn't running anymore.
+	lockStaleTimeout = 2 * time.Minute
+)
+
 // lockFilePath returns the path to the lock file.
 func (srv *Service) lockFilePath() string {
 	if srv.lockFile != "" {
@@ -48,10 +57,11 @@ func (srv *Service) lockFilePath() string {
 }
 
 // acquireLock for the configuration execution.
-func (srv *Service) acquireLock(lockFileTimeout time.Duration) error {
-	// Check if lock file exists and is not expired
+// While the lock is held, keepLockFresh must be running, so other processes don't consider the lock stale.
+func (srv *Service) acquireLock() error {
+	// Check if lock file exists and is not stale
 	if lockFileStat, err := os.Stat(srv.lockFilePath()); err == nil {
-		lockFileExpired := time.Since(lockFileStat.ModTime()) > lockFileTimeout
+		lockFileExpired := time.Since(lockFileStat.ModTime()) > lockStaleTimeout
 
 		if !lockFileExpired {
 			return fmt.Errorf("another process is running configuration")
@@ -77,11 +87,33 @@ func (srv *Service) acquireLock(lockFileTimeout time.Duration) error {
 	return nil
 }
 
-// touchLock updates the modification time of the lock file, so it isn't considered expired.
-func (srv *Service) touchLock() {
-	now := time.Now()
-	if err := os.Chtimes(srv.lockFilePath(), now, now); err != nil {
-		log.Warnf("failed to refresh execution lock - %v", err)
+// keepLockFresh refreshes the lock file every interval, until the returned stop function is called.
+func (srv *Service) keepLockFresh(interval time.Duration) (stop func()) {
+	done := make(chan struct{})
+	stopped := make(chan struct{})
+
+	go func() {
+		defer close(stopped)
+
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				now := time.Now()
+				if err := os.Chtimes(srv.lockFilePath(), now, now); err != nil {
+					log.Warnf("failed to refresh execution lock - %v", err)
+				}
+			}
+		}
+	}()
+
+	return func() {
+		close(done)
+		<-stopped
 	}
 }
 

@@ -269,19 +269,26 @@ func (srv *Service) resumeDownload(ctx context.Context, src string, partialFile 
 		return fmt.Errorf("not enough disk space: need %d bytes plus %d bytes overhead, have %d bytes", remaining, freeDiskOverhead, bytesAvail)
 	}
 
-	// track download progress, so the execution watchdog can tell a slow download from a hanging one
+	// let the execution watchdog know about the download, so it can let the download finish in overtime
 	monitor := executionMonitorFromContext(ctx)
-	var downloadTransfer *transfer
+	stallTimeout := downloadStallTimeout
 	if monitor != nil {
+		var downloadTransfer *transfer
 		if downloadTransfer, err = monitor.startTransfer(src); err != nil {
 			return err
 		}
 		defer monitor.finishTransfer(downloadTransfer)
+
+		stallTimeout = monitor.stallTimeout
 	}
 
-	srcFile, err := srv.getFile(ctx, src, offset)
+	// cancel the download if it hangs, i.e. receives no data within the stall timeout
+	stall := watchStall(ctx, stallTimeout)
+	defer stall.stop()
+
+	srcFile, err := srv.getFile(stall.ctx, src, offset)
 	if err != nil {
-		return err
+		return stall.wrap(err)
 	}
 	defer func() { _ = srcFile.Close() }()
 
@@ -289,13 +296,9 @@ func (srv *Service) resumeDownload(ctx context.Context, src string, partialFile 
 		return err
 	}
 
-	var srcReader io.Reader = srcFile
-	if downloadTransfer != nil {
-		srcReader = &progressReader{reader: srcFile, transfer: downloadTransfer}
-	}
-
+	srcReader := &progressReader{reader: srcFile, stall: stall}
 	if _, err = io.CopyN(partialFile, srcReader, remaining); err != nil {
-		return err
+		return stall.wrap(err)
 	}
 
 	// When the download finished in overtime, don't let the caller act on the downloaded file

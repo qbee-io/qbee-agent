@@ -64,8 +64,12 @@ func NewClient(host, port string) *Client {
 				IdleConnTimeout:       60 * time.Second,
 				TLSHandshakeTimeout:   10 * time.Second,
 				ExpectContinueTimeout: 1 * time.Second,
+
+				// Requests have no overall time limit, so file downloads can take as long as they need.
+				// API calls are limited by apiCallTimeout and file downloads are cancelled when they hang.
+				// This is a safety net for requests without a time limit of their own.
+				ResponseHeaderTimeout: apiCallTimeout,
 			},
-			Timeout: 45 * time.Minute,
 		},
 	}
 }
