@@ -519,6 +519,9 @@ func (r *realExecution) waitForDownload(t *testing.T) *os.File {
 		// opening the write end without blocking only succeeds once the reader opened the FIFO
 		writer, err := os.OpenFile(r.source, os.O_WRONLY|syscall.O_NONBLOCK, 0)
 		if err == nil {
+			// if the test fails before finishing the download, closing the writer ends the execution,
+			// so it doesn't keep holding the configuration lock
+			t.Cleanup(func() { _ = writer.Close() })
 			return writer
 		}
 

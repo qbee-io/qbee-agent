@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
-	"syscall"
 
 	"go.qbee.io/agent/app/utils"
 )
@@ -51,16 +50,9 @@ func RunCommand(ctx context.Context, command string) ([]byte, error) {
 		return nil, fmt.Errorf("cannot execute command '%s', no supported shell found", command)
 	}
 
-	cmd := exec.CommandContext(ctx, shell, "-c", command)
-
-	// set pgid, so we can terminate all subprocesses as well
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setpgid:   true,
-		Pdeathsig: syscall.SIGINT,
-	}
-
-	// explicitly set working directory to root
-	cmd.Dir = "/"
+	// when ctx is cancelled (e.g. the execution time limit is reached), the command is killed with all its
+	// subprocesses, and we don't wait for subprocesses which keep the output open
+	cmd := utils.NewCommand(ctx, []string{shell, "-c", command})
 
 	// append tail buffer to Stdout to collect only most recent bytes
 	tailBuffer := utils.NewTailBuffer(commandOutputBytesLimit)
