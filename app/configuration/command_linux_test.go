@@ -20,6 +20,7 @@ package configuration
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -35,6 +36,19 @@ func TestRunCommand_CancelKillsSubprocesses(t *testing.T) {
 	_, err := RunCommand(ctx, "sleep 30 & wait")
 
 	assert.True(t, err != nil)
+	assert.True(t, time.Since(start) < 5*time.Second)
+}
+
+func TestRunCommand_CancelKillsSubprocessesAfterShellExits(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	// the shell exits right away, while its background process keeps the output open
+	start := time.Now()
+	output, err := RunCommand(ctx, "(sleep 30; echo done) &")
+
+	assert.True(t, errors.Is(err, context.DeadlineExceeded))
+	assert.Equal(t, string(output), "")
 	assert.True(t, time.Since(start) < 5*time.Second)
 }
 

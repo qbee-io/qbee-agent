@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"syscall"
 
 	"go.qbee.io/agent/app/utils"
 )
@@ -64,8 +65,32 @@ func RunCommand(ctx context.Context, command string) ([]byte, error) {
 	cmd.Stdout = tailBuffer
 	cmd.Stderr = tailBuffer
 
-	// run the command
-	err := cmd.Run()
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+
+	// exec.Cmd stops watching ctx when the shell exits, but its background subprocesses may keep running
+	// and keep the output open, so we keep watching ctx until the output is closed
+	outputClosed := make(chan struct{})
+	killed := make(chan bool, 1)
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			killed <- true
+		case <-outputClosed:
+			killed <- false
+		}
+	}()
+
+	err := cmd.Wait()
+	close(outputClosed)
+
+	// the shell may have exited successfully before its subprocesses were killed
+	if <-killed && err == nil {
+		err = ctx.Err()
+	}
 
 	// grab tail of the output
 	output := tailBuffer.Close()
