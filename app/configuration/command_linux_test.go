@@ -40,7 +40,9 @@ func TestRunCommand_CancelKillsSubprocesses(t *testing.T) {
 	start := time.Now()
 	_, err := RunCommand(ctx, "sleep 30 & wait")
 
-	assert.True(t, err != nil)
+	// the shell was killed, which is reported (rather than the cancellation)
+	var exitErr *exec.ExitError
+	assert.True(t, errors.As(err, &exitErr))
 	assert.True(t, time.Since(start) < 5*time.Second)
 }
 
@@ -55,6 +57,36 @@ func TestRunCommand_CancelKillsSubprocessesAfterShellExits(t *testing.T) {
 	assert.True(t, errors.Is(err, context.DeadlineExceeded))
 	assert.Equal(t, string(output), "")
 	assert.True(t, time.Since(start) < 5*time.Second)
+}
+
+func TestRunCommand_CancelStopsBackgroundSubprocesses(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	// the background process would create the marker after the deadline, unless it's killed
+	marker := filepath.Join(t.TempDir(), "marker")
+	_, err := RunCommand(ctx, "(sleep 1; touch "+marker+") &")
+	assert.True(t, errors.Is(err, context.DeadlineExceeded))
+
+	time.Sleep(1500 * time.Millisecond)
+
+	_, statErr := os.Stat(marker)
+	assert.True(t, os.IsNotExist(statErr))
+}
+
+func TestRunCommand_CancelStopsBackgroundSubprocessesWithoutOutput(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	// the background process doesn't keep the output open, and the command is still running at the deadline
+	marker := filepath.Join(t.TempDir(), "marker")
+	_, err := RunCommand(ctx, "(sleep 1; touch "+marker+") >/dev/null 2>&1 & exec sleep 30")
+	assert.True(t, err != nil)
+
+	time.Sleep(1500 * time.Millisecond)
+
+	_, statErr := os.Stat(marker)
+	assert.True(t, os.IsNotExist(statErr))
 }
 
 func TestRunCommand_CancelClosesOutputOfDetachedSubprocesses(t *testing.T) {
