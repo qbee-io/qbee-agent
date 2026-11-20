@@ -269,9 +269,26 @@ func (srv *Service) resumeDownload(ctx context.Context, src string, partialFile 
 		return fmt.Errorf("not enough disk space: need %d bytes plus %d bytes overhead, have %d bytes", remaining, freeDiskOverhead, bytesAvail)
 	}
 
-	srcFile, err := srv.getFile(ctx, src, offset)
+	// let the execution watchdog know about the download, so it can let the download finish in overtime
+	monitor := executionMonitorFromContext(ctx)
+	stallTimeout := downloadStallTimeout
+	if monitor != nil {
+		var downloadTransfer *transfer
+		if downloadTransfer, err = monitor.startTransfer(src); err != nil {
+			return err
+		}
+		defer monitor.finishTransfer(downloadTransfer)
+
+		stallTimeout = monitor.stallTimeout
+	}
+
+	// cancel the download if it hangs, i.e. receives no data within the stall timeout
+	stall := watchStall(ctx, stallTimeout)
+	defer stall.stop()
+
+	srcFile, err := srv.getFile(stall.ctx, src, offset)
 	if err != nil {
-		return err
+		return stall.wrap(err)
 	}
 	defer func() { _ = srcFile.Close() }()
 
@@ -279,9 +296,19 @@ func (srv *Service) resumeDownload(ctx context.Context, src string, partialFile 
 		return err
 	}
 
-	_, err = io.CopyN(partialFile, srcFile, remaining)
+	srcReader := &progressReader{reader: srcFile, stall: stall}
+	if _, err = io.CopyN(partialFile, srcReader, remaining); err != nil {
+		return stall.wrap(err)
+	}
 
-	return err
+	// When the download finished in overtime, don't let the caller act on the downloaded file
+	// (e.g. install a package or RAUC bundle), as the execution is about to be cancelled.
+	// The complete partial download is kept and installed during the next run.
+	if monitor != nil && monitor.inOvertime() {
+		return fmt.Errorf("download completed after %w, it will be installed during the next run", errExecutionTimeExceeded)
+	}
+
+	return nil
 }
 
 // installPartialDownload sets ownership of the verified partialFile and renames it to dst.
