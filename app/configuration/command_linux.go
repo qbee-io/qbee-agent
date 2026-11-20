@@ -21,8 +21,11 @@ package configuration
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"syscall"
+	"time"
 
 	"go.qbee.io/agent/app/utils"
 )
@@ -42,6 +45,9 @@ func getShell() string {
 
 const commandOutputBytesLimit = 1024 * 1024 // 1MB
 
+// outputCloseTimeout is how long RunCommand waits for the output to be closed after killing the command.
+const outputCloseTimeout = time.Second
+
 // RunCommand runs a command and returns its output.
 func RunCommand(ctx context.Context, command string) ([]byte, error) {
 	command = resolveParameters(ctx, command)
@@ -51,25 +57,61 @@ func RunCommand(ctx context.Context, command string) ([]byte, error) {
 		return nil, fmt.Errorf("cannot execute command '%s', no supported shell found", command)
 	}
 
-	cmd := exec.CommandContext(ctx, shell, "-c", command)
+	cmd := utils.NewCommand(ctx, []string{shell, "-c", command})
 
-	// set pgid, so we can terminate all subprocesses as well
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setpgid:   true,
-		Pdeathsig: syscall.SIGINT,
+	// The output goes through our own pipe, so cmd.Wait doesn't wait for it (it would also wait for
+	// background subprocesses which keep the output open). Instead, we read it until all writers closed it.
+	outputReader, outputWriter, err := os.Pipe()
+	if err != nil {
+		return nil, fmt.Errorf("cannot create output pipe: %w", err)
 	}
+	defer func() { _ = outputReader.Close() }()
 
-	// explicitly set working directory to root
-	cmd.Dir = "/"
+	cmd.Stdout = outputWriter
+	cmd.Stderr = outputWriter
+
+	err = cmd.Start()
+	_ = outputWriter.Close()
+	if err != nil {
+		return nil, err
+	}
 
 	// append tail buffer to Stdout to collect only most recent bytes
 	tailBuffer := utils.NewTailBuffer(commandOutputBytesLimit)
 
-	cmd.Stdout = tailBuffer
-	cmd.Stderr = tailBuffer
+	outputClosed := make(chan struct{})
+	go func() {
+		_, _ = io.Copy(tailBuffer, outputReader)
+		close(outputClosed)
+	}()
 
-	// run the command
-	err := cmd.Run()
+	// When ctx is cancelled while the shell runs, cmd kills its process group (see utils.NewCommand).
+	// The shell is reaped as soon as it exits, as background subprocesses may wait for it to disappear.
+	err = cmd.Wait()
+
+	killed := false
+
+	select {
+	case <-outputClosed:
+	case <-ctx.Done():
+		// Kill background subprocesses (e.g. "sleep 600 &") which keep the output open.
+		// The process group ID can't be reused while any process of the group is still running.
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		killed = true
+
+		// subprocesses which left the process group (e.g. "setsid sleep 600 &") may still keep the output open
+		select {
+		case <-outputClosed:
+		case <-time.After(outputCloseTimeout):
+			_ = outputReader.Close()
+			<-outputClosed
+		}
+	}
+
+	// the shell may have exited successfully before its subprocesses were killed
+	if killed && err == nil {
+		err = ctx.Err()
+	}
 
 	// grab tail of the output
 	output := tailBuffer.Close()

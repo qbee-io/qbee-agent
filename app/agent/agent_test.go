@@ -258,7 +258,7 @@ func newCheckInTestAgent(t *testing.T) *checkInTestAgent {
 		stop:                make(chan bool, 1),
 		reboot:              make(chan bool, 1),
 		api:                 apiClient,
-		Configuration:       configuration.New(apiClient, t.TempDir(), t.TempDir()),
+		Configuration:       configuration.New(apiClient, t.TempDir(), t.TempDir()).WithLockFile(filepath.Join(t.TempDir(), "config.lock")),
 		Metrics:             metrics.New(apiClient),
 		disableRemoteAccess: true,
 	}
@@ -446,6 +446,9 @@ type realExecution struct {
 	source   string
 	dst      string
 	contents []byte
+
+	// executionTimeout is set in the settings bundle (in minutes)
+	executionTimeout int
 }
 
 func newRealExecution(t *testing.T) *realExecution {
@@ -472,9 +475,10 @@ func (r *realExecution) config(t *testing.T, watchdogThreshold string) []byte {
 		BundleData: configuration.BundleData{
 			// reporting is disabled, so only the check-in uses the mocked API
 			Settings: configuration.SettingsBundle{
-				Metadata:      configuration.Metadata{Enabled: true},
-				EnableMetrics: true,
-				RunInterval:   5,
+				Metadata:         configuration.Metadata{Enabled: true},
+				EnableMetrics:    true,
+				RunInterval:      5,
+				ExecutionTimeout: r.executionTimeout,
 			},
 			FileDistribution: &configuration.FileDistributionBundle{
 				Metadata: configuration.Metadata{Enabled: true},
@@ -515,6 +519,9 @@ func (r *realExecution) waitForDownload(t *testing.T) *os.File {
 		// opening the write end without blocking only succeeds once the reader opened the FIFO
 		writer, err := os.OpenFile(r.source, os.O_WRONLY|syscall.O_NONBLOCK, 0)
 		if err == nil {
+			// if the test fails before finishing the download, closing the writer ends the execution,
+			// so it doesn't keep holding the configuration lock
+			t.Cleanup(func() { _ = writer.Close() })
 			return writer
 		}
 

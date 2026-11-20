@@ -19,6 +19,7 @@ package configuration_test
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"testing"
 
 	"go.qbee.io/agent/app/api"
@@ -27,7 +28,7 @@ import (
 
 func Test_ConnectivityWatchdog(t *testing.T) {
 	apiClient := api.NewClient("invalid-host.example", "12345")
-	service := configuration.New(apiClient, "", "")
+	service := configuration.New(apiClient, "", "").WithLockFile(filepath.Join(t.TempDir(), "config.lock"))
 
 	committedConfig := configuration.CommittedConfig{
 		Bundles: []string{"connectivity_watchdog"},
