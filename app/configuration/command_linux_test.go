@@ -21,6 +21,11 @@ package configuration
 import (
 	"context"
 	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -83,4 +88,84 @@ func TestRunCommand_WaitsForBackgroundSubprocesses(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, string(output), "done")
+}
+
+func TestRunCommand_ReturnsExitError(t *testing.T) {
+	output, err := RunCommand(context.Background(), "echo failed; exit 3")
+
+	var exitErr *exec.ExitError
+	assert.True(t, errors.As(err, &exitErr))
+	assert.Equal(t, exitErr.ExitCode(), 3)
+	assert.Equal(t, string(output), "failed")
+}
+
+func TestRunCommand_CombinesStdoutAndStderr(t *testing.T) {
+	output, err := RunCommand(context.Background(), "echo out1; echo err >&2; echo out2")
+
+	assert.NoError(t, err)
+	assert.Equal(t, string(output), "out1\nerr\nout2")
+}
+
+func TestRunCommand_KeepsTailOfLargeOutput(t *testing.T) {
+	// about 2MB of output, twice the limit
+	output, err := RunCommand(context.Background(), "seq 1 300000")
+
+	assert.NoError(t, err)
+	assert.True(t, len(output) <= commandOutputBytesLimit)
+	assert.True(t, len(output) > commandOutputBytesLimit/2)
+	assert.True(t, strings.HasSuffix(string(output), "\n299999\n300000"))
+	assert.False(t, strings.HasPrefix(string(output), "1\n2\n"))
+}
+
+func TestRunCommand_AlreadyCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	marker := filepath.Join(t.TempDir(), "marker")
+	_, err := RunCommand(ctx, "touch "+marker)
+
+	assert.True(t, errors.Is(err, context.Canceled))
+
+	_, statErr := os.Stat(marker)
+	assert.True(t, os.IsNotExist(statErr))
+}
+
+func TestRunCommand_BackgroundSubprocessFinishingBeforeDeadline(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// the background process outlives the shell, but finishes well before the deadline
+	output, err := RunCommand(ctx, "(sleep 0.2; echo late) &")
+
+	assert.NoError(t, err)
+	assert.Equal(t, string(output), "late")
+}
+
+func TestRunCommand_NoLeaks(t *testing.T) {
+	openFiles := func() int {
+		entries, err := os.ReadDir("/proc/self/fd")
+		assert.NoError(t, err)
+		return len(entries)
+	}
+
+	filesBefore := openFiles()
+	goroutinesBefore := runtime.NumGoroutine()
+
+	for range 20 {
+		_, _ = RunCommand(context.Background(), "echo ok")
+		_, _ = RunCommand(context.Background(), "exit 1")
+
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+		_, _ = RunCommand(ctx, "sleep 30 &")
+		cancel()
+	}
+
+	// goroutines may need a moment to exit after the last command returned
+	deadline := time.Now().Add(time.Second)
+	for runtime.NumGoroutine() > goroutinesBefore && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	assert.Equal(t, openFiles(), filesBefore)
+	assert.True(t, runtime.NumGoroutine() <= goroutinesBefore)
 }

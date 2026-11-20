@@ -33,6 +33,7 @@ func TestAgent_signedURLTTL(t *testing.T) {
 		{name: "default execution timeout", executionTimeout: 0, expected: time.Hour},
 		{name: "shorter execution timeout", executionTimeout: 10, expected: time.Hour},
 		{name: "longer execution timeout", executionTimeout: 180, expected: 3 * time.Hour},
+		{name: "execution timeout above maximum", executionTimeout: 100000, expected: 24 * time.Hour},
 	}
 
 	for _, tt := range tests {
