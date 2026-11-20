@@ -21,8 +21,13 @@ package configuration
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"syscall"
+	"time"
+
+	"golang.org/x/sys/unix"
 
 	"go.qbee.io/agent/app/utils"
 )
@@ -42,6 +47,21 @@ func getShell() string {
 
 const commandOutputBytesLimit = 1024 * 1024 // 1MB
 
+// outputCloseTimeout is how long RunCommand waits for the output to be closed after killing the command.
+const outputCloseTimeout = time.Second
+
+// waitForExit waits for the process to exit, without reaping it.
+func waitForExit(pid int) error {
+	var info unix.Siginfo
+
+	for {
+		err := unix.Waitid(unix.P_PID, pid, &info, unix.WEXITED|unix.WNOWAIT, nil)
+		if err != unix.EINTR {
+			return err
+		}
+	}
+}
+
 // RunCommand runs a command and returns its output.
 func RunCommand(ctx context.Context, command string) ([]byte, error) {
 	command = resolveParameters(ctx, command)
@@ -51,44 +71,64 @@ func RunCommand(ctx context.Context, command string) ([]byte, error) {
 		return nil, fmt.Errorf("cannot execute command '%s', no supported shell found", command)
 	}
 
-	// when ctx is cancelled (e.g. the execution time limit is reached), the command is killed with all its
-	// subprocesses, which also closes the output we wait for
 	cmd := utils.NewCommand(ctx, []string{shell, "-c", command})
 
-	// keep waiting for the output of background subprocesses (e.g. "sleep 2 &") after the shell exits,
-	// otherwise valid commands fail when their subprocesses outlive the shell by more than WaitDelay
-	cmd.WaitDelay = 0
+	// The output goes through our own pipe, so cmd.Wait doesn't wait for it (it would also wait for
+	// background subprocesses which keep the output open). Instead, we read it until all writers closed it.
+	outputReader, outputWriter, err := os.Pipe()
+	if err != nil {
+		return nil, fmt.Errorf("cannot create output pipe: %w", err)
+	}
+	defer func() { _ = outputReader.Close() }()
+
+	cmd.Stdout = outputWriter
+	cmd.Stderr = outputWriter
+
+	err = cmd.Start()
+	_ = outputWriter.Close()
+	if err != nil {
+		return nil, err
+	}
 
 	// append tail buffer to Stdout to collect only most recent bytes
 	tailBuffer := utils.NewTailBuffer(commandOutputBytesLimit)
 
-	cmd.Stdout = tailBuffer
-	cmd.Stderr = tailBuffer
-
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-
-	// exec.Cmd stops watching ctx when the shell exits, but its background subprocesses may keep running
-	// and keep the output open, so we keep watching ctx until the output is closed
 	outputClosed := make(chan struct{})
-	killed := make(chan bool, 1)
-
 	go func() {
-		select {
-		case <-ctx.Done():
-			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-			killed <- true
-		case <-outputClosed:
-			killed <- false
-		}
+		_, _ = io.Copy(tailBuffer, outputReader)
+		close(outputClosed)
 	}()
 
-	err := cmd.Wait()
-	close(outputClosed)
+	// When ctx is cancelled while the shell runs, cmd kills its process group (see utils.NewCommand).
+	// We wait for the shell to exit without reaping it, so its process group ID can't be reused by another
+	// process, and it's safe to kill the process group of its background subprocesses later.
+	if err = waitForExit(cmd.Process.Pid); err != nil {
+		// shouldn't happen, but make sure the shell doesn't keep running in that case
+		_ = cmd.Process.Kill()
+	}
+
+	killed := false
+
+	select {
+	case <-outputClosed:
+	case <-ctx.Done():
+		// kill background subprocesses (e.g. "sleep 600 &") which keep the output open
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		killed = true
+
+		// subprocesses which left the process group (e.g. "setsid sleep 600 &") may still keep the output open
+		select {
+		case <-outputClosed:
+		case <-time.After(outputCloseTimeout):
+			_ = outputReader.Close()
+			<-outputClosed
+		}
+	}
+
+	err = cmd.Wait()
 
 	// the shell may have exited successfully before its subprocesses were killed
-	if <-killed && err == nil {
+	if killed && err == nil {
 		err = ctx.Err()
 	}
 
