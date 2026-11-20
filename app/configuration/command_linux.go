@@ -27,8 +27,6 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/sys/unix"
-
 	"go.qbee.io/agent/app/utils"
 )
 
@@ -49,18 +47,6 @@ const commandOutputBytesLimit = 1024 * 1024 // 1MB
 
 // outputCloseTimeout is how long RunCommand waits for the output to be closed after killing the command.
 const outputCloseTimeout = time.Second
-
-// waitForExit waits for the process to exit, without reaping it.
-func waitForExit(pid int) error {
-	var info unix.Siginfo
-
-	for {
-		err := unix.Waitid(unix.P_PID, pid, &info, unix.WEXITED|unix.WNOWAIT, nil)
-		if err != unix.EINTR {
-			return err
-		}
-	}
-}
 
 // RunCommand runs a command and returns its output.
 func RunCommand(ctx context.Context, command string) ([]byte, error) {
@@ -100,19 +86,16 @@ func RunCommand(ctx context.Context, command string) ([]byte, error) {
 	}()
 
 	// When ctx is cancelled while the shell runs, cmd kills its process group (see utils.NewCommand).
-	// We wait for the shell to exit without reaping it, so its process group ID can't be reused by another
-	// process, and it's safe to kill the process group of its background subprocesses later.
-	if err = waitForExit(cmd.Process.Pid); err != nil {
-		// shouldn't happen, but make sure the shell doesn't keep running in that case
-		_ = cmd.Process.Kill()
-	}
+	// The shell is reaped as soon as it exits, as background subprocesses may wait for it to disappear.
+	err = cmd.Wait()
 
 	killed := false
 
 	select {
 	case <-outputClosed:
 	case <-ctx.Done():
-		// kill background subprocesses (e.g. "sleep 600 &") which keep the output open
+		// Kill background subprocesses (e.g. "sleep 600 &") which keep the output open.
+		// The process group ID can't be reused while any process of the group is still running.
 		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 		killed = true
 
@@ -124,8 +107,6 @@ func RunCommand(ctx context.Context, command string) ([]byte, error) {
 			<-outputClosed
 		}
 	}
-
-	err = cmd.Wait()
 
 	// the shell may have exited successfully before its subprocesses were killed
 	if killed && err == nil {

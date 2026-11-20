@@ -64,6 +64,19 @@ func TestRunCommand_CancelClosesOutputOfDetachedSubprocesses(t *testing.T) {
 	assert.True(t, time.Since(start) < 5*time.Second)
 }
 
+func TestRunCommand_BackgroundSubprocessWaitingForShell(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// the background process keeps the output open until the shell is gone
+	start := time.Now()
+	output, err := RunCommand(ctx, "(while kill -0 $$ 2>/dev/null; do sleep 0.1; done; echo shell gone) &")
+
+	assert.NoError(t, err)
+	assert.Equal(t, string(output), "shell gone")
+	assert.True(t, time.Since(start) < 5*time.Second)
+}
+
 func TestRunCommand_WaitsForBackgroundSubprocesses(t *testing.T) {
 	// the background process keeps the command's output open after the shell exits
 	output, err := RunCommand(context.Background(), "(sleep 2; echo done) &")
