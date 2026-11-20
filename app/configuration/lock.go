@@ -27,6 +27,9 @@ const lockFileName = "config.lock"
 
 // lockFilePath returns the path to the lock file.
 func (srv *Service) lockFilePath() string {
+	if srv.lockFile != "" {
+		return srv.lockFile
+	}
 
 	tmpfsDirs := []string{"/run", "/var/run"}
 

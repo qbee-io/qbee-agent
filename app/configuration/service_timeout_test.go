@@ -36,7 +36,8 @@ func TestService_Execute_StopsAtExecutionTimeout(t *testing.T) {
 	dir := t.TempDir()
 
 	// reports can't be delivered, so they end up in the reports buffer where we can check them
-	srv := New(api.NewClient("localhost", "99999"), dir, t.TempDir())
+	srv := New(api.NewClient("localhost", "99999"), dir, t.TempDir()).
+		WithLockFile(filepath.Join(dir, "config.lock"))
 	srv.reportingEnabled.Store(true)
 
 	// the setting doesn't accept values below 5 minutes, so the time limit is set directly

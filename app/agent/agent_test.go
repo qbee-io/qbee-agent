@@ -258,7 +258,7 @@ func newCheckInTestAgent(t *testing.T) *checkInTestAgent {
 		stop:                make(chan bool, 1),
 		reboot:              make(chan bool, 1),
 		api:                 apiClient,
-		Configuration:       configuration.New(apiClient, t.TempDir(), t.TempDir()),
+		Configuration:       configuration.New(apiClient, t.TempDir(), t.TempDir()).WithLockFile(filepath.Join(t.TempDir(), "config.lock")),
 		Metrics:             metrics.New(apiClient),
 		disableRemoteAccess: true,
 	}
