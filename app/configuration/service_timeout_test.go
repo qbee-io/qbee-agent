@@ -171,7 +171,9 @@ func TestService_Execute_DownloadInProgressAtTimeout(t *testing.T) {
 	go func() { done <- srv.Execute(t.Context(), config) }()
 
 	select {
-	case <-done:
+	case err := <-done:
+		// reporting is disabled, so the time limit isn't reported as an error
+		assert.NoError(t, err)
 	case <-time.After(10 * time.Second):
 		t.Fatalf("configuration execution didn't stop after the download finished")
 	}
