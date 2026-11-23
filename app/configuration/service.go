@@ -283,6 +283,10 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 		return nil
 	}
 
+	// Keep refreshing the lock file while the execution runs. Other processes (e.g. "qbee-agent config") consider
+	// a lock file stale only when it hasn't been refreshed for lockStaleTimeout, so a long execution keeps its lock,
+	// while a lock left behind by a crashed process blocks configuration execution for at most lockStaleTimeout.
+	// The refresh stops before the lock is released, so it never touches a lock file created by another process.
 	stopLockRefresh := srv.keepLockFresh(lockRefreshInterval)
 	defer func() {
 		stopLockRefresh()
