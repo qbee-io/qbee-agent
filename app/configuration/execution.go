@@ -31,9 +31,6 @@ import (
 const (
 	// downloadStallTimeout defines for how long a download may receive no data before it is cancelled as hanging.
 	downloadStallTimeout = 2 * time.Minute
-
-	// executionWatchdogInterval defines how often the execution watchdog checks the execution state.
-	executionWatchdogInterval = 10 * time.Second
 )
 
 // errExecutionTimeExceeded is returned for work which was stopped, or not started, because configuration execution
@@ -51,10 +48,9 @@ var errDownloadStalled = errors.New("download received no data within the stall 
 // progress is not hanging. In that case, the execution goes into overtime: no new downloads are started and
 // the execution is cancelled as soon as there are no downloads in progress left.
 type executionMonitor struct {
-	timeout       time.Duration
-	deadline      time.Time
-	stallTimeout  time.Duration
-	checkInterval time.Duration
+	timeout      time.Duration
+	deadline     time.Time
+	stallTimeout time.Duration
 
 	overtime atomic.Bool
 
@@ -64,15 +60,17 @@ type executionMonitor struct {
 
 	// transfers is the number of downloads in progress
 	transfers int
+
+	// cancel stops the execution (set by watch)
+	cancel context.CancelFunc
 }
 
 // newExecutionMonitor returns a new execution monitor for an execution starting now, limited by timeout.
 func newExecutionMonitor(timeout time.Duration) *executionMonitor {
 	return &executionMonitor{
-		timeout:       timeout,
-		deadline:      time.Now().Add(timeout),
-		stallTimeout:  downloadStallTimeout,
-		checkInterval: executionWatchdogInterval,
+		timeout:      timeout,
+		deadline:     time.Now().Add(timeout),
+		stallTimeout: downloadStallTimeout,
 	}
 }
 
@@ -116,27 +114,38 @@ func (m *executionMonitor) startTransfer() error {
 }
 
 // finishTransfer de-registers a download.
+// In overtime, the execution is stopped as soon as the last download in progress finished, so no further work
+// is done past the deadline.
 func (m *executionMonitor) finishTransfer() {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
 	m.transfers--
+
+	if m.transfers == 0 && m.inOvertime() && m.cancel != nil {
+		log.Warnf("configuration execution exceeded time limit of %s - downloads finished, stopping", m.timeout)
+		m.cancel()
+	}
 }
 
 // enterOvertime switches the execution into overtime and returns the number of downloads in progress.
-// first is true when the execution wasn't in overtime before.
-func (m *executionMonitor) enterOvertime() (transfers int, first bool) {
+func (m *executionMonitor) enterOvertime() int {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	first = !m.overtime.Swap(true)
+	m.overtime.Store(true)
 
-	return m.transfers, first
+	return m.transfers
 }
 
-// watch the execution and call cancel when it should be stopped.
-// Returns when ctx is done or after cancel was called.
+// watch the execution and call cancel when it should be stopped: at the deadline, or when the deadline passed
+// while downloads were in progress, once they finished (see finishTransfer).
+// Returns when ctx is done.
 func (m *executionMonitor) watch(ctx context.Context, cancel context.CancelFunc) {
+	m.mutex.Lock()
+	m.cancel = cancel
+	m.mutex.Unlock()
+
 	deadline := time.NewTimer(time.Until(m.deadline))
 	defer deadline.Stop()
 
@@ -146,30 +155,18 @@ func (m *executionMonitor) watch(ctx context.Context, cancel context.CancelFunc)
 	case <-deadline.C:
 	}
 
-	// past the deadline, wait for downloads in progress to finish
-	ticker := time.NewTicker(m.checkInterval)
-	defer ticker.Stop()
-
-	for {
-		transfers, first := m.enterOvertime()
-		if transfers == 0 {
-			log.Warnf("configuration execution exceeded time limit of %s - stopping", m.timeout)
-			cancel()
-			return
-		}
-
-		// download sources are not logged, as they may contain secrets
-		if first {
-			log.Infof("configuration execution exceeded time limit of %s - waiting for %d download(s) to finish",
-				m.timeout, transfers)
-		}
-
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
+	transfers := m.enterOvertime()
+	if transfers == 0 {
+		log.Warnf("configuration execution exceeded time limit of %s - stopping", m.timeout)
+		cancel()
+		return
 	}
+
+	// download sources are not logged, as they may contain secrets
+	log.Infof("configuration execution exceeded time limit of %s - waiting for %d download(s) to finish",
+		m.timeout, transfers)
+
+	<-ctx.Done()
 }
 
 type executionMonitorContextKey struct{}

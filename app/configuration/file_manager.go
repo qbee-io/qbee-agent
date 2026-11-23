@@ -201,6 +201,13 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 		return false, fmt.Errorf("downloaded file is incomplete or has invalid contents")
 	}
 
+	// Past the deadline (e.g. the download finished in overtime), don't install the file or let the caller act on
+	// it (e.g. install a package or RAUC bundle), as the execution is being stopped. The verified partial download
+	// is kept and installed during the next run.
+	if err = checkExecutionDeadline(ctx); err != nil {
+		return false, fmt.Errorf("%w, the downloaded file will be installed during the next run", err)
+	}
+
 	if err = installPartialDownload(dstRoot, partialDir, partialFile, dst, fileCreateData); err != nil {
 		return false, err
 	}
@@ -302,13 +309,6 @@ func (srv *Service) resumeDownload(ctx context.Context, src string, partialFile 
 	srcReader := &progressReader{reader: srcFile, stall: stall}
 	if _, err = io.CopyN(partialFile, srcReader, remaining); err != nil {
 		return stall.wrap(err)
-	}
-
-	// When the download finished past the deadline, don't let the caller act on the downloaded file
-	// (e.g. install a package or RAUC bundle), as the execution is about to be cancelled.
-	// The complete partial download is kept and installed during the next run.
-	if monitor != nil && monitor.pastDeadline() {
-		return fmt.Errorf("download completed after %w, it will be installed during the next run", errExecutionTimeExceeded)
 	}
 
 	return nil
@@ -514,6 +514,11 @@ func (srv *Service) downloadTemplateFile(
 	}
 
 	defer func() { _ = srcFile.Close() }()
+
+	// the template may have just been downloaded to the cache, so the deadline is checked again before rendering
+	if err = checkExecutionDeadline(ctx); err != nil {
+		return false, err
+	}
 
 	var dstFile io.WriteCloser
 	if dstFile, err = createFile(dst, fileCreateData, fileManagerDefaultFilePermission, true); err != nil {

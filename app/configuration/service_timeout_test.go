@@ -21,6 +21,7 @@ package configuration
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -111,4 +112,91 @@ func TestService_Execute_StopsAtExecutionTimeout(t *testing.T) {
 		}
 	}
 	assert.True(t, reported)
+}
+
+func TestService_Execute_DownloadInProgressAtTimeout(t *testing.T) {
+	dir := t.TempDir()
+
+	srv, mock := newMockedFileService(t)
+	srv.WithLockFile(filepath.Join(dir, "config.lock"))
+
+	// the setting doesn't accept values below 5 minutes, so the time limit is set directly
+	srv.executionTimeout.Store(int64(200 * time.Millisecond))
+
+	// the download takes longer than the time limit (about 600ms), but keeps receiving data
+	contents := []byte("downloaded across the deadline\n")
+	mock.AddHandler(func(req *http.Request) (*http.Response, error) {
+		body := &trickleReader{ctx: req.Context(), data: contents, interval: 20 * time.Millisecond}
+		return fileResponse(http.StatusOK, body), nil
+	})
+	downloaded := filepath.Join(dir, "downloaded.txt")
+
+	template := filepath.Join(dir, "template.txt")
+	assert.NoError(t, os.WriteFile(template, []byte("value={{key}}\n"), 0600))
+	rendered := filepath.Join(dir, "rendered.txt")
+
+	afterCommandMarker := filepath.Join(dir, "after-command-ran")
+
+	config := &CommittedConfig{
+		CommitID: "test-commit",
+		Bundles:  []string{BundleFileDistribution, BundleConnectivityWatchdog},
+		BundleData: BundleData{
+			FileDistribution: &FileDistributionBundle{
+				Metadata: Metadata{Enabled: true},
+				FileSets: []FileSet{
+					{
+						Files: []File{{
+							Source:      "downloaded.txt",
+							Destination: downloaded,
+							Digest:      sha256Hex(contents),
+							Size:        int64(len(contents)),
+						}},
+						AfterCommand: "touch " + afterCommandMarker,
+					},
+					{
+						Files:              []File{{Source: "file://" + template, Destination: rendered, IsTemplate: true}},
+						TemplateParameters: []TemplateParameter{{Key: "key", Value: "value"}},
+					},
+				},
+			},
+			ConnectivityWatchdog: &ConnectivityWatchdogBundle{
+				Metadata:  Metadata{Enabled: true},
+				Threshold: "5",
+			},
+		},
+	}
+
+	start := time.Now()
+	done := make(chan error, 1)
+	go func() { done <- srv.Execute(t.Context(), config) }()
+
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("configuration execution didn't stop after the download finished")
+	}
+
+	// the download wasn't cancelled at the deadline, and the execution stopped as soon as it finished
+	elapsed := time.Since(start)
+	assert.True(t, elapsed > 500*time.Millisecond)
+	assert.True(t, elapsed < 3*time.Second)
+
+	// the download finished past the deadline, so it's kept for the next run instead of being installed
+	assertNotExist(t, downloaded)
+	assertFileContents(t, GetPartialDownloadFilePath(downloaded, sha256Hex(contents)), contents)
+
+	// no further work was done past the deadline
+	assertNotExist(t, afterCommandMarker)
+	assertNotExist(t, rendered)
+	assert.Equal(t, srv.connectivityWatchdogThreshold.Load(), int64(0))
+
+	// the execution released its lock
+	_, err := os.Stat(srv.lockFilePath())
+	assert.True(t, os.IsNotExist(err))
+
+	// the next run installs the file without downloading it again
+	srv.executionTimeout.Store(int64(time.Minute))
+	assert.NoError(t, srv.Execute(t.Context(), config))
+	assertFileContents(t, downloaded, contents)
+	assertNoPartialDownload(t, downloaded, testFileMetadata(contents))
 }

@@ -34,7 +34,6 @@ import (
 func newTestExecutionMonitor(timeout time.Duration) *executionMonitor {
 	m := newExecutionMonitor(timeout)
 	m.stallTimeout = 100 * time.Millisecond
-	m.checkInterval = 5 * time.Millisecond
 	return m
 }
 
@@ -359,4 +358,21 @@ func Test_downloadTemplateFile_IsNotRenderedPastDeadline(t *testing.T) {
 	assert.True(t, errors.Is(err, errExecutionTimeExceeded))
 	assert.False(t, created)
 	assertNotExist(t, dst)
+}
+
+func Test_executionMonitor_StopsAsSoonAsDownloadsFinish(t *testing.T) {
+	// production intervals, so the execution must not wait for a watchdog check
+	m := newExecutionMonitor(20 * time.Millisecond)
+
+	assert.NoError(t, m.startTransfer())
+	ctx, done := startWatch(t, m)
+
+	// the deadline passed, but the download in progress keeps the execution going
+	time.Sleep(100 * time.Millisecond)
+	assert.True(t, m.inOvertime())
+	assert.NoError(t, ctx.Err())
+
+	m.finishTransfer()
+	waitFor(t, ctx.Done(), 100*time.Millisecond)
+	waitFor(t, done, time.Second)
 }
