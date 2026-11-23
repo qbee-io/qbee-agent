@@ -273,11 +273,10 @@ func (srv *Service) resumeDownload(ctx context.Context, src string, partialFile 
 	monitor := executionMonitorFromContext(ctx)
 	stallTimeout := downloadStallTimeout
 	if monitor != nil {
-		var downloadTransfer *transfer
-		if downloadTransfer, err = monitor.startTransfer(src); err != nil {
+		if err = monitor.startTransfer(); err != nil {
 			return err
 		}
-		defer monitor.finishTransfer(downloadTransfer)
+		defer monitor.finishTransfer()
 
 		stallTimeout = monitor.stallTimeout
 	}

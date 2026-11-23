@@ -74,14 +74,14 @@ func Test_executionMonitor_CancelsAtDeadlineWithoutDownloads(t *testing.T) {
 	assert.True(t, time.Since(start) >= 30*time.Millisecond)
 	assert.True(t, m.inOvertime())
 
-	_, err := m.startTransfer("file.txt")
+	err := m.startTransfer()
 	assert.True(t, errors.Is(err, errExecutionTimeExceeded))
 }
 
 func Test_executionMonitor_WaitsForDownloadInProgress(t *testing.T) {
 	m := newTestExecutionMonitor(30 * time.Millisecond)
 
-	tr, err := m.startTransfer("file.txt")
+	err := m.startTransfer()
 	assert.NoError(t, err)
 
 	ctx, done := startWatch(t, m)
@@ -96,11 +96,11 @@ func Test_executionMonitor_WaitsForDownloadInProgress(t *testing.T) {
 	assert.True(t, m.inOvertime())
 
 	// no new downloads are allowed in overtime
-	_, err = m.startTransfer("other.txt")
+	err = m.startTransfer()
 	assert.True(t, errors.Is(err, errExecutionTimeExceeded))
 
 	// once the download finishes, execution is cancelled
-	m.finishTransfer(tr)
+	m.finishTransfer()
 	waitFor(t, ctx.Done(), time.Second)
 	waitFor(t, done, time.Second)
 }
@@ -157,7 +157,7 @@ func activeTransfers(m *executionMonitor) int {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	return len(m.transfers)
+	return m.transfers
 }
 
 func Test_downloadHTTP_TransferIsTracked(t *testing.T) {
@@ -263,4 +263,15 @@ func Test_downloadHTTP_SlowDownloadIsNotCancelled(t *testing.T) {
 	assert.True(t, created)
 	assert.True(t, time.Since(start) > m.stallTimeout)
 	assertFileContents(t, dst, contents)
+}
+
+func Test_executionMonitor_RejectsDownloadsPastDeadline(t *testing.T) {
+	// the watchdog isn't running, so the deadline must be enforced when the download is registered
+	m := newExecutionMonitor(10 * time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
+
+	err := m.startTransfer()
+	assert.True(t, errors.Is(err, errExecutionTimeExceeded))
+	assert.True(t, m.inOvertime())
+	assert.Equal(t, activeTransfers(m), 0)
 }
