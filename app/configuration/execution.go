@@ -81,6 +81,23 @@ func (m *executionMonitor) inOvertime() bool {
 	return m.overtime.Load()
 }
 
+// pastDeadline returns true when the execution exceeded its time limit, switching it into overtime.
+// Unlike inOvertime, it doesn't depend on the watchdog having noticed the deadline yet, so work finishing or
+// starting just after the deadline is treated consistently.
+func (m *executionMonitor) pastDeadline() bool {
+	if m.overtime.Load() {
+		return true
+	}
+
+	if time.Now().Before(m.deadline) {
+		return false
+	}
+
+	m.overtime.Store(true)
+
+	return true
+}
+
 // startTransfer registers a new download.
 // Returns errExecutionTimeExceeded when the deadline passed, as no new downloads are allowed then.
 func (m *executionMonitor) startTransfer() error {
@@ -89,8 +106,7 @@ func (m *executionMonitor) startTransfer() error {
 
 	// the deadline is checked here as well, so no download is started between the deadline and the watchdog
 	// noticing it
-	if m.inOvertime() || !time.Now().Before(m.deadline) {
-		m.overtime.Store(true)
+	if m.pastDeadline() {
 		return errExecutionTimeExceeded
 	}
 

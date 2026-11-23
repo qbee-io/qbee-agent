@@ -337,7 +337,7 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 		log.Debugf("starting processing of bundle %s", bundleName)
 
 		// Stop bundles execution if execution time limit was reached.
-		if execCtx.Err() != nil || monitor.inOvertime() {
+		if execCtx.Err() != nil || monitor.pastDeadline() {
 			break
 		}
 

@@ -152,6 +152,41 @@ func Test_downloadHTTP_DownloadCompletedInOvertimeIsInstalledNextRun(t *testing.
 	assertNoPartialDownload(t, dst, fileMetadata)
 }
 
+// lateReader returns its data only after the monitor's deadline passed, emulating a download completing just
+// after the deadline, before the watchdog noticed it.
+type lateReader struct {
+	reader  io.Reader
+	monitor *executionMonitor
+}
+
+func (r *lateReader) Read(p []byte) (int, error) {
+	time.Sleep(time.Until(r.monitor.deadline) + 10*time.Millisecond)
+	return r.reader.Read(p)
+}
+
+func Test_downloadHTTP_DownloadCompletedPastDeadlineIsNotInstalled(t *testing.T) {
+	contents := testFileContents()
+	srv, mock := newMockedFileService(t)
+
+	// the watchdog isn't running, so only the deadline itself can stop the download from being installed
+	m := newExecutionMonitor(50 * time.Millisecond)
+	mock.AddHandler(func(req *http.Request) (*http.Response, error) {
+		return fileResponse(http.StatusOK, &lateReader{reader: bytes.NewReader(contents), monitor: m}), nil
+	})
+
+	dst := filepath.Join(t.TempDir(), "file.txt")
+	fileMetadata := testFileMetadata(contents)
+	partialPath := GetPartialDownloadFilePath(dst, fileMetadata.SHA256())
+
+	created, err := srv.downloadMetadataCompare(withExecutionMonitor(t.Context(), m), "", "file.txt", dst,
+		fileMetadata)
+	assert.True(t, errors.Is(err, errExecutionTimeExceeded))
+	assert.False(t, created)
+	assertNotExist(t, dst)
+	assertFileContents(t, partialPath, contents)
+	assert.True(t, m.inOvertime())
+}
+
 // activeTransfers returns the number of downloads registered with the monitor.
 func activeTransfers(m *executionMonitor) int {
 	m.mutex.Lock()

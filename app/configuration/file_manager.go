@@ -300,10 +300,10 @@ func (srv *Service) resumeDownload(ctx context.Context, src string, partialFile 
 		return stall.wrap(err)
 	}
 
-	// When the download finished in overtime, don't let the caller act on the downloaded file
+	// When the download finished past the deadline, don't let the caller act on the downloaded file
 	// (e.g. install a package or RAUC bundle), as the execution is about to be cancelled.
 	// The complete partial download is kept and installed during the next run.
-	if monitor != nil && monitor.inOvertime() {
+	if monitor != nil && monitor.pastDeadline() {
 		return fmt.Errorf("download completed after %w, it will be installed during the next run", errExecutionTimeExceeded)
 	}
 
