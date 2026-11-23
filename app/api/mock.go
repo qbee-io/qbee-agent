@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 )
 
 // MockResponse represents a mock response with the request that was used to get it.
@@ -46,6 +47,8 @@ func (resp *MockResponse) Request() *http.Request {
 
 // Mock is a mock RoundTripper implementation.
 type Mock struct {
+	// mutex protects mockResponses, as requests may be sent while the test adds responses
+	mutex         sync.Mutex
 	mockResponses []*MockResponse
 }
 
@@ -54,6 +57,9 @@ func (m *Mock) AddResponse(response *http.Response) *MockResponse {
 	mockResponse := &MockResponse{
 		httpResponse: response,
 	}
+
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 
 	m.mockResponses = append(m.mockResponses, mockResponse)
 
@@ -65,6 +71,9 @@ func (m *Mock) AddHandler(handler MockHandlerFunc) *MockResponse {
 	mockResponse := &MockResponse{
 		handler: handler,
 	}
+
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 
 	m.mockResponses = append(m.mockResponses, mockResponse)
 
@@ -82,7 +91,10 @@ func (m *Mock) Add(statusCode int, body string, args ...any) *MockResponse {
 
 // RoundTrip is the RoundTripper interface implementation, so we can use this in http.Client.
 func (m *Mock) RoundTrip(req *http.Request) (*http.Response, error) {
+	m.mutex.Lock()
+
 	if len(m.mockResponses) == 0 {
+		m.mutex.Unlock()
 		return nil, fmt.Errorf("no more mockResponses")
 	}
 
@@ -91,6 +103,8 @@ func (m *Mock) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	response.called = true
 	response.httpRequest = req
+
+	m.mutex.Unlock()
 
 	if response.handler != nil {
 		return response.handler(req)

@@ -60,7 +60,7 @@ func TestAgent_signedURLTTL_ExecutionInProgress(t *testing.T) {
 	exec.executionTimeout = 180
 
 	a := newCheckInTestAgent(t)
-	a.useRealExecution()
+	a.useRealExecution(exec)
 	a.configResponse = exec.config(t, "")
 
 	// the execution starts with a 3 hour time limit and blocks downloading the file

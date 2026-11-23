@@ -28,7 +28,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync/atomic"
-	"syscall"
 	"testing"
 	"time"
 
@@ -239,6 +238,9 @@ type checkInTestAgent struct {
 	// configResponse is the configuration returned by the mocked API (if set)
 	configResponse []byte
 
+	// realExecution serves the file download of a real configuration execution (if set)
+	realExecution *realExecution
+
 	// failConfigRequests makes configuration requests fail with a connection error
 	failConfigRequests atomic.Bool
 }
@@ -288,33 +290,40 @@ func newCheckInTestAgent(t *testing.T) *checkInTestAgent {
 	return a
 }
 
+// handleRequest responds to requests to the mocked API.
+// Requests are routed by path, so any queued handler can respond to any request.
+func (a *checkInTestAgent) handleRequest(req *http.Request) (*http.Response, error) {
+	if a.realExecution != nil && req.URL.Path == a.realExecution.downloadPath() {
+		return a.realExecution.serveDownload(), nil
+	}
+
+	body := ""
+	switch req.URL.Path {
+	case testConfigAPIPath:
+		a.configRequests.Add(1)
+
+		if a.failConfigRequests.Load() {
+			return nil, errors.New("connection refused")
+		}
+
+		body = `{"commit_id":"test-commit","bundles":[]}`
+		if a.configResponse != nil {
+			body = string(a.configResponse)
+		}
+	case testMetricsAPIPath:
+		a.metricsRequests.Add(1)
+	}
+
+	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(body))}, nil
+}
+
 // checkIn runs a full agent run and fails the test if the check-in doesn't return promptly.
 func (a *checkInTestAgent) checkIn(t *testing.T) {
 	t.Helper()
 
 	// respond to configuration and metrics requests, in whichever order they come
-	handler := func(req *http.Request) (*http.Response, error) {
-		body := ""
-		switch req.URL.Path {
-		case testConfigAPIPath:
-			a.configRequests.Add(1)
-
-			if a.failConfigRequests.Load() {
-				return nil, errors.New("connection refused")
-			}
-
-			body = `{"commit_id":"test-commit","bundles":[]}`
-			if a.configResponse != nil {
-				body = string(a.configResponse)
-			}
-		case testMetricsAPIPath:
-			a.metricsRequests.Add(1)
-		}
-
-		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(body))}, nil
-	}
-	a.mock.AddHandler(handler)
-	a.mock.AddHandler(handler)
+	a.mock.AddHandler(a.handleRequest)
+	a.mock.AddHandler(a.handleRequest)
 
 	done := make(chan struct{})
 	go func() {
@@ -440,7 +449,7 @@ func TestNewWithoutCredentials_SetsDefaultImplementations(t *testing.T) {
 	assert.True(t, agent.collectInventories != nil)
 }
 
-// realExecution is a configuration which is executed for real. It distributes a file from a FIFO,
+// realExecution is a configuration which is executed for real. It distributes a file from the mocked API,
 // so the execution blocks while downloading the file, until the test provides the file contents.
 type realExecution struct {
 	source   string
@@ -449,20 +458,31 @@ type realExecution struct {
 
 	// executionTimeout is set in the settings bundle (in minutes)
 	executionTimeout int
+
+	// downloadStarted receives the write end of the download's response body, once the download started
+	downloadStarted chan *io.PipeWriter
 }
 
 func newRealExecution(t *testing.T) *realExecution {
-	dir := t.TempDir()
-
-	r := &realExecution{
-		source:   filepath.Join(dir, "source.fifo"),
-		dst:      filepath.Join(dir, "destination.txt"),
-		contents: []byte("distributed by a real configuration execution\n"),
+	return &realExecution{
+		source:          "real-execution/source.txt",
+		dst:             filepath.Join(t.TempDir(), "destination.txt"),
+		contents:        []byte("distributed by a real configuration execution\n"),
+		downloadStarted: make(chan *io.PipeWriter, 1),
 	}
+}
 
-	assert.NoError(t, syscall.Mkfifo(r.source, 0600))
+// downloadPath returns the API path from which the file is downloaded.
+func (r *realExecution) downloadPath() string {
+	return "/v1/org/device/auth/files/" + r.source
+}
 
-	return r
+// serveDownload responds to the download with a body which blocks until the test provides the file contents.
+func (r *realExecution) serveDownload() *http.Response {
+	reader, writer := io.Pipe()
+	r.downloadStarted <- writer
+
+	return &http.Response{StatusCode: http.StatusOK, Body: reader}
 }
 
 // config returns the configuration, with the connectivity watchdog enabled when watchdogThreshold is set.
@@ -473,7 +493,7 @@ func (r *realExecution) config(t *testing.T, watchdogThreshold string) []byte {
 		CommitID: "test-commit",
 		Bundles:  []string{configuration.BundleSettings},
 		BundleData: configuration.BundleData{
-			// reporting is disabled, so only the check-in uses the mocked API
+			// reporting is disabled, so only the check-in and the file download use the mocked API
 			Settings: configuration.SettingsBundle{
 				Metadata:         configuration.Metadata{Enabled: true},
 				EnableMetrics:    true,
@@ -484,7 +504,7 @@ func (r *realExecution) config(t *testing.T, watchdogThreshold string) []byte {
 				Metadata: configuration.Metadata{Enabled: true},
 				FileSets: []configuration.FileSet{{
 					Files: []configuration.File{{
-						Source:      "file://" + r.source,
+						Source:      r.source,
 						Destination: r.dst,
 						Digest:      hex.EncodeToString(digest[:]),
 						Size:        int64(len(r.contents)),
@@ -510,31 +530,25 @@ func (r *realExecution) config(t *testing.T, watchdogThreshold string) []byte {
 	return data
 }
 
-// waitForDownload waits until the execution started downloading the file and returns the FIFO's write end.
-func (r *realExecution) waitForDownload(t *testing.T) *os.File {
+// waitForDownload waits until the execution started downloading the file and returns the write end of
+// the download's response body.
+func (r *realExecution) waitForDownload(t *testing.T) *io.PipeWriter {
 	t.Helper()
 
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		// opening the write end without blocking only succeeds once the reader opened the FIFO
-		writer, err := os.OpenFile(r.source, os.O_WRONLY|syscall.O_NONBLOCK, 0)
-		if err == nil {
-			// if the test fails before finishing the download, closing the writer ends the execution,
-			// so it doesn't keep holding the configuration lock
-			t.Cleanup(func() { _ = writer.Close() })
-			return writer
-		}
-
-		if !errors.Is(err, syscall.ENXIO) || time.Now().After(deadline) {
-			t.Fatalf("configuration execution didn't start downloading the file: %v", err)
-		}
-
-		time.Sleep(5 * time.Millisecond)
+	select {
+	case writer := <-r.downloadStarted:
+		// if the test fails before finishing the download, closing the writer ends the execution,
+		// so it doesn't keep holding the configuration lock
+		t.Cleanup(func() { _ = writer.Close() })
+		return writer
+	case <-time.After(5 * time.Second):
+		t.Fatal("configuration execution didn't start downloading the file")
+		return nil
 	}
 }
 
 // finishDownload provides the file contents, which lets the execution finish.
-func (r *realExecution) finishDownload(t *testing.T, writer *os.File) {
+func (r *realExecution) finishDownload(t *testing.T, writer *io.PipeWriter) {
 	t.Helper()
 
 	_, err := writer.Write(r.contents)
@@ -543,7 +557,12 @@ func (r *realExecution) finishDownload(t *testing.T, writer *os.File) {
 }
 
 // useRealExecution makes the agent execute configuration for real, counting the executions.
-func (a *checkInTestAgent) useRealExecution() {
+func (a *checkInTestAgent) useRealExecution(exec *realExecution) {
+	a.realExecution = exec
+
+	// the file download is an additional request to the mocked API
+	a.mock.AddHandler(a.handleRequest)
+
 	a.executeConfig = func(ctx context.Context, configData *configuration.CommittedConfig) error {
 		a.executions.Add(1)
 		return a.Configuration.Execute(ctx, configData)
@@ -554,7 +573,7 @@ func TestAgent_CheckInsDuringRealConfigExecution(t *testing.T) {
 	exec := newRealExecution(t)
 
 	a := newCheckInTestAgent(t)
-	a.useRealExecution()
+	a.useRealExecution(exec)
 	a.configResponse = exec.config(t, "")
 
 	// first check-in starts the execution, which blocks downloading the file
@@ -585,7 +604,7 @@ func TestAgent_ConnectivityWatchdogRebootWaitsForRealConfigExecution(t *testing.
 	exec := newRealExecution(t)
 
 	a := newCheckInTestAgent(t)
-	a.useRealExecution()
+	a.useRealExecution(exec)
 	a.configResponse = exec.config(t, "1")
 
 	rebootCalls := new(atomic.Int32)
