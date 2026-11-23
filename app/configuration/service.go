@@ -278,7 +278,8 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 
 	executionTimeout := srv.ExecutionTimeout()
 
-	if err := srv.acquireLock(); err != nil {
+	lock, err := srv.acquireLock()
+	if err != nil {
 		log.Infof("failed to acquire execution lock - %v", err)
 		return nil
 	}
@@ -286,12 +287,16 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 	// Keep refreshing the lock file while the execution runs. Other processes (e.g. "qbee-agent config") consider
 	// a lock file stale only when it hasn't been refreshed for lockStaleTimeout, so a long execution keeps its lock,
 	// while a lock left behind by a crashed process blocks configuration execution for at most lockStaleTimeout.
-	// The refresh stops before the lock is released, so it never touches a lock file created by another process.
-	stopLockRefresh := srv.keepLockFresh(lockRefreshInterval)
+	// If this process was suspended for longer than that, another process may have taken over the lock. Then this
+	// execution is stopped, and the lock file is neither refreshed nor removed, so it stays with the other process.
+	lockCtx, lockLost := context.WithCancel(ctx)
+	defer lockLost()
+
+	stopLockRefresh := lock.keepFresh(lockRefreshInterval, lockLost)
 	defer func() {
 		stopLockRefresh()
 
-		if err := srv.releaseLock(); err != nil {
+		if err := lock.release(); err != nil {
 			log.Errorf("failed to release execution lock - %v", err)
 		}
 	}()
@@ -306,7 +311,7 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 	if parametersBundle == nil {
 		parametersBundle = new(ParametersBundle)
 	}
-	ctxWithParameters := parametersBundle.Context(ctx, srv.urlSigner)
+	ctxWithParameters := parametersBundle.Context(lockCtx, srv.urlSigner)
 
 	monitor := newExecutionMonitor(executionTimeout)
 	execCtx, cancel := context.WithCancel(withExecutionMonitor(ctxWithParameters, monitor))

@@ -25,45 +25,82 @@ import (
 	"go.qbee.io/agent/app/utils/assert"
 )
 
-// newLockTestService returns a service which holds the execution lock, released when the test finishes.
-func newLockTestService(t *testing.T) *Service {
+// newLockTestService returns a service and the execution lock it holds, released when the test finishes.
+func newLockTestService(t *testing.T) (*Service, *executionLock) {
 	srv := New(nil, t.TempDir(), t.TempDir()).WithLockFile(filepath.Join(t.TempDir(), "config.lock"))
 
-	assert.NoError(t, srv.acquireLock())
-	t.Cleanup(func() { _ = srv.releaseLock() })
+	lock, err := srv.acquireLock()
+	assert.NoError(t, err)
+	t.Cleanup(func() { _ = os.Remove(lock.path) })
 
-	return srv
+	return srv, lock
 }
 
-func setLockAge(t *testing.T, srv *Service, age time.Duration) {
+func setLockAge(t *testing.T, lock *executionLock, age time.Duration) {
 	modTime := time.Now().Add(-age)
-	assert.NoError(t, os.Chtimes(srv.lockFilePath(), modTime, modTime))
+	assert.NoError(t, os.Chtimes(lock.path, modTime, modTime))
+}
+
+func lockAcquired(srv *Service) bool {
+	_, err := srv.acquireLock()
+	return err == nil
 }
 
 func TestService_acquireLock(t *testing.T) {
-	srv := newLockTestService(t)
+	srv, lock := newLockTestService(t)
 
 	// lock held by another run, which keeps it fresh
-	setLockAge(t, srv, lockStaleTimeout-time.Minute)
-	assert.True(t, srv.acquireLock() != nil)
+	setLockAge(t, lock, lockStaleTimeout-time.Minute)
+	assert.False(t, lockAcquired(srv))
 
 	// lock left behind by a run which isn't running anymore
-	setLockAge(t, srv, lockStaleTimeout+time.Minute)
-	assert.NoError(t, srv.acquireLock())
+	setLockAge(t, lock, lockStaleTimeout+time.Minute)
+	assert.True(t, lockAcquired(srv))
 }
 
-func TestService_keepLockFresh(t *testing.T) {
-	srv := newLockTestService(t)
-	setLockAge(t, srv, lockStaleTimeout+time.Minute)
+func TestExecutionLock_keepFresh(t *testing.T) {
+	srv, lock := newLockTestService(t)
+	setLockAge(t, lock, lockStaleTimeout+time.Minute)
 
-	stop := srv.keepLockFresh(5 * time.Millisecond)
+	stop := lock.keepFresh(5*time.Millisecond, func() { t.Error("lock reported as lost") })
 	time.Sleep(50 * time.Millisecond)
 	stop()
 
-	stat, err := os.Stat(srv.lockFilePath())
+	stat, err := os.Stat(lock.path)
 	assert.NoError(t, err)
 	assert.True(t, time.Since(stat.ModTime()) < lockStaleTimeout)
 
 	// the lock is refreshed, so another run can't acquire it
-	assert.True(t, srv.acquireLock() != nil)
+	assert.False(t, lockAcquired(srv))
+
+	assert.NoError(t, lock.release())
+	assert.True(t, lockAcquired(srv))
+}
+
+func TestExecutionLock_takenOver(t *testing.T) {
+	srv, lock := newLockTestService(t)
+
+	// another run takes over the lock, e.g. while this process was suspended
+	setLockAge(t, lock, lockStaleTimeout+time.Minute)
+	otherLock, err := srv.acquireLock()
+	assert.NoError(t, err)
+	setLockAge(t, otherLock, time.Minute)
+
+	lost := make(chan struct{})
+	stop := lock.keepFresh(5*time.Millisecond, func() { close(lost) })
+
+	select {
+	case <-lost:
+	case <-time.After(time.Second):
+		t.Fatal("lost lock not detected")
+	}
+	stop()
+
+	// the other run's lock is neither refreshed nor removed
+	stat, err := os.Stat(otherLock.path)
+	assert.NoError(t, err)
+	assert.True(t, time.Since(stat.ModTime()) > 30*time.Second)
+
+	assert.True(t, lock.release() != nil)
+	assert.NoError(t, otherLock.owned())
 }
