@@ -825,3 +825,48 @@ func Test_downloadMetadataCompare_RemovesPartialDownloadsWithOtherDigest(t *test
 	assert.NoError(t, err)
 	assert.Equal(t, contents, got)
 }
+
+// runWithin fails the test if fn doesn't return within timeout.
+func runWithin(t *testing.T, timeout time.Duration, fn func()) {
+	t.Helper()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		fn()
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(timeout):
+		t.Fatal("blocked on a non-regular local source")
+	}
+}
+
+func Test_localSource_RejectsFIFO(t *testing.T) {
+	tempDir := t.TempDir()
+	fifoPath := filepath.Join(tempDir, "fifo")
+	assert.NoError(t, unix.Mkfifo(fifoPath, 0600))
+	src := "file://" + fifoPath
+
+	srv := new(Service)
+
+	// with metadata supplied, the source is opened for download
+	runWithin(t, 5*time.Second, func() {
+		fileMetadata := &FileMetadata{
+			Tags: map[string]string{fileDigestSHA256Tag: sha256Hex([]byte("contents"))},
+			Size: 8,
+		}
+
+		created, err := srv.downloadMetadataCompare(context.Background(), "", src,
+			filepath.Join(tempDir, "file.txt"), fileMetadata)
+		assert.True(t, err != nil && strings.Contains(err.Error(), "not a regular file"))
+		assert.False(t, created)
+	})
+
+	// without metadata supplied, the source is opened to calculate it
+	runWithin(t, 5*time.Second, func() {
+		_, err := srv.getFileMetadataFromLocal(src)
+		assert.True(t, err != nil && strings.Contains(err.Error(), "not a regular file"))
+	})
+}

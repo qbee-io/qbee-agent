@@ -352,7 +352,7 @@ const localFileSchema = "file://"
 
 // getLocalFile returns file read-closer for a file on the local filesystem.
 func getLocalFile(src string, offset int64) (io.ReadCloser, error) {
-	fp, err := os.Open(strings.TrimPrefix(src, localFileSchema))
+	fp, err := openLocalFile(src)
 	if err != nil {
 		return nil, err
 	}
@@ -362,6 +362,33 @@ func getLocalFile(src string, offset int64) (io.ReadCloser, error) {
 			_ = fp.Close()
 			return nil, err
 		}
+	}
+
+	return fp, nil
+}
+
+// openLocalFile opens a local (file://) source for reading. Only regular files are accepted.
+//
+// Opening and reading e.g. a FIFO can block indefinitely and doesn't observe context cancellation, which would keep
+// the configuration execution (and its lock) alive forever. The file is opened with O_NONBLOCK, so opening a FIFO
+// doesn't block before the file type is checked. O_NONBLOCK has no effect on regular files.
+func openLocalFile(src string) (*os.File, error) {
+	path := strings.TrimPrefix(src, localFileSchema)
+
+	fp, err := os.OpenFile(path, os.O_RDONLY|unix.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	info, err := fp.Stat()
+	if err != nil {
+		_ = fp.Close()
+		return nil, err
+	}
+
+	if !info.Mode().IsRegular() {
+		_ = fp.Close()
+		return nil, fmt.Errorf("%s is not a regular file", path)
 	}
 
 	return fp, nil
@@ -378,7 +405,7 @@ func (srv *Service) getFile(ctx context.Context, src string, offset int64) (io.R
 
 // getFileMetadataFromLocal returns metadata for a file on the local filesystem.
 func (srv *Service) getFileMetadataFromLocal(src string) (*FileMetadata, error) {
-	fp, err := os.Open(strings.TrimPrefix(src, localFileSchema))
+	fp, err := openLocalFile(src)
 	if err != nil {
 		return nil, fmt.Errorf("error opening file %s: %w", src, err)
 	}
