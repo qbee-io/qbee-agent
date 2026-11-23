@@ -295,6 +295,9 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 		}
 	}()
 
+	// Record the time limit of this execution, so URLs signed during it remain valid for as long as it may run,
+	// even when a check-in changes the setting in the meantime (see Agent.signedURLTTL). Reset it when the
+	// execution is done, so URLs signed afterwards don't get a longer validity than needed.
 	srv.activeExecutionTimeout.Store(int64(executionTimeout))
 	defer srv.activeExecutionTimeout.Store(0)
 
