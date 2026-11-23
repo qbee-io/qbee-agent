@@ -152,6 +152,14 @@ func Test_downloadHTTP_DownloadCompletedInOvertimeIsInstalledNextRun(t *testing.
 	assertNoPartialDownload(t, dst, fileMetadata)
 }
 
+// activeTransfers returns the number of downloads registered with the monitor.
+func activeTransfers(m *executionMonitor) int {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	return len(m.transfers)
+}
+
 func Test_downloadHTTP_TransferIsTracked(t *testing.T) {
 	contents := testFileContents()
 	srv, mock := newMockedFileService(t)
@@ -160,7 +168,7 @@ func Test_downloadHTTP_TransferIsTracked(t *testing.T) {
 
 	var trackedDuringDownload bool
 	mock.AddHandler(func(req *http.Request) (*http.Response, error) {
-		trackedDuringDownload = m.activeTransfer() != nil
+		trackedDuringDownload = activeTransfers(m) == 1
 		return fileResponse(http.StatusOK, bytes.NewReader(contents)), nil
 	})
 
@@ -173,7 +181,7 @@ func Test_downloadHTTP_TransferIsTracked(t *testing.T) {
 	assert.True(t, trackedDuringDownload)
 
 	// transfer is de-registered once finished
-	assert.True(t, m.activeTransfer() == nil)
+	assert.Equal(t, activeTransfers(m), 0)
 }
 
 // trickleReader returns a single byte at a time, every interval, until data is exhausted.

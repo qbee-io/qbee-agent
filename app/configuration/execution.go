@@ -105,16 +105,20 @@ func (m *executionMonitor) finishTransfer(t *transfer) {
 	delete(m.transfers, t)
 }
 
-// activeTransfer returns a download in progress (if any).
-func (m *executionMonitor) activeTransfer() *transfer {
+// enterOvertime switches the execution into overtime and returns a download in progress (if any).
+// It holds the mutex used by startTransfer, so every download is either rejected or seen here.
+// first is true when the execution wasn't in overtime before.
+func (m *executionMonitor) enterOvertime() (t *transfer, first bool) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	for t := range m.transfers {
-		return t
+	first = !m.overtime.Swap(true)
+
+	for t = range m.transfers {
+		return t, first
 	}
 
-	return nil
+	return nil, first
 }
 
 // watch the execution and call cancel when it should be stopped.
@@ -134,15 +138,14 @@ func (m *executionMonitor) watch(ctx context.Context, cancel context.CancelFunc)
 				continue
 			}
 
-			t := m.activeTransfer()
+			t, first := m.enterOvertime()
 			if t == nil {
 				log.Warnf("configuration execution exceeded time limit of %s - stopping", m.timeout)
-				m.overtime.Store(true)
 				cancel()
 				return
 			}
 
-			if !m.overtime.Swap(true) {
+			if first {
 				log.Infof("configuration execution exceeded time limit of %s - waiting for download of %s to finish",
 					m.timeout, t.src)
 			}
