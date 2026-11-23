@@ -869,4 +869,12 @@ func Test_localSource_RejectsFIFO(t *testing.T) {
 		_, err := srv.getFileMetadataFromLocal(src)
 		assert.True(t, err != nil && strings.Contains(err.Error(), "not a regular file"))
 	})
+
+	// templates are opened to calculate the digest of the rendered file
+	runWithin(t, 5*time.Second, func() {
+		dst := filepath.Join(tempDir, "rendered.txt")
+		created, err := srv.downloadTemplateFile(context.Background(), "", src, dst, File{}, map[string]string{})
+		assert.True(t, err != nil && strings.Contains(err.Error(), "not a regular file"))
+		assert.False(t, created)
+	})
 }

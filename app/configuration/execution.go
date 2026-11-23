@@ -185,6 +185,17 @@ func executionMonitorFromContext(ctx context.Context) *executionMonitor {
 	return m
 }
 
+// checkExecutionDeadline returns errExecutionTimeExceeded when the execution of ctx (if any) is past its deadline.
+// File operations check it before acting, so nothing is installed after the deadline, even when it needs no
+// download (e.g. a file which was already downloaded completely by a previous run, or is in the cache).
+func checkExecutionDeadline(ctx context.Context) error {
+	if m := executionMonitorFromContext(ctx); m != nil && m.pastDeadline() {
+		return errExecutionTimeExceeded
+	}
+
+	return nil
+}
+
 // stallWatch cancels a download which receives no data within the stall timeout.
 type stallWatch struct {
 	ctx     context.Context

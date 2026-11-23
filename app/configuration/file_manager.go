@@ -141,6 +141,10 @@ func (srv *Service) downloadMetadataCompare(ctx context.Context, label, src, dst
 		return false, fmt.Errorf("invalid file metadata for %s: file size must not be negative and SHA256 digest must be present", src)
 	}
 
+	if err := checkExecutionDeadline(ctx); err != nil {
+		return false, err
+	}
+
 	// check if file already exists and has the right contents
 	if fileReady, err := isFileReady(dst, fileMetadata); err != nil || fileReady {
 		return false, err
@@ -366,7 +370,7 @@ func getLocalFile(src string, offset int64) (io.ReadCloser, error) {
 	return fp, nil
 }
 
-// openLocalFile opens a local (file://) source for reading. Only regular files are accepted.
+// openLocalFile opens a local source (file:// or a path) for reading. Only regular files are accepted.
 //
 // Opening and reading e.g. a FIFO can block indefinitely and doesn't observe context cancellation, which would keep
 // the configuration execution (and its lock) alive forever. The file is opened with O_NONBLOCK, so opening a FIFO
@@ -467,6 +471,10 @@ func (srv *Service) downloadTemplateFile(
 		}
 	}()
 
+	if err = checkExecutionDeadline(ctx); err != nil {
+		return false, err
+	}
+
 	var cacheSrc string
 
 	if strings.HasPrefix(src, localFileSchema) {
@@ -501,7 +509,7 @@ func (srv *Service) downloadTemplateFile(
 	}
 
 	var srcFile io.ReadCloser
-	if srcFile, err = os.Open(cacheSrc); err != nil {
+	if srcFile, err = openLocalFile(cacheSrc); err != nil {
 		return false, fmt.Errorf("error opening template file %s: %w", cacheSrc, err)
 	}
 
@@ -631,7 +639,7 @@ func templateScanner(data []byte, atEOF bool) (advance int, token []byte, err er
 func calculateTemplateDigest(src string, params map[string]string) (string, error) {
 	digest := sha256.New()
 
-	srcFile, err := os.Open(src)
+	srcFile, err := openLocalFile(src)
 	if err != nil {
 		return "", fmt.Errorf("error opening template file %s: %w", src, err)
 	}

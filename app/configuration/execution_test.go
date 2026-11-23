@@ -310,3 +310,53 @@ func Test_executionMonitor_RejectsDownloadsPastDeadline(t *testing.T) {
 	assert.True(t, m.inOvertime())
 	assert.Equal(t, activeTransfers(m), 0)
 }
+
+// pastDeadlineContext returns a context of an execution which is past its deadline, but which the watchdog
+// didn't notice yet (it isn't running), so only the deadline itself can stop work from being done.
+func pastDeadlineContext(t *testing.T) context.Context {
+	return withExecutionMonitor(t.Context(), newExecutionMonitor(-time.Second))
+}
+
+func Test_downloadMetadataCompare_CompletePartialIsNotInstalledPastDeadline(t *testing.T) {
+	contents := testFileContents()
+	dst := filepath.Join(t.TempDir(), "file.txt")
+	fileMetadata := testFileMetadata(contents)
+
+	// a previous run downloaded the file completely, but didn't install it
+	partialPath := GetPartialDownloadFilePath(dst, fileMetadata.SHA256())
+	assert.NoError(t, os.Mkdir(filepath.Dir(partialPath), 0700))
+	assert.NoError(t, os.WriteFile(partialPath, contents, 0600))
+
+	created, err := new(Service).downloadMetadataCompare(pastDeadlineContext(t), "", "file.txt", dst, fileMetadata)
+	assert.True(t, errors.Is(err, errExecutionTimeExceeded))
+	assert.False(t, created)
+	assertNotExist(t, dst)
+
+	// it's kept for the next run
+	assertFileContents(t, partialPath, contents)
+}
+
+func Test_downloadFile_CachedFileIsNotUsedPastDeadline(t *testing.T) {
+	contents := testFileContents()
+	cached := filepath.Join(t.TempDir(), "package.deb")
+	assert.NoError(t, os.WriteFile(cached, contents, 0600))
+
+	// callers act on the cached file when downloadFile succeeds (e.g. installing a package), so it must fail
+	file := File{Digest: testFileMetadata(contents).SHA256(), Size: int64(len(contents))}
+	created, err := new(Service).downloadFile(pastDeadlineContext(t), "", "package.deb", cached, file)
+	assert.True(t, errors.Is(err, errExecutionTimeExceeded))
+	assert.False(t, created)
+}
+
+func Test_downloadTemplateFile_IsNotRenderedPastDeadline(t *testing.T) {
+	dir := t.TempDir()
+	template := filepath.Join(dir, "template.txt")
+	assert.NoError(t, os.WriteFile(template, []byte("value={{ key }}\n"), 0600))
+	dst := filepath.Join(dir, "rendered.txt")
+
+	created, err := new(Service).downloadTemplateFile(pastDeadlineContext(t), "", "file://"+template, dst, File{},
+		map[string]string{"key": "value"})
+	assert.True(t, errors.Is(err, errExecutionTimeExceeded))
+	assert.False(t, created)
+	assertNotExist(t, dst)
+}
