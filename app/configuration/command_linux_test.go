@@ -33,7 +33,7 @@ import (
 )
 
 func TestRunCommand_CancelKillsSubprocesses(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 
 	// the background process keeps the command's output open after the shell is killed
@@ -47,7 +47,7 @@ func TestRunCommand_CancelKillsSubprocesses(t *testing.T) {
 }
 
 func TestRunCommand_CancelKillsSubprocessesAfterShellExits(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
 	defer cancel()
 
 	// the shell exits right away, while its background process keeps the output open
@@ -60,7 +60,7 @@ func TestRunCommand_CancelKillsSubprocessesAfterShellExits(t *testing.T) {
 }
 
 func TestRunCommand_CancelStopsBackgroundSubprocesses(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
 	defer cancel()
 
 	// the background process would create the marker after the deadline, unless it's killed
@@ -75,7 +75,7 @@ func TestRunCommand_CancelStopsBackgroundSubprocesses(t *testing.T) {
 }
 
 func TestRunCommand_CancelStopsBackgroundSubprocessesWithoutOutput(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
 	defer cancel()
 
 	// the background process doesn't keep the output open, and the command is still running at the deadline
@@ -90,7 +90,7 @@ func TestRunCommand_CancelStopsBackgroundSubprocessesWithoutOutput(t *testing.T)
 }
 
 func TestRunCommand_CancelClosesOutputOfDetachedSubprocesses(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
 	defer cancel()
 
 	// the detached process isn't in the command's process group, so it isn't killed and keeps the output open
@@ -102,7 +102,7 @@ func TestRunCommand_CancelClosesOutputOfDetachedSubprocesses(t *testing.T) {
 }
 
 func TestRunCommand_BackgroundSubprocessWaitingForShell(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	// the background process keeps the output open until the shell is gone
@@ -116,14 +116,14 @@ func TestRunCommand_BackgroundSubprocessWaitingForShell(t *testing.T) {
 
 func TestRunCommand_WaitsForBackgroundSubprocesses(t *testing.T) {
 	// the background process keeps the command's output open after the shell exits
-	output, err := RunCommand(context.Background(), "(sleep 2; echo done) &")
+	output, err := RunCommand(t.Context(), "(sleep 2; echo done) &")
 
 	assert.NoError(t, err)
 	assert.Equal(t, string(output), "done")
 }
 
 func TestRunCommand_ReturnsExitError(t *testing.T) {
-	output, err := RunCommand(context.Background(), "echo failed; exit 3")
+	output, err := RunCommand(t.Context(), "echo failed; exit 3")
 
 	var exitErr *exec.ExitError
 	assert.True(t, errors.As(err, &exitErr))
@@ -132,7 +132,7 @@ func TestRunCommand_ReturnsExitError(t *testing.T) {
 }
 
 func TestRunCommand_CombinesStdoutAndStderr(t *testing.T) {
-	output, err := RunCommand(context.Background(), "echo out1; echo err >&2; echo out2")
+	output, err := RunCommand(t.Context(), "echo out1; echo err >&2; echo out2")
 
 	assert.NoError(t, err)
 	assert.Equal(t, string(output), "out1\nerr\nout2")
@@ -140,7 +140,7 @@ func TestRunCommand_CombinesStdoutAndStderr(t *testing.T) {
 
 func TestRunCommand_KeepsTailOfLargeOutput(t *testing.T) {
 	// about 2MB of output, twice the limit
-	output, err := RunCommand(context.Background(), "seq 1 300000")
+	output, err := RunCommand(t.Context(), "seq 1 300000")
 
 	assert.NoError(t, err)
 	assert.True(t, len(output) <= commandOutputBytesLimit)
@@ -150,7 +150,7 @@ func TestRunCommand_KeepsTailOfLargeOutput(t *testing.T) {
 }
 
 func TestRunCommand_AlreadyCancelled(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
 	marker := filepath.Join(t.TempDir(), "marker")
@@ -163,7 +163,7 @@ func TestRunCommand_AlreadyCancelled(t *testing.T) {
 }
 
 func TestRunCommand_BackgroundSubprocessFinishingBeforeDeadline(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	// the background process outlives the shell, but finishes well before the deadline
@@ -184,10 +184,10 @@ func TestRunCommand_NoLeaks(t *testing.T) {
 	goroutinesBefore := runtime.NumGoroutine()
 
 	for range 20 {
-		_, _ = RunCommand(context.Background(), "echo ok")
-		_, _ = RunCommand(context.Background(), "exit 1")
+		_, _ = RunCommand(t.Context(), "echo ok")
+		_, _ = RunCommand(t.Context(), "exit 1")
 
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+		ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
 		_, _ = RunCommand(ctx, "sleep 30 &")
 		cancel()
 	}

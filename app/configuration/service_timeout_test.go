@@ -19,7 +19,6 @@
 package configuration
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
@@ -75,7 +74,7 @@ func TestService_Execute_StopsAtExecutionTimeout(t *testing.T) {
 
 	start := time.Now()
 	done := make(chan error, 1)
-	go func() { done <- srv.Execute(context.Background(), config) }()
+	go func() { done <- srv.Execute(t.Context(), config) }()
 
 	select {
 	case err := <-done:
