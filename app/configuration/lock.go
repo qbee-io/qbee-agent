@@ -72,7 +72,10 @@ func (srv *Service) acquireLock() (*executionLock, error) {
 
 	// Check if lock file exists and is not stale
 	if lockFileStat, err := os.Stat(lockPath); err == nil {
-		lockFileExpired := time.Since(lockFileStat.ModTime()) > lockStaleTimeout
+		// A lock file far in the future was left behind before the clock was set back (e.g. by NTP on a device
+		// which booted with a wrong time). Otherwise it would block configuration until that time is reached.
+		lockFileAge := time.Since(lockFileStat.ModTime())
+		lockFileExpired := lockFileAge > lockStaleTimeout || lockFileAge < -lockStaleTimeout
 
 		if !lockFileExpired {
 			return nil, fmt.Errorf("another process is running configuration")

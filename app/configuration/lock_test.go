@@ -58,6 +58,18 @@ func TestService_acquireLock(t *testing.T) {
 	assert.True(t, lockAcquired(srv))
 }
 
+func TestService_acquireLock_ClockSetBack(t *testing.T) {
+	srv, lock := newLockTestService(t)
+
+	// lock refreshed by a running process just before the clock was set back slightly
+	setLockAge(t, lock, -time.Minute)
+	assert.False(t, lockAcquired(srv))
+
+	// lock left behind before the clock was set back by days (e.g. after booting with a wrong time)
+	setLockAge(t, lock, -72*time.Hour)
+	assert.True(t, lockAcquired(srv))
+}
+
 func TestExecutionLock_keepFresh(t *testing.T) {
 	srv, lock := newLockTestService(t)
 	setLockAge(t, lock, lockStaleTimeout+time.Minute)
