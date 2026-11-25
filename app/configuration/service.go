@@ -276,21 +276,25 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 
 	executionTimeout := srv.ExecutionTimeout()
 
-	parametersBundle := configData.BundleData.Parameters
-	if parametersBundle == nil {
-		parametersBundle = new(ParametersBundle)
-	}
-	ctxWithParameters := parametersBundle.Context(ctx, srv.urlSigner)
-
-	ctxWithTimeout, cancel := context.WithTimeout(ctxWithParameters, executionTimeout)
-	defer cancel()
-
-	if err := srv.acquireLock(executionTimeout); err != nil {
+	lock, err := srv.acquireLock()
+	if err != nil {
 		log.Infof("failed to acquire execution lock - %v", err)
 		return nil
 	}
+
+	// Keep refreshing the lock file while the execution runs. Other processes (e.g. "qbee-agent config") consider
+	// a lock file stale only when it hasn't been refreshed for lockStaleTimeout, so a long execution keeps its lock,
+	// while a lock left behind by a crashed process blocks configuration execution for at most lockStaleTimeout.
+	// If this process was suspended for longer than that, another process may have taken over the lock. Then this
+	// execution is stopped, and the lock file is neither refreshed nor removed, so it stays with the other process.
+	lockCtx, lockLost := context.WithCancel(ctx)
+	defer lockLost()
+
+	stopLockRefresh := lock.keepFresh(lockRefreshInterval, lockLost)
 	defer func() {
-		if err := srv.releaseLock(); err != nil {
+		stopLockRefresh()
+
+		if err := lock.release(); err != nil {
 			log.Errorf("failed to release execution lock - %v", err)
 		}
 	}()
@@ -300,6 +304,15 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 	// execution is done, so URLs signed afterwards don't get a longer validity than needed.
 	srv.activeExecutionTimeout.Store(int64(executionTimeout))
 	defer srv.activeExecutionTimeout.Store(0)
+
+	parametersBundle := configData.BundleData.Parameters
+	if parametersBundle == nil {
+		parametersBundle = new(ParametersBundle)
+	}
+	ctxWithParameters := parametersBundle.Context(lockCtx, srv.urlSigner)
+
+	ctxWithTimeout, cancel := context.WithTimeout(ctxWithParameters, executionTimeout)
+	defer cancel()
 
 	// disable connectivity watchdog if not set in the configData
 	if !configData.HasBundle(BundleConnectivityWatchdog) {
