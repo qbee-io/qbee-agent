@@ -19,6 +19,7 @@
 package configuration
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
@@ -111,4 +112,78 @@ func TestService_Execute_StopsAtExecutionTimeout(t *testing.T) {
 		}
 	}
 	assert.True(t, reported)
+}
+
+// newBlockingExecution returns a service reporting into its reports buffer and a configuration with a single
+// bundle, whose after-command runs until it's killed.
+func newBlockingExecution(t *testing.T) (*Service, *CommittedConfig) {
+	dir := t.TempDir()
+
+	srv := New(api.NewClient("localhost", "99999"), dir, t.TempDir()).
+		WithLockFile(filepath.Join(dir, "config.lock"))
+	srv.reportingEnabled.Store(true)
+
+	contents := []byte("distributed file\n")
+	digest := sha256.Sum256(contents)
+	source := filepath.Join(dir, "source.txt")
+	assert.NoError(t, os.WriteFile(source, contents, 0600))
+
+	config := &CommittedConfig{
+		CommitID: "test-commit",
+		Bundles:  []string{BundleFileDistribution},
+		BundleData: BundleData{
+			FileDistribution: &FileDistributionBundle{
+				Metadata: Metadata{Enabled: true},
+				FileSets: []FileSet{{
+					Files: []File{{
+						Source:      "file://" + source,
+						Destination: filepath.Join(dir, "destination.txt"),
+						Digest:      hex.EncodeToString(digest[:]),
+						Size:        int64(len(contents)),
+					}},
+					AfterCommand: "sleep 600 &",
+				}},
+			},
+		},
+	}
+
+	return srv, config
+}
+
+// timeLimitReports returns how many times the execution reported exceeding its time limit.
+func timeLimitReports(t *testing.T, srv *Service) int {
+	reports, err := srv.readReportsBuffer()
+	assert.NoError(t, err)
+
+	count := 0
+	for _, report := range reports {
+		if strings.HasPrefix(report.Text, "Configuration execution exceeded time limit") {
+			count++
+		}
+	}
+
+	return count
+}
+
+func TestService_Execute_ReportsTimeLimitInLastBundle(t *testing.T) {
+	srv, config := newBlockingExecution(t)
+	srv.executionTimeout.Store(int64(500 * time.Millisecond))
+
+	// the only bundle is cut off by the time limit, which is reported once
+	_ = srv.Execute(t.Context(), config)
+
+	assert.Equal(t, timeLimitReports(t, srv), 1)
+}
+
+func TestService_Execute_DoesNotReportCancellationAsTimeLimit(t *testing.T) {
+	srv, config := newBlockingExecution(t)
+
+	// the execution is cancelled (e.g. the agent is stopping) well before its time limit
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	time.AfterFunc(500*time.Millisecond, cancel)
+
+	_ = srv.Execute(ctx, config)
+
+	assert.Equal(t, timeLimitReports(t, srv), 0)
 }

@@ -325,15 +325,8 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 	for _, bundleName := range configData.Bundles {
 		log.Debugf("starting processing of bundle %s", bundleName)
 
-		// Stop bundles execution if execution time limit was reached.
+		// Stop bundles execution if execution time limit was reached (or the execution was cancelled otherwise).
 		if ctxWithTimeout.Err() != nil {
-			log.Warnf("configuration execution exceeded time limit of %s - remaining bundles will be applied during "+
-				"the next run", executionTimeout)
-
-			internalCtx := reporter.BundleContext(ctx, bundleAgentInternal, "")
-			ReportWarning(internalCtx, nil,
-				"Configuration execution exceeded time limit of %s. Remaining bundles will be applied during the next run.",
-				executionTimeout)
 			break
 		}
 
@@ -366,6 +359,18 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 		}
 
 		log.Debugf("bundle %s execution finished", bundleName)
+	}
+
+	// Report the time limit once all bundles are done or skipped, so it's reported also when the last bundle
+	// was cut off. A cancellation for another reason (e.g. the agent stopping) isn't reported.
+	if errors.Is(ctxWithTimeout.Err(), context.DeadlineExceeded) {
+		log.Warnf("configuration execution exceeded time limit of %s - remaining bundles will be applied during "+
+			"the next run", executionTimeout)
+
+		internalCtx := reporter.BundleContext(ctx, bundleAgentInternal, "")
+		ReportWarning(internalCtx, nil,
+			"Configuration execution exceeded time limit of %s. Remaining bundles will be applied during the next run.",
+			executionTimeout)
 	}
 
 	// assign config's commitID as current
