@@ -276,11 +276,18 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 	ctxWithTimeout, cancel := context.WithTimeoutCause(ctxWithParameters, executionTimeout, errExecutionTimeLimit)
 	defer cancel()
 
-	if err := srv.acquireLock(executionTimeout); err != nil {
+	if err := srv.acquireLock(lockStaleTimeout); err != nil {
 		log.Infof("failed to acquire execution lock - %v", err)
 		return nil
 	}
+
+	// Refresh the lock while executing, so it's only considered stale when left behind by a crashed process.
+	// The refresh continues when ctx is cancelled, as long as the execution is still running.
+	lockRefreshCtx, stopLockRefresh := context.WithCancel(context.WithoutCancel(ctx))
+	go srv.keepLockFresh(lockRefreshCtx, lockRefreshInterval)
 	defer func() {
+		stopLockRefresh()
+
 		if err := srv.releaseLock(); err != nil {
 			log.Errorf("failed to release execution lock - %v", err)
 		}

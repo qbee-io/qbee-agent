@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -196,4 +197,71 @@ func TestService_Execute_DoesNotReportCallerDeadlineAsTimeLimit(t *testing.T) {
 	_ = srv.Execute(ctx, config)
 
 	assert.Equal(t, timeLimitReports(t, srv), 0)
+}
+
+func TestService_Execute_KeepsLockFreshAfterCancellation(t *testing.T) {
+	defaultInterval := lockRefreshInterval
+	lockRefreshInterval = 10 * time.Millisecond
+	t.Cleanup(func() { lockRefreshInterval = defaultInterval })
+
+	// the file is downloaded from a FIFO, so reading it blocks without being cancellable
+	srv, config := newBlockingExecution(t)
+	fifo := filepath.Join(t.TempDir(), "source")
+	assert.NoError(t, syscall.Mkfifo(fifo, 0600))
+	config.BundleData.FileDistribution.FileSets[0].Files[0].Source = "file://" + fifo
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		_ = srv.Execute(ctx, config)
+		close(done)
+	}()
+
+	// opening the write end without blocking only succeeds once the execution opened the FIFO for reading
+	var writer *os.File
+	deadline := time.Now().Add(10 * time.Second)
+	for writer == nil {
+		if time.Now().After(deadline) {
+			t.Fatal("execution didn't start reading the file")
+		}
+
+		if file, err := os.OpenFile(fifo, os.O_WRONLY|syscall.O_NONBLOCK, 0); err == nil {
+			writer = file
+		} else {
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	defer func() { _ = writer.Close() }()
+
+	// the execution is cancelled (e.g. the agent is stopping), but is still blocked reading the file
+	cancel()
+
+	modTime := time.Now().Add(-lockStaleTimeout - time.Minute)
+	assert.NoError(t, os.Chtimes(srv.lockFilePath(), modTime, modTime))
+	time.Sleep(100 * time.Millisecond)
+
+	// the lock is still refreshed, so other processes don't take it over while the execution is running
+	select {
+	case <-done:
+		t.Fatal("execution didn't block reading the file")
+	default:
+	}
+
+	stat, err := os.Stat(srv.lockFilePath())
+	assert.NoError(t, err)
+	assert.True(t, time.Since(stat.ModTime()) < time.Minute)
+
+	// once the read finishes, the execution ends and releases its lock
+	assert.NoError(t, writer.Close())
+
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("execution didn't finish")
+	}
+
+	_, err = os.Stat(srv.lockFilePath())
+	assert.True(t, os.IsNotExist(err))
 }

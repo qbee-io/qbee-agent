@@ -17,13 +17,24 @@
 package configuration
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
+
+	"go.qbee.io/agent/app/log"
 )
 
 const lockFileName = "config.lock"
+
+// lockRefreshInterval defines how often the lock file is refreshed while configuration is executed.
+// It's a variable, so tests can shorten it.
+var lockRefreshInterval = 30 * time.Second
+
+// lockStaleTimeout defines after how long without a refresh the lock file is considered stale,
+// i.e. left behind by a process which isn't running anymore.
+const lockStaleTimeout = 2 * time.Minute
 
 // lockFilePath returns the path to the lock file.
 func (srv *Service) lockFilePath() string {
@@ -49,7 +60,10 @@ func (srv *Service) lockFilePath() string {
 func (srv *Service) acquireLock(lockFileTimeout time.Duration) error {
 	// Check if lock file exists and is not expired
 	if lockFileStat, err := os.Stat(srv.lockFilePath()); err == nil {
-		lockFileExpired := time.Since(lockFileStat.ModTime()) > lockFileTimeout
+		// A lock file far in the future was left behind before the clock was set back (e.g. by NTP on a device
+		// which booted with a wrong time). Otherwise it would block configuration until that time is reached.
+		lockFileAge := time.Since(lockFileStat.ModTime())
+		lockFileExpired := lockFileAge > lockFileTimeout || lockFileAge < -lockFileTimeout
 
 		if !lockFileExpired {
 			return fmt.Errorf("another process is running configuration")
@@ -82,4 +96,24 @@ func (srv *Service) releaseLock() error {
 	}
 
 	return nil
+}
+
+// keepLockFresh refreshes the lock file every interval until ctx is done,
+// so other processes don't consider it stale while configuration is executed.
+func (srv *Service) keepLockFresh(ctx context.Context, interval time.Duration) {
+	lockPath := srv.lockFilePath()
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case now := <-ticker.C:
+			if err := os.Chtimes(lockPath, now, now); err != nil {
+				log.Warnf("failed to refresh execution lock - %v", err)
+			}
+		}
+	}
 }
