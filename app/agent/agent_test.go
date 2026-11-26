@@ -258,7 +258,7 @@ func newCheckInTestAgent(t *testing.T) *checkInTestAgent {
 		stop:                make(chan bool, 1),
 		reboot:              make(chan bool, 1),
 		api:                 apiClient,
-		Configuration:       configuration.New(apiClient, t.TempDir(), t.TempDir()),
+		Configuration:       configuration.New(apiClient, t.TempDir(), t.TempDir()).WithLockFile(filepath.Join(t.TempDir(), "config.lock")),
 		Metrics:             metrics.New(apiClient),
 		disableRemoteAccess: true,
 	}
@@ -515,6 +515,9 @@ func (r *realExecution) waitForDownload(t *testing.T) *os.File {
 		// opening the write end without blocking only succeeds once the reader opened the FIFO
 		writer, err := os.OpenFile(r.source, os.O_WRONLY|syscall.O_NONBLOCK, 0)
 		if err == nil {
+			// if the test fails before finishing the download, closing the writer ends the execution,
+			// so it doesn't keep holding the configuration lock
+			t.Cleanup(func() { _ = writer.Close() })
 			return writer
 		}
 

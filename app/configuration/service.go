@@ -65,6 +65,9 @@ type Service struct {
 	// urlSigner is used to sign URLs for the device hub
 	urlSigner URLSigner
 
+	// lockFile overrides the path of the configuration execution lock file (used in tests)
+	lockFile string
+
 	// Fields of atomic types are accessed by both check-in and configuration execution, which run concurrently.
 	// Other fields are not accessed by configuration execution.
 	rebootAfterRun           atomic.Bool
@@ -113,6 +116,14 @@ func New(apiClient *api.Client, appDirectory, cacheDirectory string) *Service {
 // WithURLSigner sets the URL signer for the service.
 func (srv *Service) WithURLSigner(urlSigner URLSigner) *Service {
 	srv.urlSigner = urlSigner
+	return srv
+}
+
+// WithLockFile sets the path of the configuration execution lock file.
+// By default, the lock file is shared by all agent processes on the device. Tests use their own lock file,
+// so they don't block each other when running in parallel.
+func (srv *Service) WithLockFile(path string) *Service {
+	srv.lockFile = path
 	return srv
 }
 
