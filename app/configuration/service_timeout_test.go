@@ -19,12 +19,21 @@
 package configuration
 
 import (
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -261,6 +270,106 @@ func TestService_Execute_KeepsLockFreshAfterCancellation(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("execution didn't finish")
 	}
+
+	_, err = os.Stat(srv.lockFilePath())
+	assert.True(t, os.IsNotExist(err))
+}
+
+func TestService_Execute_StopsDownloadAtExecutionTimeout(t *testing.T) {
+	const fileSize = 1 << 30
+
+	var reportsMutex sync.Mutex
+	var reports []string
+	var downloadStarted atomic.Bool
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/org/device/auth/filemetadata/", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"status":"ok","data":{"md5":"md5","last_modified":1,"size":`+strconv.Itoa(fileSize)+`}}`)
+	})
+	mux.HandleFunc("/v1/org/device/auth/files/", func(w http.ResponseWriter, r *http.Request) {
+		// the download is slow, so it would take much longer than the execution's time limit
+		downloadStarted.Store(true)
+		w.Header().Set("Content-Length", strconv.Itoa(fileSize))
+		w.WriteHeader(http.StatusOK)
+
+		giveUp := time.After(30 * time.Second)
+		for {
+			select {
+			case <-r.Context().Done():
+				return
+			case <-giveUp:
+				return
+			case <-time.After(50 * time.Millisecond):
+				_, _ = w.Write(make([]byte, 1024))
+				w.(http.Flusher).Flush()
+			}
+		}
+	})
+	mux.HandleFunc("/v1/org/device/auth/report", func(w http.ResponseWriter, r *http.Request) {
+		if body, err := gzip.NewReader(r.Body); err == nil {
+			data, _ := io.ReadAll(body)
+
+			reportsMutex.Lock()
+			reports = append(reports, string(data))
+			reportsMutex.Unlock()
+		}
+		_, _ = io.WriteString(w, "{}")
+	})
+
+	server := httptest.NewTLSServer(mux)
+	defer server.Close()
+
+	serverURL, err := url.Parse(server.URL)
+	assert.NoError(t, err)
+	host, port, err := net.SplitHostPort(serverURL.Host)
+	assert.NoError(t, err)
+
+	tlsConfig := server.Client().Transport.(*http.Transport).TLSClientConfig.Clone()
+	apiClient := api.NewClient(host, port).WithTLSConfig(tlsConfig)
+
+	dir := t.TempDir()
+	srv := New(apiClient, dir, t.TempDir()).WithLockFile(filepath.Join(dir, "config.lock"))
+	srv.reportingEnabled.Store(true)
+	srv.executionTimeout.Store(int64(time.Second))
+
+	digest := sha256.Sum256([]byte("contents"))
+	config := &CommittedConfig{
+		CommitID: "test-commit",
+		Bundles:  []string{BundleFileDistribution},
+		BundleData: BundleData{
+			FileDistribution: &FileDistributionBundle{
+				Metadata: Metadata{Enabled: true},
+				FileSets: []FileSet{{
+					Files: []File{{
+						Source:      "files/large.bin",
+						Destination: filepath.Join(dir, "large.bin"),
+						Digest:      hex.EncodeToString(digest[:]),
+						Size:        fileSize,
+					}},
+				}},
+			},
+		},
+	}
+
+	done := make(chan struct{})
+	go func() {
+		_ = srv.Execute(t.Context(), config)
+		close(done)
+	}()
+
+	// the download is cut off by the execution's time limit
+	select {
+	case <-done:
+	case <-time.After(15 * time.Second):
+		t.Fatal("download didn't stop at the execution's time limit")
+	}
+
+	assert.True(t, downloadStarted.Load())
+
+	reportsMutex.Lock()
+	sent := strings.Join(reports, "\n")
+	reportsMutex.Unlock()
+	assert.True(t, strings.Contains(sent, "Configuration execution exceeded time limit of 1s."))
 
 	_, err = os.Stat(srv.lockFilePath())
 	assert.True(t, os.IsNotExist(err))

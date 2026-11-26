@@ -64,8 +64,12 @@ func NewClient(host, port string) *Client {
 				IdleConnTimeout:       60 * time.Second,
 				TLSHandshakeTimeout:   10 * time.Second,
 				ExpectContinueTimeout: 1 * time.Second,
+
+				// Requests have no overall time limit, so file downloads can take as long as they need.
+				// API calls (see Make) are limited by apiCallTimeout, and file downloads by the time limit of the
+				// configuration execution. This is a safety net for requests without a time limit of their own.
+				ResponseHeaderTimeout: apiCallTimeout,
 			},
-			Timeout: 45 * time.Minute,
 		},
 	}
 }
@@ -108,8 +112,12 @@ func (cli *Client) NewRequest(ctx context.Context, method, path string, src any)
 }
 
 // Make sends an API request and optionally parses response body into dst.
+// The request, including reading the response body, is limited by apiCallTimeout.
 func (cli *Client) Make(request *http.Request, dst any) error {
-	response, err := cli.Do(request)
+	ctx, cancel := context.WithTimeout(request.Context(), apiCallTimeout)
+	defer cancel()
+
+	response, err := cli.Do(request.WithContext(ctx))
 	if err != nil {
 		return err
 	}
@@ -144,10 +152,7 @@ func (cli *Client) Do(request *http.Request) (*http.Response, error) {
 
 // request creates, sends and processes response for an HTTP request.
 func (cli *Client) request(ctx context.Context, method, path string, src, dst any) error {
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, apiCallTimeout)
-	defer cancel()
-
-	request, err := cli.NewRequest(ctxWithTimeout, method, path, src)
+	request, err := cli.NewRequest(ctx, method, path, src)
 	if err != nil {
 		return err
 	}
