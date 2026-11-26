@@ -258,6 +258,9 @@ func (srv *Service) UpdateMetricsMonitorState(configData *CommittedConfig) {
 	}
 }
 
+// errExecutionTimeLimit is the cause of cancelling the configuration execution at its time limit.
+var errExecutionTimeLimit = errors.New("configuration execution time limit reached")
+
 // Execute configuration bundles on the system and return true if system should be rebooted.
 func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) error {
 	log.Debugf("trying to acquire execution lock")
@@ -270,7 +273,7 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 	}
 	ctxWithParameters := parametersBundle.Context(ctx, srv.urlSigner)
 
-	ctxWithTimeout, cancel := context.WithTimeout(ctxWithParameters, executionTimeout)
+	ctxWithTimeout, cancel := context.WithTimeoutCause(ctxWithParameters, executionTimeout, errExecutionTimeLimit)
 	defer cancel()
 
 	if err := srv.acquireLock(executionTimeout); err != nil {
@@ -329,6 +332,18 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 		}
 
 		log.Debugf("bundle %s execution finished", bundleName)
+	}
+
+	// Report reaching the time limit (also when it cut off the last bundle), but not other cancellations
+	// or deadlines of the caller.
+	if errors.Is(context.Cause(ctxWithTimeout), errExecutionTimeLimit) {
+		log.Warnf("configuration execution exceeded time limit of %s - remaining bundles will be applied during "+
+			"the next run", executionTimeout)
+
+		internalCtx := reporter.BundleContext(ctx, bundleAgentInternal, "")
+		ReportWarning(internalCtx, nil,
+			"Configuration execution exceeded time limit of %s. Remaining bundles will be applied during the next run.",
+			executionTimeout)
 	}
 
 	// assign config's commitID as current
