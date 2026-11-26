@@ -105,7 +105,9 @@ func TestService_Execute_StopsAtExecutionTimeout(t *testing.T) {
 	// the bundle after the time limit wasn't executed
 	assert.Equal(t, srv.connectivityWatchdogThreshold.Load(), int64(0))
 
-	// the execution released its lock
+	// the execution doesn't count as in progress anymore and released its lock
+	assert.Equal(t, srv.ActiveExecutionTimeout(), time.Duration(0))
+
 	_, err = os.Stat(srv.lockFilePath())
 	assert.True(t, os.IsNotExist(err))
 

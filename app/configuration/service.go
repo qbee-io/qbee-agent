@@ -47,6 +47,7 @@ const (
 	minimumExecutionTimeout = 5 * time.Minute
 
 	// maximumExecutionTimeout is the largest execution timeout accepted from the settings bundle.
+	// It also limits how long signed URLs are valid (see Agent.signedURLTTL).
 	maximumExecutionTimeout = 24 * time.Hour
 )
 
@@ -93,6 +94,10 @@ type Service struct {
 
 	// executionTimeout defines the time limit of the configuration execution
 	executionTimeout atomic.Int64
+
+	// activeExecutionTimeout is the time limit of the configuration execution in progress (0 if none).
+	// It may differ from executionTimeout, when settings changed since the execution started.
+	activeExecutionTimeout atomic.Int64
 
 	// connectivityWatchdogThreshold defines failed API connections threshold at which server will be rebooted
 	// 0 -> disabled
@@ -185,6 +190,12 @@ func (srv *Service) RunInterval() time.Duration {
 // ExecutionTimeout returns the time limit of the configuration execution.
 func (srv *Service) ExecutionTimeout() time.Duration {
 	return time.Duration(srv.executionTimeout.Load())
+}
+
+// ActiveExecutionTimeout returns the time limit of the configuration execution in progress,
+// or 0 if no configuration execution is in progress.
+func (srv *Service) ActiveExecutionTimeout() time.Duration {
+	return time.Duration(srv.activeExecutionTimeout.Load())
 }
 
 // setExecutionTimeout sets the time limit of the configuration execution.
@@ -292,6 +303,10 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 			log.Errorf("failed to release execution lock - %v", err)
 		}
 	}()
+
+	// URLs signed during this execution remain valid for its time limit, even if the setting changes meanwhile.
+	srv.activeExecutionTimeout.Store(int64(executionTimeout))
+	defer srv.activeExecutionTimeout.Store(0)
 
 	// disable connectivity watchdog if not set in the configData
 	if !configData.HasBundle(BundleConnectivityWatchdog) {
