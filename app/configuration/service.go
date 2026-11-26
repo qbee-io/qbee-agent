@@ -39,6 +39,17 @@ const defaultAgentInterval = 5 // minutes
 const minimumAgentInterval = 5 // minute
 const defaultFirstRunRetryCounter = 5
 
+const (
+	// defaultExecutionTimeout is the time configuration execution may take, unless set in the settings bundle.
+	defaultExecutionTimeout = time.Hour
+
+	// minimumExecutionTimeout is the smallest execution timeout accepted from the settings bundle.
+	minimumExecutionTimeout = 5 * time.Minute
+
+	// maximumExecutionTimeout is the largest execution timeout accepted from the settings bundle.
+	maximumExecutionTimeout = 24 * time.Hour
+)
+
 // Service provides configuration management functionality for the agent.
 type Service struct {
 	api *api.Client
@@ -80,6 +91,9 @@ type Service struct {
 	runInterval               int
 	runIntervalChangeNotifier chan time.Duration
 
+	// executionTimeout defines the time limit of the configuration execution
+	executionTimeout atomic.Int64
+
 	// connectivityWatchdogThreshold defines failed API connections threshold at which server will be rebooted
 	// 0 -> disabled
 	connectivityWatchdogThreshold atomic.Int64
@@ -100,7 +114,7 @@ type Service struct {
 
 // New returns a new instance of configuration Service.
 func New(apiClient *api.Client, appDirectory, cacheDirectory string) *Service {
-	return &Service{
+	srv := &Service{
 		api:            apiClient,
 		appDirectory:   appDirectory,
 		cacheDirectory: cacheDirectory,
@@ -111,6 +125,10 @@ func New(apiClient *api.Client, appDirectory, cacheDirectory string) *Service {
 		runIntervalChangeNotifier: make(chan time.Duration, 1),
 		firstRunRetryCounter:      defaultFirstRunRetryCounter,
 	}
+
+	srv.executionTimeout.Store(int64(defaultExecutionTimeout))
+
+	return srv
 }
 
 // WithURLSigner sets the URL signer for the service.
@@ -164,6 +182,31 @@ func (srv *Service) RunInterval() time.Duration {
 	return time.Duration(srv.runInterval) * time.Minute
 }
 
+// ExecutionTimeout returns the time limit of the configuration execution.
+func (srv *Service) ExecutionTimeout() time.Duration {
+	return time.Duration(srv.executionTimeout.Load())
+}
+
+// setExecutionTimeout sets the time limit of the configuration execution.
+// Non-positive value resets it to the default, values outside the allowed range are raised or lowered to it.
+func (srv *Service) setExecutionTimeout(minutes int) {
+	// the value is checked before it's converted to time.Duration, which overflows for very large values
+	var timeout time.Duration
+
+	switch {
+	case minutes <= 0:
+		timeout = defaultExecutionTimeout
+	case minutes < int(minimumExecutionTimeout/time.Minute):
+		timeout = minimumExecutionTimeout
+	case minutes > int(maximumExecutionTimeout/time.Minute):
+		timeout = maximumExecutionTimeout
+	default:
+		timeout = time.Duration(minutes) * time.Minute
+	}
+
+	srv.executionTimeout.Store(int64(timeout))
+}
+
 // CurrentCommitID returns currently applied commit ID.
 func (srv *Service) CurrentCommitID() string {
 	srv.commitMutex.RLock()
@@ -192,6 +235,7 @@ func (srv *Service) applyDefaultSettings() {
 	srv.softwareInventoryEnabled.Store(true)
 	srv.processInventoryEnabled.Store(false)
 	srv.runInterval = defaultAgentInterval
+	srv.setExecutionTimeout(0)
 	setPkgCacheTTL(0)
 }
 
@@ -214,11 +258,11 @@ func (srv *Service) UpdateMetricsMonitorState(configData *CommittedConfig) {
 	}
 }
 
-const executeTimeout = time.Hour
-
 // Execute configuration bundles on the system and return true if system should be rebooted.
 func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) error {
 	log.Debugf("trying to acquire execution lock")
+
+	executionTimeout := srv.ExecutionTimeout()
 
 	parametersBundle := configData.BundleData.Parameters
 	if parametersBundle == nil {
@@ -226,10 +270,10 @@ func (srv *Service) Execute(ctx context.Context, configData *CommittedConfig) er
 	}
 	ctxWithParameters := parametersBundle.Context(ctx, srv.urlSigner)
 
-	ctxWithTimeout, cancel := context.WithTimeout(ctxWithParameters, executeTimeout)
+	ctxWithTimeout, cancel := context.WithTimeout(ctxWithParameters, executionTimeout)
 	defer cancel()
 
-	if err := srv.acquireLock(executeTimeout); err != nil {
+	if err := srv.acquireLock(executionTimeout); err != nil {
 		log.Infof("failed to acquire execution lock - %v", err)
 		return nil
 	}

@@ -8,6 +8,9 @@ EnvironmentFile=-/etc/default/qbee-agent
 ExecStart=/usr/bin/qbee-agent start
 KillMode=process
 Restart=on-failure
+# Stopping the agent waits for the configuration execution in progress to finish.
+# Executions taking longer (see execution_timeout in the settings bundle) are cut off,
+# and the remaining bundles are applied during the next run.
 TimeoutStopSec=3600
 # Since systemd 229, should be in [Unit] but in order to support systemd <229,
 # it is also supported to have it here.
