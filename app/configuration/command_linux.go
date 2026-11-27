@@ -21,8 +21,11 @@ package configuration
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"syscall"
+	"time"
 
 	"go.qbee.io/agent/app/utils"
 )
@@ -59,20 +62,74 @@ func RunCommand(ctx context.Context, command string) ([]byte, error) {
 		Pdeathsig: syscall.SIGINT,
 	}
 
+	// kill all subprocesses as well when ctx is cancelled (e.g. the execution time limit is reached)
+	cmd.Cancel = func() error {
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
+
 	// explicitly set working directory to root
 	cmd.Dir = "/"
 
 	// append tail buffer to Stdout to collect only most recent bytes
 	tailBuffer := utils.NewTailBuffer(commandOutputBytesLimit)
 
-	cmd.Stdout = tailBuffer
-	cmd.Stderr = tailBuffer
+	// The output goes through our own pipe, so cmd.Run waits only for the shell, and not for background
+	// subprocesses which keep the output open. We read the output until all of them closed it.
+	outputReader, outputWriter, pipeErr := os.Pipe()
+	if pipeErr != nil {
+		return nil, fmt.Errorf("cannot create output pipe: %w", pipeErr)
+	}
+	defer func() { _ = outputReader.Close() }()
+
+	cmd.Stdout = outputWriter
+	cmd.Stderr = outputWriter
+
+	outputClosed := make(chan struct{})
+	go func() {
+		_, _ = io.Copy(tailBuffer, outputReader)
+		close(outputClosed)
+	}()
 
 	// run the command
 	err := cmd.Run()
+
+	// from now on, only the command's subprocesses keep the output open
+	_ = outputWriter.Close()
+
+	// Background subprocesses (e.g. "sleep 2 &") may keep the output open after the shell exits.
+	// The shell may have exited successfully before they were killed, so report the cancellation then.
+	if waitErr := waitForSubprocesses(ctx, cmd, outputReader, outputClosed); err == nil {
+		err = waitErr
+	}
 
 	// grab tail of the output
 	output := tailBuffer.Close()
 
 	return output, err
+}
+
+// waitForSubprocesses waits until all subprocesses of the command closed its output.
+// If ctx is cancelled first, it kills the command's process group, stops reading the output after a second
+// (for subprocesses which left the process group) and returns ctx.Err().
+func waitForSubprocesses(ctx context.Context, cmd *exec.Cmd, outputReader *os.File, outputClosed <-chan struct{}) error {
+	select {
+	case <-outputClosed:
+		return nil
+	case <-ctx.Done():
+	}
+
+	// Kill the process group, including background subprocesses.
+	// cmd.Process is nil if the command didn't start (e.g. ctx was cancelled before).
+	// The process group ID can't be reused while any process of the group is still running.
+	if cmd.Process != nil {
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
+
+	// Subprocesses which left the process group (e.g. "setsid sleep 600 &") aren't killed and may keep
+	// the output open, so we stop reading it after a second.
+	stopReading := time.AfterFunc(time.Second, func() { _ = outputReader.Close() })
+	<-outputClosed
+	stopReading.Stop()
+
+	return ctx.Err()
 }
